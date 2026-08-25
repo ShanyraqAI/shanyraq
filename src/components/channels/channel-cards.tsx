@@ -8,7 +8,6 @@ import {
   AlertTriangle,
   Cable,
   Clock,
-  Link2,
   Loader2,
   RefreshCw,
   Settings2,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Menu, Hotel } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarContent } from "./app-sidebar";
