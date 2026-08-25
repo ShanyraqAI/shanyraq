@@ -15,7 +15,7 @@ function Sync-Once {
         return
     }
 
-    git pull --rebase origin main | Out-Null
+    git -c rebase.autoStash=true pull --rebase origin main | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] pull failed, push skipped"
         return

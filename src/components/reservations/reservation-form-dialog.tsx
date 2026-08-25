@@ -70,7 +70,6 @@ export function ReservationFormDialog({
   rooms,
   ratePlans,
   guests,
-  hotelCurrency,
   initial,
 }: ReservationFormProps) {
   const router = useRouter();
