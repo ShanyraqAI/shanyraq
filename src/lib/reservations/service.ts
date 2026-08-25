@@ -217,8 +217,6 @@ export async function updateReservationDetails(params: UpdateReservationParams) 
 const ROOM_STATUS_BY_RESERVATION_STATUS: Partial<Record<ReservationStatus, string>> = {
   CHECKED_IN: "OCCUPIED",
   CHECKED_OUT: "CLEANING",
-  CANCELLED: null, // freed below
-  NO_SHOW: null,
 };
 
 export async function setReservationStatus(hotelId: string, reservationId: string, status: ReservationStatus) {

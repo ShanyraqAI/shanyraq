@@ -8,9 +8,10 @@ import {
   saveRoomMappingsSchema,
   saveRateMappingsSchema,
   firstZodError,
+  type ChannelCode,
 } from "@/lib/constants";
 import { getChannelProvider } from "@/lib/channels/provider-registry";
-import type { ChannelCredentials } from "@/lib/channels/types";
+import type { ChannelCredentials, ExternalInventory } from "@/lib/channels/types";
 import { runChannelSync, syncAllConnectedChannels } from "@/lib/channels/sync-service";
 import { writeAudit } from "@/lib/reservations/service";
 import { ok, fail, type ActionResult } from "@/server/types";
@@ -175,6 +176,27 @@ export async function saveRateMappingsAction(input: unknown): Promise<ActionResu
     });
     revalidateChannels();
     return ok(undefined, "Rate mapping saved");
+  } catch (error) {
+    return fail(toErrorMessage(error));
+  }
+}
+
+/**
+ * Catalogue of the channel's rooms/rates shown in the mapping UI.
+ * Safe to call before/without a saved connection (mock providers only need a code).
+ */
+export async function fetchExternalInventoryAction(channelCode: string): Promise<ActionResult<ExternalInventory>> {
+  try {
+    const provider = getChannelProvider(channelCode);
+    const inventory = await provider.fetchExternalInventory({
+      connectionId: "",
+      channelId: channelCode as ChannelCode,
+      hotelId: "",
+      externalPropertyId: null,
+      credentials: null,
+      importCursor: 0,
+    });
+    return ok(inventory);
   } catch (error) {
     return fail(toErrorMessage(error));
   }

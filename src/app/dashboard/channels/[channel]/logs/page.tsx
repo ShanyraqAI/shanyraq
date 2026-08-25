@@ -1,0 +1,104 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ArrowLeft, FileClock } from "lucide-react";
+import { db, getCurrentHotelId } from "@/lib/db";
+import { PageHeader, EmptyState } from "@/components/shared/page-header";
+import { SyncStatusBadge } from "@/components/shared/status-badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+export const dynamic = "force-dynamic";
+
+export default async function ChannelLogsPage({
+  params,
+}: {
+  params: Promise<{ channel: string }>;
+}) {
+  const { channel: channelId } = await params;
+  const hotelId = await getCurrentHotelId();
+
+  const channel = await db.channel.findUnique({ where: { id: channelId } });
+  if (!channel || channel.isInternal) notFound();
+
+  const logs = await db.syncLog.findMany({
+    where: { channelId, connection: { hotelId } },
+    orderBy: { startedAt: "desc" },
+    take: 50,
+  });
+
+  return (
+    <div className="space-y-6">
+      <Link
+        href={`/dashboard/channels/${channelId}`}
+        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" /> {channel.name}
+      </Link>
+
+      <PageHeader
+        title={`${channel.name} — synchronization history`}
+        description="Every synchronization run with imported reservations and pushed inventory."
+      />
+
+      {logs.length === 0 ? (
+        <EmptyState
+          icon={FileClock}
+          title="No synchronization history yet"
+          description="Run a sync from the Channels page and the results will be recorded here."
+        />
+      ) : (
+        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-secondary/50 hover:bg-secondary/50">
+                <TableHead>Started</TableHead>
+                <TableHead>Finished</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Reservations</TableHead>
+                <TableHead className="text-right">Rates</TableHead>
+                <TableHead className="text-right">Availability</TableHead>
+                <TableHead>Details</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {logs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell className="whitespace-nowrap tabular-nums">
+                    {formatDateTime(log.startedAt)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
+                    {log.finishedAt ? formatDateTime(log.finishedAt) : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <SyncStatusBadge status={log.status as never} />
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{log.reservationsImported}</TableCell>
+                  <TableCell className="text-right tabular-nums">{log.ratesUpdated}</TableCell>
+                  <TableCell className="text-right tabular-nums">{log.availabilityUpdated}</TableCell>
+                  <TableCell className="max-w-[360px] text-sm text-muted-foreground">
+                    {log.error ? (
+                      <span className="text-destructive">{log.error}</span>
+                    ) : (
+                      (log.message ?? "—")
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatDateTime(d: Date): string {
+  const pad = (n: number) => (n < 10 ? `0${n}` : String(n));
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}

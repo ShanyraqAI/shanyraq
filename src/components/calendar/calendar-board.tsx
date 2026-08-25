@@ -1,0 +1,429 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
+import {
+  CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Plus,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EmptyState } from "@/components/shared/page-header";
+import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
+import { ReservationFormDialog } from "@/components/reservations/reservation-form-dialog";
+import { moveReservationAction } from "@/server/actions/reservations";
+import type { CalendarBoardData, CalendarViewMode } from "./types";
+import type { ReservationVM } from "@/lib/types";
+import {
+  addDays,
+  addMonths,
+  diffDays,
+  eachDay,
+  endOfMonth,
+  formatMonthYear,
+  isSameDay,
+  parseISODate,
+  startOfMonth,
+  today as getToday,
+  weekdayShort,
+} from "@/lib/dates";
+import { cn } from "@/lib/utils";
+
+const LABEL_W = 148;
+const DAY_W: Record<CalendarViewMode, number> = { day: 260, week: 136, month: 52 };
+
+const CHANNEL_BLOCK_STYLES: Record<string, string> = {
+  booking: "bg-sky-100/90 text-sky-900 border-sky-300",
+  ostrovok: "bg-orange-100/90 text-orange-900 border-orange-300",
+  krisha: "bg-cyan-100/90 text-cyan-900 border-cyan-300",
+  direct: "bg-emerald-100/90 text-emerald-900 border-emerald-300",
+};
+
+export function CalendarBoard(data: CalendarBoardData & { initialView?: CalendarViewMode }) {
+  const { rooms, reservations, ratePlans, guests, hotelCurrency } = data;
+  const [view, setView] = useState<CalendarViewMode>(data.initialView ?? "week");
+  const [anchorISO, setAnchorISO] = useState(() => getToday().toISOString().slice(0, 10));
+  const [filters, setFilters] = useState({ roomTypeId: "all", channelId: "all", statusId: "all" });
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selected, setSelected] = useState<ReservationVM | null>(null);
+  const [createState, setCreateState] = useState<{
+    open: boolean;
+    roomId?: string;
+    date?: string;
+  }>({ open: false });
+  const [movingId, setMovingId] = useState<string | null>(null);
+
+  const anchor = parseISODate(anchorISO);
+  const today = getToday();
+
+  const range = useMemo(() => {
+    if (view === "day") return { start: anchor, days: 1 };
+    if (view === "week") {
+      const dow = (anchor.getUTCDay() + 6) % 7; // Monday-based
+      return { start: addDays(anchor, -dow), days: 7 };
+    }
+    return {
+      start: startOfMonth(anchor),
+      days: diffDays(startOfMonth(anchor), addDays(endOfMonth(anchor), 1)),
+    };
+  }, [anchor, view]);
+
+  const days = useMemo(() => eachDay(range.start, addDays(range.start, range.days)), [range]);
+  const dayWidth = DAY_W[view];
+
+  const visibleReservations = useMemo(
+    () =>
+      reservations.filter((r) => {
+        if (r.status === "CANCELLED") return false; // keep the board clean
+        if (filters.roomTypeId !== "all" && r.roomTypeId !== filters.roomTypeId) return false;
+        if (filters.channelId !== "all" && r.channel !== filters.channelId) return false;
+        if (filters.statusId !== "all" && r.status !== filters.statusId) return false;
+        return true;
+      }),
+    [reservations, filters],
+  );
+
+  function blocksForRoom(roomId: string) {
+    const out: {
+      res: ReservationVM;
+      left: number;
+      width: number;
+      clippedStart: boolean;
+    }[] = [];
+    for (const r of visibleReservations) {
+      if (r.roomId !== roomId) continue;
+      const checkIn = parseISODate(r.checkIn);
+      const checkOut = parseISODate(r.checkOut);
+      const startOffset = Math.max(0, diffDays(range.start, checkIn));
+      const endOffset = Math.min(range.days, Math.max(1, diffDays(range.start, checkOut)));
+      if (endOffset <= startOffset) continue;
+      out.push({
+        res: r,
+        left: startOffset * dayWidth,
+        width: (endOffset - startOffset) * dayWidth - 4,
+        clippedStart: startOffset === 0 && checkIn < range.start,
+      });
+    }
+    return out;
+  }
+
+  function shift(dir: 1 | -1) {
+    if (view === "day") setAnchorISO(addDays(anchor, dir).toISOString().slice(0, 10));
+    else if (view === "week") setAnchorISO(addDays(anchor, 7 * dir).toISOString().slice(0, 10));
+    else setAnchorISO(addMonths(anchor, dir).toISOString().slice(0, 10));
+  }
+
+  async function handleDrop(reservationId: string, roomId: string, dateISO: string) {
+    // Quick move: drop onto an empty cell → move room + keep nights, anchored at dropped date.
+    const res = reservations.find((r) => r.id === reservationId);
+    if (!res) return;
+    const nights = diffDays(parseISODate(res.checkIn), parseISODate(res.checkOut));
+    setMovingId(reservationId);
+    try {
+      const result = await moveReservationAction(
+        reservationId,
+        roomId,
+        dateISO,
+        addDays(parseISODate(dateISO), nights).toISOString().slice(0, 10),
+      );
+      if (!result.ok) toast.error(result.error);
+      else toast.success(result.message ?? "Reservation moved");
+    } finally {
+      setMovingId(null);
+    }
+  }
+
+  const roomTypeOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const r of rooms) seen.set(r.roomTypeId, r.roomTypeName);
+    return Array.from(seen.entries());
+  }, [rooms]);
+  const channelOptions = ["booking", "ostrovok", "krisha", "direct"];
+
+  return (
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="icon" onClick={() => shift(-1)} aria-label="Previous">
+            <ChevronLeft className="size-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setAnchorISO(today.toISOString().slice(0, 10))}>
+            Today
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => shift(1)} aria-label="Next">
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
+        <div className="text-sm font-semibold">{formatMonthYear(range.start)}</div>
+
+        <Tabs value={view} onValueChange={(v) => setView(v as CalendarViewMode)}>
+          <TabsList className="ml-2">
+            <TabsTrigger value="day">Day</TabsTrigger>
+            <TabsTrigger value="week">Week</TabsTrigger>
+            <TabsTrigger value="month">Month</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Select
+            value={filters.roomTypeId}
+            onValueChange={(v) => setFilters((f) => ({ ...f, roomTypeId: v }))}
+          >
+            <SelectTrigger size="sm" className="w-[130px]">
+              <SelectValue placeholder="Room type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              {roomTypeOptions.map(([id, name]) => (
+                <SelectItem key={id} value={id}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={filters.channelId}
+            onValueChange={(v) => setFilters((f) => ({ ...f, channelId: v }))}
+          >
+            <SelectTrigger size="sm" className="w-[140px]">
+              <SelectValue placeholder="Channel" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All channels</SelectItem>
+              {channelOptions.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c === "booking" ? "Booking.com" : c.charAt(0).toUpperCase() + c.slice(1)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={filters.statusId}
+            onValueChange={(v) => setFilters((f) => ({ ...f, statusId: v }))}
+          >
+            <SelectTrigger size="sm" className="w-[130px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {["PENDING", "CONFIRMED", "CHECKED_IN"].map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s.replace("_", " ").toLowerCase()}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button size="sm" onClick={() => setCreateState({ open: true })}>
+            <Plus className="mr-1.5 size-4" /> Reservation
+          </Button>
+        </div>
+      </div>
+
+      {/* Board */}
+      {rooms.length === 0 ? (
+        <EmptyState
+          icon={CalendarPlus}
+          title="No rooms configured"
+          description="Add rooms in the Rooms module to start planning on the calendar."
+          action={
+            <Link href="/dashboard/rooms" className="text-sm font-medium text-primary hover:underline">
+              Go to Rooms
+            </Link>
+          }
+        />
+      ) : (
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <div className="overflow-x-auto">
+            <div style={{ minWidth: LABEL_W + range.days * dayWidth }}>
+              {/* Day header */}
+              <div className="flex h-12 border-b bg-secondary/60">
+                <div
+                  className="sticky left-0 z-20 flex shrink-0 items-end bg-secondary/95 px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  style={{ width: LABEL_W }}
+                >
+                  {rooms.length} rooms
+                </div>
+                <div className="flex">
+                  {days.map((d) => {
+                    const isToday = isSameDay(d, today);
+                    return (
+                      <div
+                        key={d.toISOString()}
+                        style={{ width: dayWidth }}
+                        className={cn(
+                          "flex shrink-0 flex-col items-center justify-center border-l first:border-l-0",
+                          isToday && "bg-accent",
+                          view !== "month" && "gap-0.5 py-1.5",
+                        )}
+                      >
+                        {view !== "month" && (
+                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            {weekdayShort(d)}
+                          </span>
+                        )}
+                        <span
+                          className={cn(
+                            "text-sm tabular-nums",
+                            isToday
+                              ? "flex size-6 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground"
+                              : "font-medium",
+                          )}
+                        >
+                          {d.getUTCDate()}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Room rows */}
+              {rooms.map((room) => (
+                <div key={room.id} className="relative flex h-[68px] border-b last:border-b-0">
+                  <div
+                    className="sticky left-0 z-20 flex shrink-0 flex-col justify-center border-r bg-card px-3"
+                    style={{ width: LABEL_W }}
+                  >
+                    <span className="text-sm font-semibold leading-tight">{room.number}</span>
+                    <span className="text-xs text-muted-foreground">{room.roomTypeName}</span>
+                  </div>
+                  <div className="relative" style={{ width: range.days * dayWidth }}>
+                    {/* clickable cells */}
+                    <div
+                      className="absolute inset-0 grid"
+                      style={{ gridTemplateColumns: `repeat(${range.days}, ${dayWidth}px)` }}
+                    >
+                      {days.map((d) => {
+                        const iso = d.toISOString().slice(0, 10);
+                        const isToday = isSameDay(d, today);
+                        const weekend = d.getUTCDay() === 0 || d.getUTCDay() === 6;
+                        return (
+                          <button
+                            key={iso}
+                            type="button"
+                            aria-label={`New reservation in ${room.number} on ${iso}`}
+                            onClick={() => setCreateState({ open: true, roomId: room.id, date: iso })}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              const id = e.dataTransfer.getData("text/plain");
+                              if (!id) return;
+                              void handleDrop(id, room.id, iso);
+                            }}
+                            className={cn(
+                              "border-l border-border/50 first:border-l-0 hover:bg-accent/60 focus-visible:bg-accent",
+                              weekend && !isToday && "bg-secondary/30",
+                              isToday && "bg-accent/40",
+                            )}
+                          />
+                        );
+                      })}
+                    </div>
+
+                    {/* reservation blocks */}
+                    {blocksForRoom(room.id).map(({ res, left, width }) => (
+                      <button
+                        key={`${res.id}-${left}`}
+                        type="button"
+                        disabled={movingId === res.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelected(res);
+                          setDetailsOpen(true);
+                        }}
+                        onDragStart={(e) => e.dataTransfer.setData("text/plain", res.id)}
+                        draggable
+                        style={{ left: left + 2, width }}
+                        className={cn(
+                          "absolute top-[9px] z-10 flex h-[50px] cursor-pointer flex-col justify-center overflow-hidden rounded-md border px-2 text-left shadow-sm transition-all hover:z-20 hover:shadow-md",
+                          CHANNEL_BLOCK_STYLES[res.channel] ?? CHANNEL_BLOCK_STYLES.direct,
+                          movingId === res.id && "opacity-50",
+                        )}
+                      >
+                        <span className="truncate text-xs font-semibold leading-tight">
+                          {res.guestName}
+                          {res.status === "PENDING" ? " · pending" : ""}
+                        </span>
+                        {width >= 110 ? (
+                          <>
+                            <span className="truncate text-[11px] leading-tight opacity-75">
+                              {res.channel === "booking" ? "Booking.com" : res.channel.charAt(0).toUpperCase() + res.channel.slice(1)}
+                            </span>
+                            <span className="text-[10px] font-medium tabular-nums opacity-80">
+                              {res.checkIn.slice(8)} → {res.checkOut.slice(8)}
+                            </span>
+                          </>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        Tip: click a block for details · click an empty cell to create a booking · drag a block to move it.
+      </p>
+
+      {/* Details */}
+      {selected && (
+        <ReservationDetailsDialog
+          reservation={selected}
+          rooms={rooms}
+          ratePlans={ratePlans}
+          guests={guests}
+          hotelCurrency={hotelCurrency}
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+        />
+      )}
+
+      {/* Create */}
+      {createState.open && (
+        <ReservationFormDialog
+          mode="create"
+          open={createState.open}
+          onOpenChange={(o) => setCreateState((s) => ({ ...s, open: o }))}
+          rooms={rooms}
+          ratePlans={ratePlans}
+          guests={guests}
+          hotelCurrency={hotelCurrency}
+          initial={{
+            roomId: createState.roomId,
+            checkIn: createState.date,
+            checkOut: createState.date
+              ? addDays(parseISODate(createState.date), 1).toISOString().slice(0, 10)
+              : undefined,
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+export function CalendarBoardSkeleton() {
+  return (
+    <div className="flex items-center gap-2 rounded-xl border bg-card p-4 text-muted-foreground">
+      <Loader2 className="size-4 animate-spin" /> Loading calendar…
+    </div>
+  );
+}
+
+export function formatRangeShort(a: string, b: string): string {
+  return `${a.slice(8)} → ${b.slice(8)}`;
+}

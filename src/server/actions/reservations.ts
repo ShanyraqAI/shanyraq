@@ -32,7 +32,7 @@ async function resolveGuest(
   const name = input.guestName?.trim();
   if (!name) throw new Error("Guest is required");
   const byName = await db.guest.findFirst({
-    where: { hotelId, fullName: { equals: name, mode: "insensitive" } },
+    where: { hotelId, fullName: { equals: name } },
     select: { id: true },
   });
   if (byName) return byName.id;
