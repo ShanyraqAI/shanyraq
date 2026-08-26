@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { getCurrentHotelId } from "@/lib/db";
+import { requireSessionHotelId } from "@/server/guards";
 import {
   connectChannelSchema,
   saveRoomMappingsSchema,
@@ -16,6 +16,7 @@ import { runChannelSync, syncAllConnectedChannels } from "@/lib/channels/sync-se
 import { writeAudit } from "@/lib/reservations/service";
 import { ok, fail, type ActionResult } from "@/server/types";
 import { toErrorMessage } from "@/server/errors";
+import { t } from "@/lib/i18n";
 
 function revalidateChannels() {
   revalidatePath("/dashboard/channels");
@@ -52,11 +53,11 @@ export async function connectChannelAction(input: unknown): Promise<ActionResult
   try {
     const parsed = connectChannelSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await getCurrentHotelId();
+    const hotelId = await requireSessionHotelId();
     const data = parsed.data;
 
     const channel = await db.channel.findUnique({ where: { id: data.channelId } });
-    if (!channel) return fail("Unknown channel");
+    if (!channel) return fail(t.channelsPage.errors.unknownChannel);
 
     const credentials: ChannelCredentials = {
       propertyId: data.externalPropertyId,
@@ -86,7 +87,7 @@ export async function connectChannelAction(input: unknown): Promise<ActionResult
       propertyId: credentials.propertyId,
     });
     revalidateChannels();
-    return ok({ connectionId: connection.id }, `${channel.name} connected`);
+    return ok({ connectionId: connection.id }, t.channelsPage.toasts.connected(channel.name));
   } catch (error) {
     return fail(toErrorMessage(error));
   }
@@ -94,12 +95,12 @@ export async function connectChannelAction(input: unknown): Promise<ActionResult
 
 export async function disconnectChannelAction(connectionId: string): Promise<ActionResult> {
   try {
-    const hotelId = await getCurrentHotelId();
+    const hotelId = await requireSessionHotelId();
     const connection = await db.channelConnection.findFirst({
       where: { id: connectionId, hotelId },
       include: { channel: true },
     });
-    if (!connection) return fail("Connection not found");
+    if (!connection) return fail(t.channelsPage.errors.connectionNotFound);
 
     await db.$transaction([
       db.channelRoomMapping.deleteMany({ where: { connectionId } }),
@@ -108,7 +109,7 @@ export async function disconnectChannelAction(connectionId: string): Promise<Act
     ]);
     await writeAudit(hotelId, "channel.disconnected", "ChannelConnection", connectionId);
     revalidateChannels();
-    return ok(undefined, `${connection.channel.name} disconnected`);
+    return ok(undefined, t.channelsPage.toasts.disconnected(connection.channel.name));
   } catch (error) {
     return fail(toErrorMessage(error));
   }
@@ -118,11 +119,11 @@ export async function saveRoomMappingsAction(input: unknown): Promise<ActionResu
   try {
     const parsed = saveRoomMappingsSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await getCurrentHotelId();
+    const hotelId = await requireSessionHotelId();
     const connection = await db.channelConnection.findFirst({
       where: { id: parsed.data.connectionId, hotelId },
     });
-    if (!connection) return fail("Connection not found");
+    if (!connection) return fail(t.channelsPage.errors.connectionNotFound);
 
     // Replace-all keeps mapping state consistent with the UI.
     await db.$transaction([
@@ -142,7 +143,7 @@ export async function saveRoomMappingsAction(input: unknown): Promise<ActionResu
       count: parsed.data.mappings.length,
     });
     revalidateChannels();
-    return ok(undefined, "Room mapping saved");
+    return ok(undefined, t.channelsPage.toasts.roomMappingsSaved);
   } catch (error) {
     return fail(toErrorMessage(error));
   }
@@ -152,11 +153,11 @@ export async function saveRateMappingsAction(input: unknown): Promise<ActionResu
   try {
     const parsed = saveRateMappingsSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await getCurrentHotelId();
+    const hotelId = await requireSessionHotelId();
     const connection = await db.channelConnection.findFirst({
       where: { id: parsed.data.connectionId, hotelId },
     });
-    if (!connection) return fail("Connection not found");
+    if (!connection) return fail(t.channelsPage.errors.connectionNotFound);
 
     await db.$transaction([
       db.channelRateMapping.deleteMany({ where: { connectionId: connection.id } }),
@@ -175,7 +176,7 @@ export async function saveRateMappingsAction(input: unknown): Promise<ActionResu
       count: parsed.data.mappings.length,
     });
     revalidateChannels();
-    return ok(undefined, "Rate mapping saved");
+    return ok(undefined, t.channelsPage.toasts.rateMappingsSaved);
   } catch (error) {
     return fail(toErrorMessage(error));
   }
@@ -211,18 +212,18 @@ export async function syncChannelAction(connectionId: string): Promise<
   }>
 > {
   try {
-    const hotelId = await getCurrentHotelId();
+    const hotelId = await requireSessionHotelId();
     const owned = await db.channelConnection.findFirst({
       where: { id: connectionId, hotelId },
       select: { id: true },
     });
-    if (!owned) return fail("Connection not found");
+    if (!owned) return fail(t.channelsPage.errors.connectionNotFound);
 
     const summary = await runChannelSync(connectionId);
     revalidateChannels();
     revalidatePath("/dashboard/reservations");
     if (summary.status === "FAILED") {
-      return { ok: false, error: summary.message ?? "Synchronization failed" };
+      return { ok: false, error: summary.message ?? t.channelsPage.syncButtons.failed };
     }
     return ok(
       {
@@ -231,7 +232,7 @@ export async function syncChannelAction(connectionId: string): Promise<
         message: summary.message,
         error: null,
       },
-      summary.message ?? "Synchronization complete",
+      summary.message ?? t.channelsPage.syncButtons.complete,
     );
   } catch (error) {
     return fail(toErrorMessage(error));
@@ -240,7 +241,7 @@ export async function syncChannelAction(connectionId: string): Promise<
 
 export async function syncAllChannelsAction(): Promise<ActionResult<{ results: { channelId: string; status: string; error: string | null }[] }>> {
   try {
-    const hotelId = await getCurrentHotelId();
+    const hotelId = await requireSessionHotelId();
     const summaries = await syncAllConnectedChannels(hotelId);
     revalidateChannels();
     return ok(
@@ -248,12 +249,15 @@ export async function syncAllChannelsAction(): Promise<ActionResult<{ results: {
         results: summaries.map((s) => ({
           channelId: s.channelId,
           status: s.status,
-          error: s.status === "FAILED" ? (s.message ?? "Failed") : null,
+          error: s.status === "FAILED" ? (s.message ?? t.statuses.sync.FAILED) : null,
         })),
       },
       summaries.length === 0
-        ? "No connected channels to sync"
-        : `Synchronized ${summaries.filter((s) => s.status !== "FAILED").length}/${summaries.length} channels`,
+        ? t.channelsPage.syncButtons.nothingToSync
+        : t.channelsPage.syncButtons.syncedSome(
+            summaries.filter((s) => s.status !== "FAILED").length,
+            summaries.length,
+          ),
     );
   } catch (error) {
     return fail(toErrorMessage(error));

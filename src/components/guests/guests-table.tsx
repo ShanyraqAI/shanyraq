@@ -36,6 +36,7 @@ import { upsertGuestAction } from "@/server/actions/guests";
 import type { ReservationVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
+import { t } from "@/lib/i18n";
 
 export interface GuestRow {
   id: string;
@@ -88,24 +89,24 @@ export function GuestsTable({ guests, reservations }: Props) {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name, email or phone…"
+          placeholder={t.guests.searchPlaceholder}
           className="pl-8"
         />
       </div>
 
       {guests.length === 0 ? (
-        <EmptyState icon={UserRound} title="No guests yet" description="Guests appear here automatically with their first reservation." />
+        <EmptyState icon={UserRound} title={t.guests.emptyTitle} description={t.guests.emptyDescription} />
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
           <Table>
             <TableHeader>
               <TableRow className="bg-secondary/50 hover:bg-secondary/50">
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead className="text-right">Reservations</TableHead>
-                <TableHead>Last stay</TableHead>
-                <TableHead>Last source</TableHead>
+                <TableHead>{t.guests.table.name}</TableHead>
+                <TableHead>{t.dashboard.table.email}</TableHead>
+                <TableHead>{t.dashboard.table.phone}</TableHead>
+                <TableHead className="text-right">{t.guests.table.reservations}</TableHead>
+                <TableHead>{t.guests.table.lastStay}</TableHead>
+                <TableHead>{t.guests.table.lastSource}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -131,7 +132,7 @@ export function GuestsTable({ guests, reservations }: Props) {
               {filtered.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                    No guests match your search.
+                    {t.guests.searchEmpty}
                   </TableCell>
                 </TableRow>
               )}
@@ -153,7 +154,7 @@ export function GuestsTable({ guests, reservations }: Props) {
                   {selected.fullName}
                 </DialogTitle>
                 <DialogDescription>
-                  Guest profile and stay history · joined Shanyraq automatically
+                  {t.guests.profile.subtitle}
                 </DialogDescription>
               </DialogHeader>
 
@@ -167,11 +168,11 @@ export function GuestsTable({ guests, reservations }: Props) {
                   <span className="truncate">{selected.phone ?? "—"}</span>
                 </div>
                 <div className="rounded-lg border p-3 text-sm">
-                  <dt className="text-xs text-muted-foreground">Country</dt>
+                  <dt className="text-xs text-muted-foreground">{t.guests.profile.country}</dt>
                   <dd className="mt-0.5 font-medium">{selected.country ?? "—"}</dd>
                 </div>
                 <div className="rounded-lg border p-3 text-sm">
-                  <dt className="text-xs text-muted-foreground">Total stays</dt>
+                  <dt className="text-xs text-muted-foreground">{t.guests.profile.totalStays}</dt>
                   <dd className="mt-0.5 font-medium tabular-nums">{history.length}</dd>
                 </div>
               </dl>
@@ -183,10 +184,10 @@ export function GuestsTable({ guests, reservations }: Props) {
               ) : null}
 
               <div>
-                <h3 className="mb-2 text-sm font-semibold">Reservation history</h3>
+                <h3 className="mb-2 text-sm font-semibold">{t.guests.profile.historyTitle}</h3>
                 {history.length === 0 ? (
                   <p className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
-                    No reservations yet.
+                    {t.guests.profile.historyEmpty}
                   </p>
                 ) : (
                   <ul className="divide-y rounded-lg border">
@@ -194,7 +195,7 @@ export function GuestsTable({ guests, reservations }: Props) {
                       <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2.5 text-sm">
                         <span className="font-mono text-xs text-muted-foreground">#{r.id.slice(-8).toUpperCase()}</span>
                         <span className="font-medium">
-                          Room {r.roomNumber}
+                          {t.guests.profile.roomLabel(r.roomNumber)}
                         </span>
                         <span className="whitespace-nowrap text-muted-foreground">
                           {formatMediumDate(new Date(`${r.checkIn}T00:00:00Z`))} → {formatMediumDate(new Date(`${r.checkOut}T00:00:00Z`))}
@@ -210,9 +211,9 @@ export function GuestsTable({ guests, reservations }: Props) {
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setEditOpen(true)}>
-                  Edit guest
+                  {t.guests.profile.editButton}
                 </Button>
-                <Button onClick={() => setSelectedId(null)}>Close</Button>
+                <Button onClick={() => setSelectedId(null)}>{t.common.close}</Button>
               </DialogFooter>
 
               <GuestEditDialog
@@ -276,35 +277,35 @@ function GuestEditDialog({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Edit guest</SheetTitle>
+          <SheetTitle>{t.guests.editForm.title}</SheetTitle>
         </SheetHeader>
         <div className="space-y-4 overflow-y-auto px-4 pb-6">
           <div className="space-y-1.5">
-            <Label htmlFor="guest-name">Full name</Label>
+            <Label htmlFor="guest-name">{t.guests.editForm.fullName}</Label>
             <Input id="guest-name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="guest-email">Email</Label>
+            <Label htmlFor="guest-email">{t.dashboard.table.email}</Label>
             <Input id="guest-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="guest-phone">Phone</Label>
+            <Label htmlFor="guest-phone">{t.dashboard.table.phone}</Label>
             <Input id="guest-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="guest-country">Country</Label>
+            <Label htmlFor="guest-country">{t.guests.editForm.country}</Label>
             <Input id="guest-country" value={country} onChange={(e) => setCountry(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="guest-notes">Notes</Label>
+            <Label htmlFor="guest-notes">{t.guests.editForm.notes}</Label>
             <Textarea id="guest-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button onClick={save} disabled={saving || !fullName.trim()}>
-              Save guest
+              {t.guests.editForm.saveGuest}
             </Button>
           </div>
         </div>

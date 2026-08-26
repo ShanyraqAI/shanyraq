@@ -4,6 +4,7 @@ import { ArrowLeft, FileClock } from "lucide-react";
 import { db, getCurrentHotelId } from "@/lib/db";
 import { PageHeader, EmptyState } from "@/components/shared/page-header";
 import { SyncStatusBadge } from "@/components/shared/status-badge";
+import { t } from "@/lib/i18n";
 import {
   Table,
   TableBody,
@@ -42,28 +43,28 @@ export default async function ChannelLogsPage({
       </Link>
 
       <PageHeader
-        title={`${channel.name} — synchronization history`}
-        description="Every synchronization run with imported reservations and pushed inventory."
+        title={t.channelsPage.logs.title(channel.name)}
+        description={t.channelsPage.logs.description}
       />
 
       {logs.length === 0 ? (
         <EmptyState
           icon={FileClock}
-          title="No synchronization history yet"
-          description="Run a sync from the Channels page and the results will be recorded here."
+          title={t.channelsPage.logs.emptyTitle}
+          description={t.channelsPage.logs.emptyDescription}
         />
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
           <Table>
             <TableHeader>
               <TableRow className="bg-secondary/50 hover:bg-secondary/50">
-                <TableHead>Started</TableHead>
-                <TableHead>Finished</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Reservations</TableHead>
-                <TableHead className="text-right">Rates</TableHead>
-                <TableHead className="text-right">Availability</TableHead>
-                <TableHead>Details</TableHead>
+                <TableHead>{t.channelsPage.logs.columns.started}</TableHead>
+                <TableHead>{t.channelsPage.logs.columns.finished}</TableHead>
+                <TableHead>{t.channelsPage.logs.columns.status}</TableHead>
+                <TableHead className="text-right">{t.channelsPage.logs.columns.reservations}</TableHead>
+                <TableHead className="text-right">{t.channelsPage.logs.columns.rates}</TableHead>
+                <TableHead className="text-right">{t.channelsPage.logs.columns.availability}</TableHead>
+                <TableHead>{t.channelsPage.logs.columns.details}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { syncChannelAction } from "@/server/actions/channels";
+import { t } from "@/lib/i18n";
 
 export function SyncConnectionButton({ connectionId }: { connectionId: string }) {
   const router = useRouter();
@@ -27,7 +28,7 @@ export function SyncConnectionButton({ connectionId }: { connectionId: string })
   return (
     <Button size="sm" onClick={run} disabled={syncing}>
       {syncing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
-      {syncing ? "Synchronizing…" : "Sync now"}
+      {syncing ? t.channelsPage.syncButtons.syncing : t.channelsPage.syncButtons.syncNow}
     </Button>
   );
 }

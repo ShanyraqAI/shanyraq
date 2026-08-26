@@ -1,9 +1,12 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LifeBuoy, Hotel } from "lucide-react";
+import { LifeBuoy, Hotel, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
+import { signOutAction } from "@/server/actions/auth";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { NAV_MAIN, NAV_SECONDARY } from "./nav-config";
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
@@ -30,7 +33,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         </Link>
       ))}
       <div className="mt-4 px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-        Manage
+        {t.sidebar.manage}
       </div>
       {NAV_SECONDARY.map((item) => (
         <Link
@@ -52,7 +55,15 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function SidebarContent({ hotelName, userName }: { hotelName: string; userName: string }) {
+export function SidebarContent({
+  hotelName,
+  userName,
+  userAvatarUrl,
+}: {
+  hotelName: string;
+  userName: string;
+  userAvatarUrl?: string | null;
+}) {
   return (
     <div className="flex h-full flex-col">
       {/* Brand */}
@@ -62,13 +73,13 @@ export function SidebarContent({ hotelName, userName }: { hotelName: string; use
         </div>
         <div className="leading-tight">
           <div className="text-[15px] font-semibold tracking-tight">Shanyraq AI</div>
-          <div className="text-[11px] text-muted-foreground">Hotel Operations Platform</div>
+          <div className="text-[11px] text-muted-foreground">{t.tagline}</div>
         </div>
       </div>
 
       {/* Property */}
       <div className="mx-3 mt-4 rounded-lg border bg-secondary/50 px-3 py-2.5">
-        <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Property</div>
+        <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{t.sidebar.property}</div>
         <div className="truncate text-sm font-semibold" title={hotelName}>
           {hotelName}
         </div>
@@ -86,30 +97,52 @@ export function SidebarContent({ hotelName, userName }: { hotelName: string; use
           onClick={() => window.open("mailto:support@shanyraq.kz")}
         >
           <LifeBuoy className="size-4" />
-          Help
+          {t.sidebar.help}
         </button>
         <div className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5 shadow-sm">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-            {userName
-              .split(" ")
-              .map((p) => p[0])
-              .slice(0, 2)
-              .join("")}
-          </div>
-          <div className="min-w-0 leading-tight">
+          <Avatar className="size-8 shrink-0">
+            {userAvatarUrl ? <AvatarImage src={userAvatarUrl} alt={userName} /> : null}
+            <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
+              {userName
+                .split(" ")
+                .map((p) => p[0])
+                .slice(0, 2)
+                .join("")
+                .toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1 leading-tight">
             <div className="truncate text-sm font-medium">{userName}</div>
-            <div className="text-[11px] text-muted-foreground">Property manager</div>
+            <div className="text-[11px] text-muted-foreground">{t.sidebar.role}</div>
           </div>
+          <form action={signOutAction}>
+            <button
+              type="submit"
+              title={t.account.signOut}
+              aria-label={t.account.signOut}
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
+              <LogOut className="size-4" />
+            </button>
+          </form>
         </div>
       </div>
     </div>
   );
 }
 
-export function DesktopSidebar({ hotelName, userName }: { hotelName: string; userName: string }) {
+export function DesktopSidebar({
+  hotelName,
+  userName,
+  userAvatarUrl,
+}: {
+  hotelName: string;
+  userName: string;
+  userAvatarUrl?: string | null;
+}) {
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r bg-sidebar lg:block">
-      <SidebarContent hotelName={hotelName} userName={userName} />
+      <SidebarContent hotelName={hotelName} userName={userName} userAvatarUrl={userAvatarUrl} />
     </aside>
   );
 }

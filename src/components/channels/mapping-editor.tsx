@@ -23,6 +23,7 @@ import {
 import { saveRateMappingsAction, saveRoomMappingsAction } from "@/server/actions/channels";
 import type { ExternalInventory } from "@/lib/channels/types";
 import type { RatePlanVM } from "@/lib/types";
+import { t } from "@/lib/i18n";
 
 export interface RoomTypeOption {
   id: string;
@@ -134,21 +135,21 @@ export function MappingEditor({
         <header className="flex items-center justify-between border-b px-4 py-3">
           <div>
             <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <Link2 className="size-4 text-primary" /> Room mapping
+              <Link2 className="size-4 text-primary" /> {t.channelsPage.mapping.roomMapping}
             </h3>
             <p className="text-xs text-muted-foreground">
-              Map Shanyraq room types to {channelCode} rooms · {roomMappedCount}/{internalRoomTypes.length} mapped
+              {t.channelsPage.mapping.roomSubtitle(channelCode, roomMappedCount, internalRoomTypes.length)}
             </p>
           </div>
           <Button size="sm" variant="outline" onClick={saveRooms} disabled={saving !== null}>
             {saving === "rooms" ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Save className="mr-1.5 size-3.5" />}
-            Save
+            {t.common.save}
           </Button>
         </header>
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[45%]">Shanyraq</TableHead>
+              <TableHead className="w-[45%]">{t.channelsPage.mapping.shanyraqColumn}</TableHead>
               <TableHead className="w-8" />
               <TableHead>{channelCode}</TableHead>
             </TableRow>
@@ -165,11 +166,11 @@ export function MappingEditor({
                     value={roomSelections[rt.id]}
                     onValueChange={(v) => setRoomSelections((s) => ({ ...s, [rt.id]: v }))}
                   >
-                    <SelectTrigger size="sm" className="w-full" aria-label={`Map ${rt.name}`}>
+                    <SelectTrigger size="sm" className="w-full" aria-label={t.channelsPage.mapping.mapAria(rt.name)}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={UNMAPPED}>— Not mapped —</SelectItem>
+                      <SelectItem value={UNMAPPED}>{t.channelsPage.mapping.unmapped}</SelectItem>
                       {inventory.roomTypes.map((ext) => (
                         <SelectItem key={ext.id} value={ext.id}>
                           {ext.name}
@@ -189,21 +190,21 @@ export function MappingEditor({
         <header className="flex items-center justify-between border-b px-4 py-3">
           <div>
             <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <Link2 className="size-4 text-primary" /> Rate mapping
+              <Link2 className="size-4 text-primary" /> {t.channelsPage.mapping.rateMapping}
             </h3>
             <p className="text-xs text-muted-foreground">
-              Map rate plans to {channelCode} rates · {rateMappedCount}/{internalRatePlans.length} mapped
+              {t.channelsPage.mapping.rateSubtitle(channelCode, rateMappedCount, internalRatePlans.length)}
             </p>
           </div>
           <Button size="sm" variant="outline" onClick={saveRates} disabled={saving !== null}>
             {saving === "rates" ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Save className="mr-1.5 size-3.5" />}
-            Save
+            {t.common.save}
           </Button>
         </header>
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[45%]">Shanyraq</TableHead>
+              <TableHead className="w-[45%]">{t.channelsPage.mapping.shanyraqColumn}</TableHead>
               <TableHead className="w-8" />
               <TableHead>{channelCode}</TableHead>
             </TableRow>
@@ -223,11 +224,11 @@ export function MappingEditor({
                     value={rateSelections[rp.id]}
                     onValueChange={(v) => setRateSelections((s) => ({ ...s, [rp.id]: v }))}
                   >
-                    <SelectTrigger size="sm" className="w-full" aria-label={`Map ${rp.name}`}>
+                    <SelectTrigger size="sm" className="w-full" aria-label={t.channelsPage.mapping.mapAria(rp.name)}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={UNMAPPED}>— Not mapped —</SelectItem>
+                      <SelectItem value={UNMAPPED}>{t.channelsPage.mapping.unmapped}</SelectItem>
                       {inventory.ratePlans.map((ext) => (
                         <SelectItem key={ext.id} value={ext.id}>
                           {ext.name}

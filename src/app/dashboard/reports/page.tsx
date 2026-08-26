@@ -3,6 +3,7 @@ import { ACTIVE_RESERVATION_STATUSES } from "@/lib/constants";
 import { addDays, eachDay, formatShortDate, isSameDay, today } from "@/lib/dates";
 import { formatMoney, formatPercent } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
+import { t, channelLabel } from "@/lib/i18n";
 import {
   Card,
   CardContent,
@@ -53,24 +54,25 @@ export default async function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Reports" description="A first glance at performance — full analytics arrive in a later stage." />
+      <PageHeader title={t.reports.title} description={t.reports.description} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base">Revenue by channel</CardTitle>
+            <CardTitle className="text-base">{t.reports.revenueByChannel}</CardTitle>
             <CardDescription>
-              Total booked revenue: <strong className="text-foreground tabular-nums">{formatMoney(totalRevenue)}</strong>
+              {t.reports.totalRevenueLabel}{" "}
+              <strong className="text-foreground tabular-nums">{formatMoney(totalRevenue)}</strong>
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {channelRows.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">No revenue recorded yet.</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">{t.reports.noRevenue}</p>
             ) : (
               channelRows.map(([channel, value]) => (
                 <div key={channel}>
                   <div className="mb-1 flex items-center justify-between text-sm">
-                    <span className="font-medium capitalize">{channel === "booking" ? "Booking.com" : channel}</span>
+                    <span className="font-medium">{channelLabel(channel)}</span>
                     <span className="tabular-nums text-muted-foreground">{formatMoney(value, { compact: true })}</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-secondary">
@@ -87,8 +89,8 @@ export default async function ReportsPage() {
 
         <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base">Occupancy trend</CardTitle>
-            <CardDescription>Nights occupied across all rooms, last 14 days</CardDescription>
+            <CardTitle className="text-base">{t.reports.occupancyTrend}</CardTitle>
+            <CardDescription>{t.reports.occupancyDescription}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex h-[180px] items-end gap-1.5">

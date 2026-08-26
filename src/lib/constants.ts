@@ -29,22 +29,22 @@ export const ACTIVE_RESERVATION_STATUSES: readonly ReservationStatus[] = ["PENDI
 export const CHANNEL_META: Record<ChannelCode, { name: string; description: string; color: string }> = {
   booking: {
     name: "Booking.com",
-    description: "Global OTA with the widest traveller reach.",
+    description: "Глобальный канал с максимальным охватом путешественников.",
     color: "#003580",
   },
   ostrovok: {
     name: "Ostrovok",
-    description: "OTA focused on CIS and Asian markets.",
+    description: "Канал, ориентированный на рынки СНГ и Азии.",
     color: "#ff6d00",
   },
   krisha: {
     name: "Krisha",
-    description: "Local Kazakhstan marketplace for stays.",
+    description: "Казахстанская площадка для размещения объектов проживания.",
     color: "#0ea5e9",
   },
   direct: {
-    name: "Direct",
-    description: "Phone, walk-in and website bookings.",
+    name: "Прямые брони",
+    description: "Брони по телефону, на стойке и через сайт отеля.",
     color: "#059669",
   },
 };
@@ -55,13 +55,13 @@ export const CHANNEL_META: Record<ChannelCode, { name: string; description: stri
 
 const isoDate = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected date in YYYY-MM-DD format");
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Дата должна быть в формате ГГГГ-ММ-ДД");
 
 export const createReservationSchema = z
   .object({
     guestId: z.string().optional(),
     guestName: z.string().trim().max(160).optional(),
-    guestEmail: z.string().trim().email("Invalid email").or(z.literal("")).optional(),
+    guestEmail: z.string().trim().email("Некорректный email").or(z.literal("")).optional(),
     guestPhone: z.string().trim().max(40).optional(),
     roomId: z.string().min(1),
     checkIn: isoDate,
@@ -73,11 +73,11 @@ export const createReservationSchema = z
     notes: z.string().max(2000).optional(),
   })
   .refine((v) => v.checkOut > v.checkIn, {
-    message: "Check-out must be after check-in",
+    message: "Дата выезда должна быть позже даты заезда",
     path: ["checkOut"],
   })
   .refine((v) => Boolean(v.guestId || v.guestName), {
-    message: "Select an existing guest or enter a name",
+    message: "Выберите гостя из списка или введите имя",
     path: ["guestName"],
   });
 export type CreateReservationInput = z.infer<typeof createReservationSchema>;
@@ -101,9 +101,9 @@ export const reservationStatusSchema = z.object({
 
 export const connectChannelSchema = z.object({
   channelId: z.enum(["booking", "ostrovok", "krisha"]),
-  externalPropertyId: z.string().trim().min(1, "Property ID is required").max(64),
-  username: z.string().trim().min(1, "Username is required").max(128),
-  apiKey: z.string().trim().min(4, "API key must be at least 4 characters").max(256),
+  externalPropertyId: z.string().trim().min(1, "Укажите ID объекта").max(64),
+  username: z.string().trim().min(1, "Укажите имя пользователя").max(128),
+  apiKey: z.string().trim().min(4, "API-ключ должен содержать минимум 4 символа").max(256),
 });
 export type ConnectChannelInput = z.infer<typeof connectChannelSchema>;
 
@@ -152,19 +152,64 @@ export const bulkRateUpdateSchema = z
     weekendsOnly: z.boolean().default(false),
   })
   .refine((v) => v.to >= v.from, {
-    message: "End date must be on or after start date",
+    message: "Конечная дата не может быть раньше начальной",
     path: ["to"],
   });
 
 export const upsertGuestSchema = z.object({
   id: z.string().optional(),
-  fullName: z.string().trim().min(1, "Name is required").max(160),
-  email: z.string().trim().email("Invalid email").or(z.literal("")).optional(),
+  fullName: z.string().trim().min(1, "Укажите имя").max(160),
+  email: z.string().trim().email("Некорректный email").or(z.literal("")).optional(),
   phone: z.string().trim().max(40).optional(),
   country: z.string().trim().max(80).optional(),
   notes: z.string().trim().max(2000).optional(),
 });
 
+// ---------------------------------------------------------------------------
+// Auth schemas
+// ---------------------------------------------------------------------------
+
+/** Loose phone mask at input level; normalization happens server-side. */
+export const PHONE_INPUT_REGEX = /^\+?\d[\d\s\-()]{6,18}$/;
+
+/** Keeps digits and an optional leading "+" only — canonical storage format. */
+export function normalizePhone(input: string): string {
+  const trimmed = input.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  return trimmed.startsWith("+") ? `+${digits}` : digits;
+}
+
+export const registerSchema = z
+  .object({
+    fullName: z.string().trim().min(2, "Укажите имя и фамилию").max(160),
+    method: z.enum(["email", "phone"]),
+    email: z.string().trim().toLowerCase().email("Некорректный email").max(200).optional(),
+    phone: z.string().trim().regex(PHONE_INPUT_REGEX, "Некорректный номер телефона").optional(),
+    password: z.string().min(8, "Пароль должен содержать минимум 8 символов").max(64),
+  })
+  .refine((v) => (v.method === "email" ? Boolean(v.email) : Boolean(v.phone)), {
+    message: "Заполните контактное поле",
+    path: ["method"],
+  });
+export type RegisterInput = z.infer<typeof registerSchema>;
+
+export const loginSchema = z.object({
+  identifier: z.string().trim().min(3, "Введите email или телефон").max(200),
+  password: z.string().min(1, "Введите пароль").max(64),
+});
+export type LoginInput = z.infer<typeof loginSchema>;
+
+export const profileSchema = z.object({
+  fullName: z.string().trim().min(2, "Укажите имя и фамилию").max(160),
+  avatarUrl: z
+    .string()
+    .trim()
+    .url("Некорректная ссылка на изображение")
+    .max(500)
+    .or(z.literal(""))
+    .optional(),
+});
+
 export function firstZodError(error: z.ZodError): string {
-  return error.issues[0]?.message ?? "Invalid input";
+  return error.issues[0]?.message ?? "Некорректные данные";
 }

@@ -10,13 +10,16 @@
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts"
+    "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
+    "test:smoke": "tsx scripts/smoke.ts",
+    "gen:sql": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script | node scripts/gen-init-sql.mjs"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
+  "engines": {
+    "node": ">=18.18.0"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
+    "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.544.0",

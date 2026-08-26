@@ -30,6 +30,7 @@ import {
 } from "@/server/actions/channels";
 import type { ExternalInventory } from "@/lib/channels/types";
 import type { RatePlanVM } from "@/lib/types";
+import { t } from "@/lib/i18n";
 
 interface Props {
   channel: {
@@ -74,7 +75,7 @@ export function ConnectChannelDialog({
     if (open && step === "mapping" && !inventory && !inventoryError) {
       fetchExternalInventoryAction(channel.id).then((result) => {
         if (result.ok && result.data) setInventory(result.data);
-        else setInventoryError(result.error ?? "Could not load channel inventory");
+        else setInventoryError(result.error ?? t.channelsPage.dialog.inventoryErrorFallback);
       });
     }
   }, [open, step, inventory, inventoryError, channel.id]);
@@ -89,7 +90,7 @@ export function ConnectChannelDialog({
         username,
         apiKey,
       });
-      setTestResult(result.ok ? { ok: true, message: result.message ?? "Connection successful" } : { ok: false, message: result.error ?? "Connection failed" });
+      setTestResult(result.ok ? { ok: true, message: result.message ?? t.channelsPage.dialog.testOk } : { ok: false, message: result.error ?? t.channelsPage.dialog.testFailed });
     } finally {
       setTesting(false);
     }
@@ -118,7 +119,7 @@ export function ConnectChannelDialog({
 
   async function handleDisconnect() {
     if (!channel.connectionId) return;
-    if (!window.confirm(`Disconnect ${channel.name}? Room and rate mappings will be removed.`)) return;
+    if (!window.confirm(t.channelsPage.dialog.disconnectConfirm(channel.name))) return;
     const result = await disconnectChannelAction(channel.connectionId);
     if (!result.ok) {
       toast.error(result.error);
@@ -145,12 +146,12 @@ export function ConnectChannelDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <PlugZap className="size-4 text-primary" />
-            {connected ? `${channel.name} settings` : `Connect ${channel.name}`}
+            {connected ? t.channelsPage.dialog.settingsTitle(channel.name) : t.channelsPage.dialog.connectTitle(channel.name)}
           </DialogTitle>
           <DialogDescription>
             {connected
-              ? "Manage the connection and how Shanyraq inventory maps to this channel."
-              : "Development mode uses a simulated provider — no real API calls are made."}
+              ? t.channelsPage.dialog.settingsDescription
+              : t.channelsPage.dialog.connectDescription}
           </DialogDescription>
         </DialogHeader>
 
@@ -158,21 +159,21 @@ export function ConnectChannelDialog({
           <>
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="property-id">Property ID</Label>
+                <Label htmlFor="property-id">{t.channelsPage.dialog.propertyId}</Label>
                 <Input
                   id="property-id"
                   value={propertyId}
                   onChange={(e) => setPropertyId(e.target.value)}
-                  placeholder="e.g. 100200330"
+                  placeholder={t.channelsPage.dialog.propertyIdPlaceholder}
                 />
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="username">Username</Label>
-                  <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="channel manager login" />
+                  <Label htmlFor="username">{t.channelsPage.dialog.username}</Label>
+                  <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t.channelsPage.dialog.usernamePlaceholder} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="api-key">API key / password</Label>
+                  <Label htmlFor="api-key">{t.channelsPage.dialog.apiKey}</Label>
                   <Input id="api-key" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="••••••••" />
                 </div>
               </div>
@@ -186,7 +187,7 @@ export function ConnectChannelDialog({
                   }
                 >
                   {testResult.ok ? <CheckCircle2 className="size-4 shrink-0" /> : <AlertCircle className="size-4 shrink-0" />}
-                  {testResult.ok ? "Connection successful — " : "Connection failed — "}
+                  {testResult.ok ? t.channelsPage.dialog.testOk : t.channelsPage.dialog.testFailed}
                   {testResult.message}
                 </div>
               ) : null}
@@ -195,11 +196,11 @@ export function ConnectChannelDialog({
             <DialogFooter className="mt-2 flex-col gap-2 sm:flex-row">
               <Button variant="outline" onClick={handleTest} disabled={testing || !propertyId || !username || !apiKey}>
                 {testing ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                Test connection
+                {t.channelsPage.dialog.testConnection}
               </Button>
               <Button onClick={handleSave} disabled={saving || !propertyId || !username || !apiKey}>
                 {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                Save connection <ArrowRight className="ml-1 size-4" />
+                {t.channelsPage.dialog.saveConnection} <ArrowRight className="ml-1 size-4" />
               </Button>
             </DialogFooter>
           </>
@@ -207,11 +208,11 @@ export function ConnectChannelDialog({
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-lg border bg-secondary/40 px-3 py-2.5 text-sm">
               <span>
-                Property ID: <strong>{propertyId || channel.externalPropertyId}</strong>
-                {username ? <> · user <strong>{username}</strong></> : null}
+                {t.channelsPage.dialog.summaryPropertyId} <strong>{propertyId || channel.externalPropertyId}</strong>
+                {username ? <>{t.channelsPage.dialog.summaryUser}<strong>{username}</strong></> : null}
               </span>
               <Button variant="ghost" size="sm" className="text-destructive hover:bg-red-50 hover:text-destructive" onClick={handleDisconnect}>
-                Disconnect
+                {t.common.disconnect}
               </Button>
             </div>
 
@@ -219,7 +220,7 @@ export function ConnectChannelDialog({
               <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{inventoryError}</div>
             ) : !inventory ? (
               <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" /> Loading channel inventory…
+                <Loader2 className="size-4 animate-spin" /> {t.channelsPage.dialog.loadingInventory}
               </div>
             ) : (
               <MappingEditor

@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ChannelCards, type ChannelCardVM } from "@/components/channels/channel-cards";
 import { SyncAllButton } from "@/components/channels/sync-all-button";
 import type { RatePlanVM } from "@/lib/types";
+import { t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -67,8 +68,8 @@ export default async function ChannelsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Channels"
-        description="Connect booking channels and keep rates and inventory synchronized."
+        title={t.channelsPage.title}
+        description={t.channelsPage.description}
       >
         <SyncAllButton />
       </PageHeader>

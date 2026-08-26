@@ -9,6 +9,7 @@ import { SyncConnectionButton } from "@/components/channels/sync-connection-butt
 import type { ExternalInventory } from "@/lib/channels/types";
 import type { RatePlanVM } from "@/lib/types";
 import { formatTimeAgo } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +79,7 @@ export default async function ChannelDetailPage({
         href="/dashboard/channels"
         className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="size-4" /> All channels
+        <ArrowLeft className="size-4" /> {t.channelsPage.allChannels}
       </Link>
 
       <PageHeader title={channel.name} description={channel.description}>
@@ -88,13 +89,13 @@ export default async function ChannelDetailPage({
               href={`/dashboard/channels/${channelId}/logs`}
               className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
             >
-              <FileClock className="size-4" /> Sync logs
+              <FileClock className="size-4" /> {t.channelsPage.syncLogs}
             </Link>
             <SyncConnectionButton connectionId={connection.id} />
           </>
         ) : (
           <span className="text-sm text-muted-foreground">
-            Connect this channel from the Channels page to enable synchronization.
+            {t.channelsPage.connectHint}
           </span>
         )}
       </PageHeader>
@@ -102,26 +103,26 @@ export default async function ChannelDetailPage({
       {/* Connection summary */}
       <section className="grid grid-cols-2 gap-4 rounded-xl border bg-card p-5 shadow-sm sm:grid-cols-4">
         <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</dt>
+          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t.channelsPage.summary.status}</dt>
           <dd className="mt-1.5">
             <ConnectionStatusBadge status={(connection?.status ?? "DISCONNECTED") as never} />
           </dd>
         </div>
         <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Property ID</dt>
+          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t.channelsPage.summary.propertyId}</dt>
           <dd className="mt-1 font-mono text-sm">{connection?.externalPropertyId ?? "—"}</dd>
         </div>
         <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Last sync</dt>
+          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t.channelsPage.summary.lastSync}</dt>
           <dd className="mt-1 flex items-center gap-2 text-sm">
             {formatTimeAgo(connection?.lastSyncAt ?? null)}
             {connection?.lastSyncStatus ? <SyncStatusBadge status={connection.lastSyncStatus as never} /> : null}
           </dd>
         </div>
         <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Credentials</dt>
+          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t.channelsPage.summary.credentials}</dt>
           <dd className="mt-1 text-sm text-muted-foreground">
-            Stored server-side · never exposed to the browser
+            {t.channelsPage.summary.credentialsValue}
           </dd>
         </div>
       </section>
@@ -130,8 +131,8 @@ export default async function ChannelDetailPage({
       {!connection ? (
         <EmptyState
           icon={FileClock}
-          title={`${channel.name} is not connected`}
-          description="Connect the channel first — then map rooms and rates here."
+          title={t.channelsPage.notConnectedTitle(channel.name)}
+          description={t.channelsPage.notConnectedDescription}
         />
       ) : (
         <MappingEditor

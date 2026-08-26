@@ -3,6 +3,7 @@ import { addDays, today, toISODate } from "@/lib/dates";
 import { PageHeader } from "@/components/shared/page-header";
 import { RatesBoard } from "@/components/rates/rates-board";
 import type { RatePlanVM } from "@/lib/types";
+import { t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -49,8 +50,8 @@ export default async function RatesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Rates"
-        description={`Nightly pricing for the next ${HORIZON} days — the internal source of truth pushed to channels.`}
+        title={t.rates.title}
+        description={t.rates.description(HORIZON)}
       />
       <RatesBoard plans={planVMs} dates={dates} prices={prices} />
     </div>

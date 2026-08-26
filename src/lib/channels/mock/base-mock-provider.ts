@@ -31,10 +31,10 @@ export function sleep(ms: number): Promise<void> {
 }
 
 export function validateMockCredentials(credentials: ChannelCredentials, expectedPrefix: string): ConnectionTestResult {
-  if (!credentials.propertyId.trim()) return { ok: false, error: "Property ID is required" };
-  if (!credentials.username.trim()) return { ok: false, error: "Username is required" };
-  if (credentials.apiKey.trim().length < 4) return { ok: false, error: `${expectedPrefix} API key looks invalid (too short)` };
-  return { ok: true, message: `Authenticated with ${expectedPrefix} as ${credentials.username}` };
+  if (!credentials.propertyId.trim()) return { ok: false, error: "Укажите ID объекта" };
+  if (!credentials.username.trim()) return { ok: false, error: "Укажите имя пользователя" };
+  if (credentials.apiKey.trim().length < 4) return { ok: false, error: `API-ключ ${expectedPrefix} выглядит некорректным (слишком короткий)` };
+  return { ok: true, message: `Подключение к ${expectedPrefix} установлено (пользователь ${credentials.username})` };
 }
 
 export interface MockReservationTemplate {
@@ -94,7 +94,7 @@ export abstract class BaseMockProvider implements ChannelProvider {
       currency: "KZT",
       totalAmount: t.baseAmount * t.nights,
       status: (t.cancelled ? "CANCELLED" : "CONFIRMED") as "CANCELLED" | "CONFIRMED",
-      notes: `Imported from ${this.config.label} (mock feed)`,
+      notes: `Импортировано из ${this.config.label} (демо-канал)`,
     }));
 
     return {

@@ -36,6 +36,7 @@ import { setReservationStatusAction } from "@/server/actions/reservations";
 import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
 import type { ReservationStatus } from "@/lib/constants";
 import { formatMoney } from "@/lib/utils";
+import { t, channelLabel } from "@/lib/i18n";
 
 interface Props {
   reservations: ReservationVM[];
@@ -86,19 +87,19 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search guest, room, id…"
+            placeholder={t.reservations.searchPlaceholder}
             className="w-[240px] pl-8"
           />
         </div>
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger size="sm" className="w-[150px]">
+          <SelectTrigger size="sm" className="w-[170px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="all">{t.filters.allStatuses}</SelectItem>
             {STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
-                {s.replace("_", " ").toLowerCase()}
+                {t.statuses.reservation[s]}
               </SelectItem>
             ))}
           </SelectContent>
@@ -108,10 +109,10 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All channels</SelectItem>
+            <SelectItem value="all">{t.filters.allChannels}</SelectItem>
             {channelsPresent.map((c) => (
               <SelectItem key={c} value={c}>
-                {c === "booking" ? "Booking.com" : c.charAt(0).toUpperCase() + c.slice(1)}
+                {channelLabel(c)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -119,13 +120,15 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
 
         <div className="ml-auto flex items-center gap-4 text-sm text-muted-foreground">
           <span>
-            <strong className="text-foreground tabular-nums">{stats.total}</strong> reservations
+            <strong className="text-foreground tabular-nums">{stats.total}</strong>{" "}
+            {t.reservations.statsCount(stats.total)}
           </span>
           <span className="hidden sm:inline">
-            <strong className="text-foreground tabular-nums">{formatMoney(stats.revenue, { compact: true })}</strong> booked
+            <strong className="text-foreground tabular-nums">{formatMoney(stats.revenue, { compact: true })}</strong>{" "}
+            {t.reservations.statsBooked}
           </span>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-1.5 size-4" /> New
+            <Plus className="mr-1.5 size-4" /> {t.reservations.newButton}
           </Button>
         </div>
       </div>
@@ -133,11 +136,11 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
       {reservations.length === 0 ? (
         <EmptyState
           icon={Plus}
-          title="No reservations yet"
-          description="Create your first reservation directly or connect a channel to import bookings."
+          title={t.reservations.emptyTitle}
+          description={t.reservations.emptyDescription}
           action={
             <Button size="sm" onClick={() => setCreateOpen(true)}>
-              Create reservation
+              {t.reservations.createButton}
             </Button>
           }
         />
@@ -146,13 +149,13 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           <Table>
             <TableHeader>
               <TableRow className="bg-secondary/50 hover:bg-secondary/50">
-                <TableHead>ID</TableHead>
-                <TableHead>Guest</TableHead>
-                <TableHead>Room</TableHead>
-                <TableHead>Dates</TableHead>
-                <TableHead>Channel</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>{t.dashboard.table.id}</TableHead>
+                <TableHead>{t.dashboard.table.guest}</TableHead>
+                <TableHead>{t.dashboard.table.room}</TableHead>
+                <TableHead>{t.dashboard.table.dates}</TableHead>
+                <TableHead>{t.dashboard.table.channel}</TableHead>
+                <TableHead className="text-right">{t.dashboard.table.amount}</TableHead>
+                <TableHead>{t.dashboard.table.status}</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
@@ -180,18 +183,18 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Quick actions</DropdownMenuLabel>
+                        <DropdownMenuLabel>{t.reservations.quickActions}</DropdownMenuLabel>
                         {(r.status === "CONFIRMED" || r.status === "PENDING") && (
-                          <ResAction row={r} label="Check in" status="CHECKED_IN" onDone={() => setSelected(null)} />
+                          <ResAction row={r} label={t.reservations.checkIn} status="CHECKED_IN" onDone={() => setSelected(null)} />
                         )}
                         {r.status === "CHECKED_IN" && (
-                          <ResAction row={r} label="Check out" status="CHECKED_OUT" onDone={() => setSelected(null)} />
+                          <ResAction row={r} label={t.reservations.checkOut} status="CHECKED_OUT" onDone={() => setSelected(null)} />
                         )}
                         {r.status === "PENDING" && (
-                          <ResAction row={r} label="Confirm" status="CONFIRMED" onDone={() => setSelected(null)} />
+                          <ResAction row={r} label={t.reservations.confirm} status="CONFIRMED" onDone={() => setSelected(null)} />
                         )}
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => setSelected(r)}>View details</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setSelected(r)}>{t.common.viewDetails}</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -200,7 +203,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
               {filtered.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
-                    No reservations match the current filters.
+                    {t.filters.noMatch}
                   </TableCell>
                 </TableRow>
               )}

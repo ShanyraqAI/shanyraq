@@ -12,6 +12,7 @@ import { getChannelHealth, getDashboardStats, getRecentReservations } from "@/li
 import { toReservationVM, type GuestVM, type RatePlanVM, type RoomVM } from "@/lib/types";
 import { today, formatMediumDate } from "@/lib/dates";
 import { formatMoney, formatPercent } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 import { PageHeader, EmptyState } from "@/components/shared/page-header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { RecentReservationsTable } from "@/components/dashboard/recent-reservations-table";
@@ -88,40 +89,40 @@ export default async function DashboardPage() {
       {/* KPI cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <KpiCard
-          label="Occupancy"
+          label={t.dashboard.kpi.occupancy}
           value={formatPercent(stats.occupancyTonight)}
-          sub={`${stats.occupiedTonight} of ${stats.totalRooms} rooms tonight`}
+          sub={t.dashboard.kpi.occupancySub(stats.occupiedTonight, stats.totalRooms)}
           icon={Percent}
           accent
         />
         <KpiCard
-          label="Reservations"
+          label={t.dashboard.kpi.reservations}
           value={String(stats.activeReservations)}
-          sub="active bookings"
+          sub={t.dashboard.kpi.reservationsSub}
           icon={CalendarCheck2}
         />
         <KpiCard
-          label="Arrivals today"
+          label={t.dashboard.kpi.arrivalsToday}
           value={String(stats.arrivalsToday.length)}
-          sub={`${stats.arrivalsToday.filter((r) => r.status === "CHECKED_IN").length} already checked in`}
+          sub={t.dashboard.kpi.arrivalsSub(stats.arrivalsToday.filter((r) => r.status === "CHECKED_IN").length)}
           icon={ArrowUp}
         />
         <KpiCard
-          label="Departures today"
+          label={t.dashboard.kpi.departuresToday}
           value={String(stats.departuresToday.length)}
-          sub={`${stats.departuresToday.filter((r) => r.status === "CHECKED_OUT").length} checked out`}
+          sub={t.dashboard.kpi.departuresSub(stats.departuresToday.filter((r) => r.status === "CHECKED_OUT").length)}
           icon={ArrowDown}
         />
         <KpiCard
-          label="Revenue (MTD)"
+          label={t.dashboard.kpi.revenueMtd}
           value={formatMoney(stats.revenueMonthToDate)}
-          sub="booked revenue this month"
+          sub={t.dashboard.kpi.revenueSub}
           icon={ReceiptText}
         />
         <KpiCard
-          label="Available rooms"
+          label={t.dashboard.kpi.availableRooms}
           value={String(stats.availableRoomsTonight)}
-          sub={`for tonight · ${stats.inHouseGuests} guests in house`}
+          sub={t.dashboard.kpi.availableRoomsSub(stats.inHouseGuests)}
           icon={BedDouble}
         />
       </div>
@@ -131,7 +132,7 @@ export default async function DashboardPage() {
         <section className="rounded-xl border bg-card shadow-sm">
           <header className="flex items-center justify-between border-b px-5 py-4">
             <div>
-              <h2 className="font-semibold">Today&apos;s arrivals</h2>
+              <h2 className="font-semibold">{t.dashboard.arrivalsSection}</h2>
               <p className="text-sm text-muted-foreground">{formatMediumDate(day)}</p>
             </div>
             <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
@@ -140,16 +141,16 @@ export default async function DashboardPage() {
           </header>
           <div className="overflow-x-auto">
             {stats.arrivalsToday.length === 0 ? (
-              <EmptyState icon={CalendarCheck2} title="No arrivals expected today" className="m-3 border-0 bg-transparent py-8" />
+              <EmptyState icon={CalendarCheck2} title={t.dashboard.noArrivals} className="m-3 border-0 bg-transparent py-8" />
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Guest</TableHead>
-                    <TableHead>Room</TableHead>
-                    <TableHead>Nights</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{t.dashboard.table.guest}</TableHead>
+                    <TableHead>{t.dashboard.table.room}</TableHead>
+                    <TableHead>{t.dashboard.table.nights}</TableHead>
+                    <TableHead>{t.dashboard.table.channel}</TableHead>
+                    <TableHead>{t.dashboard.table.status}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -175,7 +176,7 @@ export default async function DashboardPage() {
         <section className="rounded-xl border bg-card shadow-sm">
           <header className="flex items-center justify-between border-b px-5 py-4">
             <div>
-              <h2 className="font-semibold">Today&apos;s departures</h2>
+              <h2 className="font-semibold">{t.dashboard.departuresSection}</h2>
               <p className="text-sm text-muted-foreground">{formatMediumDate(day)}</p>
             </div>
             <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground">
@@ -184,15 +185,15 @@ export default async function DashboardPage() {
           </header>
           <div className="overflow-x-auto">
             {stats.departuresToday.length === 0 ? (
-              <EmptyState icon={CalendarX2} title="No departures scheduled today" className="m-3 border-0 bg-transparent py-8" />
+              <EmptyState icon={CalendarX2} title={t.dashboard.noDepartures} className="m-3 border-0 bg-transparent py-8" />
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Guest</TableHead>
-                    <TableHead>Room</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{t.dashboard.table.guest}</TableHead>
+                    <TableHead>{t.dashboard.table.room}</TableHead>
+                    <TableHead>{t.dashboard.table.channel}</TableHead>
+                    <TableHead>{t.dashboard.table.status}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -218,8 +219,8 @@ export default async function DashboardPage() {
       {/* Recent reservations */}
       <section className="rounded-xl border bg-card p-5 shadow-sm">
         <header className="mb-4">
-          <h2 className="font-semibold">Recent reservations</h2>
-          <p className="text-sm text-muted-foreground">Latest bookings across all channels — click a row for details.</p>
+          <h2 className="font-semibold">{t.dashboard.recentReservations}</h2>
+          <p className="text-sm text-muted-foreground">{t.dashboard.recentSubtitle}</p>
         </header>
         <RecentReservationsTable
           reservations={recent.map(toReservationVM)}
@@ -238,9 +239,9 @@ export default async function DashboardPage() {
 
 function greeting(): string {
   const h = new Date().getHours();
-  if (h < 12) return "morning";
-  if (h < 18) return "afternoon";
-  return "evening";
+  if (h < 12) return t.dashboard.goodMorning;
+  if (h < 18) return t.dashboard.goodAfternoon;
+  return t.dashboard.goodEvening;
 }
 
 function nightsOf(a: Date, b: Date): number {

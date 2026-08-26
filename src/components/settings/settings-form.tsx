@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { saveHotelSettingsAction } from "@/server/actions/settings";
+import { t } from "@/lib/i18n";
 
 export interface HotelSettingsValues {
   name: string;
@@ -66,23 +67,23 @@ export function SettingsForm({ initial }: { initial: HotelSettingsValues }) {
     <form onSubmit={save} className="max-w-2xl space-y-4 rounded-xl border bg-card p-6 shadow-sm">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="hotel-name">Hotel name</Label>
+          <Label htmlFor="hotel-name">{t.settings.form.hotelName}</Label>
           <Input id="hotel-name" value={values.name} onChange={(e) => set("name", e.target.value)} required />
         </div>
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="hotel-address">Address</Label>
+          <Label htmlFor="hotel-address">{t.settings.form.address}</Label>
           <Input id="hotel-address" value={values.address ?? ""} onChange={(e) => set("address", e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="hotel-city">City</Label>
+          <Label htmlFor="hotel-city">{t.settings.form.city}</Label>
           <Input id="hotel-city" value={values.city ?? ""} onChange={(e) => set("city", e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="hotel-country">Country</Label>
+          <Label htmlFor="hotel-country">{t.settings.form.country}</Label>
           <Input id="hotel-country" value={values.country ?? ""} onChange={(e) => set("country", e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="hotel-tz">Timezone (hotel operations)</Label>
+          <Label htmlFor="hotel-tz">{t.settings.form.timezone}</Label>
           <Select value={values.timezone} onValueChange={(v) => set("timezone", v)}>
             <SelectTrigger id="hotel-tz" className="w-full">
               <SelectValue />
@@ -95,10 +96,10 @@ export function SettingsForm({ initial }: { initial: HotelSettingsValues }) {
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">Check-in dates follow hotel-local days — no UTC shifting.</p>
+          <p className="text-xs text-muted-foreground">{t.settings.form.timezoneHint}</p>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="hotel-currency">Primary currency</Label>
+          <Label htmlFor="hotel-currency">{t.settings.form.currency}</Label>
           <Select value={values.currency} onValueChange={(v) => set("currency", v)}>
             <SelectTrigger id="hotel-currency" className="w-full">
               <SelectValue />
@@ -117,7 +118,7 @@ export function SettingsForm({ initial }: { initial: HotelSettingsValues }) {
       <div className="flex justify-end pt-2">
         <Button type="submit" disabled={saving}>
           {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
-          Save settings
+          {t.settings.form.save}
         </Button>
       </div>
     </form>

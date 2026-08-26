@@ -25,6 +25,7 @@ import { ReservationFormDialog } from "@/components/reservations/reservation-for
 import { moveReservationAction } from "@/server/actions/reservations";
 import type { CalendarBoardData, CalendarViewMode } from "./types";
 import type { ReservationVM } from "@/lib/types";
+import { t, channelLabel } from "@/lib/i18n";
 import {
   addDays,
   addMonths,
@@ -138,7 +139,7 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
         addDays(parseISODate(dateISO), nights).toISOString().slice(0, 10),
       );
       if (!result.ok) toast.error(result.error);
-      else toast.success(result.message ?? "Reservation moved");
+      else toast.success(result.message ?? t.calendar.movedToast);
     } finally {
       setMovingId(null);
     }
@@ -156,13 +157,13 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" onClick={() => shift(-1)} aria-label="Previous">
+          <Button variant="outline" size="icon" onClick={() => shift(-1)} aria-label={t.common.back}>
             <ChevronLeft className="size-4" />
           </Button>
           <Button variant="outline" size="sm" onClick={() => setAnchorISO(today.toISOString().slice(0, 10))}>
-            Today
+            {t.common.today}
           </Button>
-          <Button variant="outline" size="icon" onClick={() => shift(1)} aria-label="Next">
+          <Button variant="outline" size="icon" onClick={() => shift(1)} aria-label={t.common.next}>
             <ChevronRight className="size-4" />
           </Button>
         </div>
@@ -170,9 +171,9 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
 
         <Tabs value={view} onValueChange={(v) => setView(v as CalendarViewMode)}>
           <TabsList className="ml-2">
-            <TabsTrigger value="day">Day</TabsTrigger>
-            <TabsTrigger value="week">Week</TabsTrigger>
-            <TabsTrigger value="month">Month</TabsTrigger>
+            <TabsTrigger value="day">{t.calendar.day}</TabsTrigger>
+            <TabsTrigger value="week">{t.calendar.week}</TabsTrigger>
+            <TabsTrigger value="month">{t.calendar.month}</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -181,11 +182,11 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
             value={filters.roomTypeId}
             onValueChange={(v) => setFilters((f) => ({ ...f, roomTypeId: v }))}
           >
-            <SelectTrigger size="sm" className="w-[130px]">
-              <SelectValue placeholder="Room type" />
+            <SelectTrigger size="sm" className="w-[140px]">
+              <SelectValue placeholder={t.filters.roomType} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="all">{t.filters.allTypes}</SelectItem>
               {roomTypeOptions.map(([id, name]) => (
                 <SelectItem key={id} value={id}>
                   {name}
@@ -197,14 +198,14 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
             value={filters.channelId}
             onValueChange={(v) => setFilters((f) => ({ ...f, channelId: v }))}
           >
-            <SelectTrigger size="sm" className="w-[140px]">
-              <SelectValue placeholder="Channel" />
+            <SelectTrigger size="sm" className="w-[150px]">
+              <SelectValue placeholder={t.filters.channel} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All channels</SelectItem>
+              <SelectItem value="all">{t.filters.allChannels}</SelectItem>
               {channelOptions.map((c) => (
                 <SelectItem key={c} value={c}>
-                  {c === "booking" ? "Booking.com" : c.charAt(0).toUpperCase() + c.slice(1)}
+                  {channelLabel(c)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -213,20 +214,20 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
             value={filters.statusId}
             onValueChange={(v) => setFilters((f) => ({ ...f, statusId: v }))}
           >
-            <SelectTrigger size="sm" className="w-[130px]">
-              <SelectValue placeholder="Status" />
+            <SelectTrigger size="sm" className="w-[150px]">
+              <SelectValue placeholder={t.filters.status} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="all">{t.filters.allStatuses}</SelectItem>
               {["PENDING", "CONFIRMED", "CHECKED_IN"].map((s) => (
                 <SelectItem key={s} value={s}>
-                  {s.replace("_", " ").toLowerCase()}
+                  {t.statuses.reservation[s as keyof typeof t.statuses.reservation]}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Button size="sm" onClick={() => setCreateState({ open: true })}>
-            <Plus className="mr-1.5 size-4" /> Reservation
+            <Plus className="mr-1.5 size-4" /> {t.calendar.newReservation}
           </Button>
         </div>
       </div>
@@ -235,11 +236,11 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
       {rooms.length === 0 ? (
         <EmptyState
           icon={CalendarPlus}
-          title="No rooms configured"
-          description="Add rooms in the Rooms module to start planning on the calendar."
+          title={t.calendar.noRoomsTitle}
+          description={t.calendar.noRoomsDescription}
           action={
             <Link href="/dashboard/rooms" className="text-sm font-medium text-primary hover:underline">
-              Go to Rooms
+              {t.calendar.goToRooms}
             </Link>
           }
         />
@@ -253,7 +254,7 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                   className="sticky left-0 z-20 flex shrink-0 items-end bg-secondary/95 px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
                   style={{ width: LABEL_W }}
                 >
-                  {rooms.length} rooms
+                  {t.calendar.roomsCount(rooms.length)}
                 </div>
                 <div className="flex">
                   {days.map((d) => {
@@ -313,7 +314,7 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                           <button
                             key={iso}
                             type="button"
-                            aria-label={`New reservation in ${room.number} on ${iso}`}
+                            aria-label={t.calendar.newReservationCell(room.number, iso)}
                             onClick={() => setCreateState({ open: true, roomId: room.id, date: iso })}
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={(e) => {
@@ -354,12 +355,12 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                       >
                         <span className="truncate text-xs font-semibold leading-tight">
                           {res.guestName}
-                          {res.status === "PENDING" ? " · pending" : ""}
+                          {res.status === "PENDING" ? ` ${t.calendar.pendingSuffix}` : ""}
                         </span>
                         {width >= 110 ? (
                           <>
                             <span className="truncate text-[11px] leading-tight opacity-75">
-                              {res.channel === "booking" ? "Booking.com" : res.channel.charAt(0).toUpperCase() + res.channel.slice(1)}
+                              {channelLabel(res.channel)}
                             </span>
                             <span className="text-[10px] font-medium tabular-nums opacity-80">
                               {res.checkIn.slice(8)} → {res.checkOut.slice(8)}
@@ -377,7 +378,7 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
       )}
 
       <p className="text-xs text-muted-foreground">
-        Tip: click a block for details · click an empty cell to create a booking · drag a block to move it.
+        {t.calendar.tip}
       </p>
 
       {/* Details */}
@@ -419,7 +420,7 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
 export function CalendarBoardSkeleton() {
   return (
     <div className="flex items-center gap-2 rounded-xl border bg-card p-4 text-muted-foreground">
-      <Loader2 className="size-4 animate-spin" /> Loading calendar…
+      <Loader2 className="size-4 animate-spin" /> {t.calendar.loadingBoard}
     </div>
   );
 }

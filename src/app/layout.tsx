@@ -4,14 +4,14 @@ import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Shanyraq AI — Hotel PMS & Channel Manager",
+  title: "Shanyraq AI — управление отелем и каналами продаж",
   description:
-    "Shanyraq AI is a hotel management platform: reservations, calendar, inventory, rates and channel synchronization.",
+    "Shanyraq AI — платформа для отелей: бронирования, календарь, номерной фонд, тарифы и синхронизация с каналами продаж.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="antialiased">
+    <html lang="ru" className="antialiased">
       <body
         style={{
           fontFamily:

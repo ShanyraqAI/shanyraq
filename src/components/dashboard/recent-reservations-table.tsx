@@ -23,6 +23,7 @@ import { ReservationDetailsDialog } from "@/components/reservations/reservation-
 import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
 import type { ReservationStatus } from "@/lib/constants";
 import { formatMoney } from "@/lib/utils";
+import { t, channelLabel } from "@/lib/i18n";
 
 interface Props {
   reservations: ReservationVM[];
@@ -58,48 +59,48 @@ export function RecentReservationsTable({ reservations, rooms, ratePlans, guests
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Select value={channelFilter} onValueChange={setChannelFilter}>
           <SelectTrigger size="sm" className="w-[150px]">
-            <SelectValue placeholder="Channel" />
+            <SelectValue placeholder={t.filters.channel} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All channels</SelectItem>
+            <SelectItem value="all">{t.filters.allChannels}</SelectItem>
             {channelsPresent.map((c) => (
               <SelectItem key={c} value={c}>
-                {c === "booking" ? "Booking.com" : c.charAt(0).toUpperCase() + c.slice(1)}
+                {channelLabel(c)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger size="sm" className="w-[150px]">
-            <SelectValue placeholder="Status" />
+          <SelectTrigger size="sm" className="w-[170px]">
+            <SelectValue placeholder={t.filters.status} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="all">{t.filters.allStatuses}</SelectItem>
             {(["PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED"] as ReservationStatus[]).map((s) => (
               <SelectItem key={s} value={s}>
-                {s.replace("_", " ").toLowerCase()}
+                {t.statuses.reservation[s]}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Link href="/dashboard/reservations" className="ml-auto text-sm font-medium text-primary hover:underline">
-          View all
+          {t.nav.reservations}
         </Link>
       </div>
 
       <div className="overflow-x-auto rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-secondary/50 hover:bg-secondary/50">
-              <TableHead>Reservation</TableHead>
-              <TableHead>Guest</TableHead>
-              <TableHead>Room</TableHead>
-              <TableHead>Dates</TableHead>
-              <TableHead>Channel</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-secondary/50 hover:bg-secondary/50">
+                <TableHead>{t.dashboard.table.reservation}</TableHead>
+                <TableHead>{t.dashboard.table.guest}</TableHead>
+                <TableHead>{t.dashboard.table.room}</TableHead>
+                <TableHead>{t.dashboard.table.dates}</TableHead>
+                <TableHead>{t.dashboard.table.channel}</TableHead>
+                <TableHead className="text-right">{t.dashboard.table.amount}</TableHead>
+                <TableHead>{t.dashboard.table.status}</TableHead>
+              </TableRow>
+            </TableHeader>
           <TableBody>
             {filtered.slice(0, 8).map((r) => (
               <TableRow
@@ -129,7 +130,7 @@ export function RecentReservationsTable({ reservations, rooms, ratePlans, guests
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                  No reservations match the current filters.
+                  {t.filters.noMatch}
                 </TableCell>
               </TableRow>
             )}

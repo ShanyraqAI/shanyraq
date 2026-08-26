@@ -4,7 +4,7 @@ import { OverbookingError } from "@/lib/reservations/service";
 export function toErrorMessage(error: unknown): string {
   if (error instanceof OverbookingError) return error.message;
   if (error instanceof Error) {
-    return error.message.length <= 300 ? error.message : "Unexpected server error";
+    return error.message.length <= 300 ? error.message : "Не удалось выполнить действие. Попробуйте ещё раз.";
   }
-  return "Unexpected server error";
+  return "Не удалось выполнить действие. Попробуйте ещё раз.";
 }

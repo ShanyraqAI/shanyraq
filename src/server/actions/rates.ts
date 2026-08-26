@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { getCurrentHotelId } from "@/lib/db";
+import { requireSessionHotelId } from "@/server/guards";
 import { bulkRateUpdateSchema, firstZodError } from "@/lib/constants";
 import { addDays, isWeekend, parseISODate } from "@/lib/dates";
 import { writeAudit } from "@/lib/reservations/service";
 import { ok, fail, type ActionResult } from "@/server/types";
 import { toErrorMessage } from "@/server/errors";
+import { t } from "@/lib/i18n";
 
 /**
  * Bulk price update over a date range. This is the internal source of truth
@@ -17,11 +18,11 @@ export async function bulkUpdateRatesAction(input: unknown): Promise<ActionResul
   try {
     const parsed = bulkRateUpdateSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await getCurrentHotelId();
+    const hotelId = await requireSessionHotelId();
     const data = parsed.data;
 
     const plan = await db.ratePlan.findFirst({ where: { id: data.ratePlanId, hotelId } });
-    if (!plan) return fail("Rate plan not found");
+    if (!plan) return fail(t.rates.errors.ratePlanNotFound);
 
     const from = parseISODate(data.from);
     const to = parseISODate(data.to); // inclusive
@@ -43,7 +44,7 @@ export async function bulkUpdateRatesAction(input: unknown): Promise<ActionResul
     });
     revalidatePath("/dashboard/rates");
     revalidatePath("/dashboard/channels");
-    return ok({ updated }, `Updated ${updated} day${updated === 1 ? "" : "s"}`);
+    return ok({ updated }, t.rates.toast(updated));
   } catch (error) {
     return fail(toErrorMessage(error));
   }

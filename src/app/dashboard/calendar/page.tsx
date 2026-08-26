@@ -2,6 +2,7 @@ import { db, getCurrentHotelId } from "@/lib/db";
 import { PageHeader } from "@/components/shared/page-header";
 import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { toReservationVM, type GuestVM, type RatePlanVM, type RoomVM } from "@/lib/types";
+import { t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -70,8 +71,8 @@ export default async function CalendarPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Calendar"
-        description={`Drag-and-drop timeline across ${rooms.length} rooms · week view is the daily driver`}
+        title={t.calendar.title}
+        description={t.calendar.description(rooms.length)}
       />
       <CalendarBoard
         rooms={rooms}

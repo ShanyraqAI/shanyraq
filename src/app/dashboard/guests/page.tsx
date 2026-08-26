@@ -3,6 +3,7 @@ import { getAllReservations } from "@/lib/stats";
 import { toReservationVM } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { GuestsTable, type GuestRow } from "@/components/guests/guests-table";
+import { t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -34,8 +35,8 @@ export default async function GuestsPage() {
   return (
     <div>
       <PageHeader
-        title="Guests"
-        description="Normalized guest profiles with stay history across every channel."
+        title={t.guests.title}
+        description={t.guests.description}
       />
       <GuestsTable guests={rows} reservations={reservations} />
     </div>

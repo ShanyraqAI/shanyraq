@@ -29,6 +29,8 @@ import { EmptyState } from "@/components/shared/page-header";
 import { bulkUpdateRatesAction } from "@/server/actions/rates";
 import type { RatePlanVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
+import { t } from "@/lib/i18n";
+import { WEEKDAYS_SHORT } from "@/lib/dates";
 
 export interface RatesBoardProps {
   plans: (RatePlanVM & { availableToday: number | null })[];
@@ -70,7 +72,7 @@ export function RatesBoard({ plans, dates, prices }: RatesBoardProps) {
   }
 
   if (plans.length === 0) {
-    return <EmptyState icon={Tag} title="No rate plans yet" description="Create rate plans to start pricing your room types." />;
+    return <EmptyState icon={Tag} title={t.rates.emptyTitle} description={t.rates.emptyDescription} />;
   }
 
   return (
@@ -79,7 +81,7 @@ export function RatesBoard({ plans, dates, prices }: RatesBoardProps) {
         <Table>
           <TableHeader>
             <TableRow className="bg-secondary/50 hover:bg-secondary/50">
-              <TableHead className="sticky left-0 z-10 min-w-[220px] bg-secondary/95">Rate plan</TableHead>
+              <TableHead className="sticky left-0 z-10 min-w-[220px] bg-secondary/95">{t.rates.planColumn}</TableHead>
               {dates.map((d) => {
                 const date = new Date(`${d}T00:00:00Z`);
                 const weekend = date.getUTCDay() === 0 || date.getUTCDay() === 6;
@@ -87,7 +89,7 @@ export function RatesBoard({ plans, dates, prices }: RatesBoardProps) {
                   <TableHead key={d} className="min-w-[76px] text-center tabular-nums">
                     <div className="text-[11px] font-normal text-muted-foreground">{d.slice(8)}.{d.slice(5, 7)}</div>
                     <div className={weekend ? "text-primary" : ""}>
-                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getUTCDay()]}
+                      {WEEKDAYS_SHORT[(date.getUTCDay() + 6) % 7]}
                     </div>
                   </TableHead>
                 );
@@ -101,18 +103,18 @@ export function RatesBoard({ plans, dates, prices }: RatesBoardProps) {
                   <div className="flex items-center justify-between gap-2">
                     <div className="leading-tight">
                       <div className="font-medium">{plan.name}</div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-xs text-muted-foreground whitespace-nowrap">
                         {plan.roomTypeName}
-                        {plan.breakfastIncluded ? " · breakfast" : ""}
-                        {!plan.refundable ? " · non-refundable" : ""}
-                        {plan.availableToday !== null ? ` · ${plan.availableToday} avail.` : ""}
+                        {plan.breakfastIncluded ? t.rates.meta.breakfast : ""}
+                        {!plan.refundable ? t.rates.meta.nonRefundable : ""}
+                        {plan.availableToday !== null ? t.rates.meta.avail(plan.availableToday) : ""}
                       </div>
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="size-7 shrink-0"
-                      aria-label={`Edit prices for ${plan.name}`}
+                      aria-label={t.rates.editPricesAria(plan.name)}
                       onClick={() => {
                         setPlanForUpdate(plan);
                         setFrom(dates[0]);
@@ -151,23 +153,25 @@ export function RatesBoard({ plans, dates, prices }: RatesBoardProps) {
       <Dialog open={Boolean(planForUpdate)} onOpenChange={(o) => !o && setPlanForUpdate(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Update prices</DialogTitle>
+            <DialogTitle>{t.rates.bulkDialog.title}</DialogTitle>
             <DialogDescription>
-              {planForUpdate?.name} · changes become the internal source of truth and are pushed to connected channels on the next sync.
+              {planForUpdate ? t.rates.bulkDialog.description(planForUpdate.name) : ""}
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="bulk-from">From</Label>
+              <Label htmlFor="bulk-from">{t.rates.bulkDialog.from}</Label>
               <Input id="bulk-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="bulk-to">To</Label>
+              <Label htmlFor="bulk-to">{t.rates.bulkDialog.to}</Label>
               <Input id="bulk-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="bulk-price">Nightly price ({formatMoney(Number(price) || 0)} per night)</Label>
+            <Label htmlFor="bulk-price">
+              {t.rates.bulkDialog.priceLabel(formatMoney(Number(price) || 0))}
+            </Label>
             <Input
               id="bulk-price"
               type="number"
@@ -180,14 +184,14 @@ export function RatesBoard({ plans, dates, prices }: RatesBoardProps) {
           </div>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={weekendsOnly} onCheckedChange={(v) => setWeekendsOnly(v === true)} />
-            Weekends only (Fri &amp; Sat)
+            {t.rates.bulkDialog.weekendsOnly}
           </label>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPlanForUpdate(null)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button onClick={saveBulk} disabled={saving || !price || !from || !to}>
-              Apply prices
+              {t.rates.bulkDialog.apply}
             </Button>
           </DialogFooter>
         </DialogContent>

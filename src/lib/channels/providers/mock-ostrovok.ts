@@ -1,7 +1,7 @@
-import type { ChannelCode } from "@/lib/constants";
+﻿import type { ChannelCode } from "@/lib/constants";
 import { BaseMockProvider, type MockProviderConfig } from "../mock/base-mock-provider";
 
-/** MockOstrovokProvider — simulates the Ostrovok API adapter. */
+/** MockOstrovokProvider вЂ” simulates the Ostrovok API adapter. */
 export class MockOstrovokProvider extends BaseMockProvider {
   readonly code: ChannelCode = "ostrovok";
 
@@ -11,15 +11,15 @@ export class MockOstrovokProvider extends BaseMockProvider {
     batchLimit: 2,
     inventory: {
       roomTypes: [
-        { id: "rt_std_01", name: "Standard Double", capacity: 2 },
-        { id: "rt_dlxE_02", name: "Deluxe King", capacity: 3 },
-        { id: "rt_suit_09", name: "Executive Suite", capacity: 4 },
+        { id: "rt_std_01", name: "Стандартный двухместный", capacity: 2 },
+        { id: "rt_dlxE_02", name: "Делюкс с кроватью king-size", capacity: 3 },
+        { id: "rt_suit_09", name: "Люкс «Executive»", capacity: 4 },
       ],
       ratePlans: [
-        { id: "rp_std_flex", name: "Standard Flexible Rate", appliesToRoomTypeIds: ["rt_std_01"] },
-        { id: "rp_std_nrfnd", name: "Standard Saver (Non-refundable)", appliesToRoomTypeIds: ["rt_std_01"] },
-        { id: "rp_dlx_flex", name: "Deluxe Flexible Rate", appliesToRoomTypeIds: ["rt_dlxE_02"] },
-        { id: "rp_suit_bb", name: "Suite Bed & Breakfast", appliesToRoomTypeIds: ["rt_suit_09"] },
+        { id: "rp_std_flex", name: "Гибкий тариф «Стандарт»", appliesToRoomTypeIds: ["rt_std_01"] },
+        { id: "rp_std_nrfnd", name: "Невозвратный тариф «Стандарт»", appliesToRoomTypeIds: ["rt_std_01"] },
+        { id: "rp_dlx_flex", name: "Гибкий тариф «Делюкс»", appliesToRoomTypeIds: ["rt_dlxE_02"] },
+        { id: "rp_suit_bb", name: "Люкс с завтраком", appliesToRoomTypeIds: ["rt_suit_09"] },
       ],
     },
     reservationTemplates: [
@@ -27,8 +27,8 @@ export class MockOstrovokProvider extends BaseMockProvider {
         externalRoomTypeId: "rt_std_01",
         guestName: "Ivan Sokolov",
         guestEmail: "ivan.sokolov@example.ru",
-        guestCountry: "Russia",
-        offsetFromToday: 0,
+        guestCountry: "Россия",
+        offsetFromToday: 6,
         nights: 1,
         adults: 1,
         children: 0,
@@ -38,8 +38,8 @@ export class MockOstrovokProvider extends BaseMockProvider {
         externalRoomTypeId: "rt_dlxE_02",
         guestName: "Gulnara Karimova",
         guestEmail: "gulnara.k@example.kz",
-        guestCountry: "Kazakhstan",
-        offsetFromToday: 2,
+        guestCountry: "Казахстан",
+        offsetFromToday: 6,
         nights: 2,
         adults: 2,
         children: 0,
@@ -47,9 +47,9 @@ export class MockOstrovokProvider extends BaseMockProvider {
       },
       {
         externalRoomTypeId: "rt_suit_09",
-        guestName: "Hans Müller",
+        guestName: "Hans MГјller",
         guestEmail: "hans.mueller@example.de",
-        guestCountry: "Germany",
+        guestCountry: "Германия",
         offsetFromToday: 4,
         nights: 3,
         adults: 2,
@@ -60,8 +60,8 @@ export class MockOstrovokProvider extends BaseMockProvider {
         externalRoomTypeId: "rt_std_01",
         guestName: "Aylin Demir",
         guestEmail: "aylin.demir@example.tr",
-        guestCountry: "Turkey",
-        offsetFromToday: 6,
+        guestCountry: "Турция",
+        offsetFromToday: 10,
         nights: 2,
         adults: 2,
         children: 0,
@@ -71,8 +71,8 @@ export class MockOstrovokProvider extends BaseMockProvider {
         externalRoomTypeId: "rt_dlxE_02",
         guestName: "Arman Zhaksybaev",
         guestEmail: "arman.z@example.kz",
-        guestCountry: "Kazakhstan",
-        offsetFromToday: 9,
+        guestCountry: "Казахстан",
+        offsetFromToday: 15,
         nights: 4,
         adults: 2,
         children: 2,
@@ -82,8 +82,8 @@ export class MockOstrovokProvider extends BaseMockProvider {
         externalRoomTypeId: "rt_std_01",
         guestName: "Nina Ivanova",
         guestEmail: "nina.ivanova@example.ru",
-        guestCountry: "Russia",
-        offsetFromToday: 12,
+        guestCountry: "Россия",
+        offsetFromToday: 17,
         nights: 2,
         adults: 1,
         children: 0,
@@ -92,10 +92,10 @@ export class MockOstrovokProvider extends BaseMockProvider {
       },
       {
         externalRoomTypeId: "rt_suit_09",
-        guestName: "Zhang Lei",
-        guestEmail: "zhang.lei@example.cn",
-        guestCountry: "China",
-        offsetFromToday: 16,
+        guestName: "Viktor Petrov",
+        guestEmail: "v.petrov@example.ru",
+        guestCountry: "Россия",
+        offsetFromToday: 19,
         nights: 2,
         adults: 3,
         children: 0,

@@ -19,6 +19,8 @@ import { EmptyState } from "@/components/shared/page-header";
 import { ConnectChannelDialog } from "./connect-channel-dialog";
 import { syncChannelAction } from "@/server/actions/channels";
 import type { RatePlanVM } from "@/lib/types";
+import { t } from "@/lib/i18n";
+import { formatTimeAgo } from "@/lib/utils";
 
 export interface ChannelCardVM {
   id: string;
@@ -51,7 +53,7 @@ export function ChannelCards({ channels, internalRoomTypes, internalRatePlans }:
     setSyncingId(channel.id);
     try {
       const result = await syncChannelAction(channel.connectionId);
-      if (!result.ok) toast.error(result.error ?? `${channel.name} synchronization failed`);
+      if (!result.ok) toast.error(result.error ?? t.channelsPage.cards.syncFailedToast(channel.name));
       else if (result.data?.status === "PARTIAL") toast.warning(result.message);
       else toast.success(result.message);
       router.refresh();
@@ -69,14 +71,14 @@ export function ChannelCards({ channels, internalRoomTypes, internalRatePlans }:
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h3 className="truncate font-semibold">{ch.name}</h3>
-                  {ch.isInternal ? <Badge variant="secondary">Built-in</Badge> : null}
+                  {ch.isInternal ? <Badge variant="secondary">{t.channelsPage.cards.builtIn}</Badge> : null}
                 </div>
                 <p className="mt-0.5 text-sm text-muted-foreground">{ch.description}</p>
               </div>
               {!ch.isInternal && ch.status !== "DISCONNECTED" ? <ConnectionStatusBadge status={ch.status} /> : null}
               {!ch.isInternal && ch.status === "DISCONNECTED" ? (
-                <Badge variant="outline" className="shrink-0 text-muted-foreground">
-                  Not connected
+                <Badge variant="outline" className="shrink-0 whitespace-nowrap text-muted-foreground">
+                  {t.statuses.connection.DISCONNECTED}
                 </Badge>
               ) : null}
             </div>
@@ -85,23 +87,23 @@ export function ChannelCards({ channels, internalRoomTypes, internalRatePlans }:
             <dl className="mt-4 space-y-1.5 text-sm">
               {ch.externalPropertyId ? (
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Property ID</dt>
+                  <dt className="text-muted-foreground">{t.channelsPage.summary.propertyId}</dt>
                   <dd className="font-mono text-xs leading-5">{ch.externalPropertyId}</dd>
                 </div>
               ) : null}
               <div className="flex justify-between gap-2">
-                <dt className="text-muted-foreground">Last sync</dt>
+                <dt className="text-muted-foreground">{t.channelsPage.summary.lastSync}</dt>
                 <dd className="flex items-center gap-2">
                   <Clock className="size-3.5 text-muted-foreground" />
-                  {formatAgo(ch.lastSyncAt)}
+                  {formatTimeAgo(ch.lastSyncAt ? new Date(ch.lastSyncAt) : null)}
                   {ch.lastSyncStatus ? <SyncStatusBadge status={ch.lastSyncStatus as never} /> : null}
                 </dd>
               </div>
               {(ch.roomMappings.length > 0 || ch.rateMappings.length > 0) && (
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Mapped</dt>
+                  <dt className="text-muted-foreground">{t.channelsPage.cards.mapped}</dt>
                   <dd className="tabular-nums">
-                    {ch.roomMappings.length} rooms · {ch.rateMappings.length} rates
+                    {t.channelsPage.cards.mappedValue(ch.roomMappings.length, ch.rateMappings.length)}
                   </dd>
                 </div>
               )}
@@ -116,10 +118,10 @@ export function ChannelCards({ channels, internalRoomTypes, internalRatePlans }:
             {/* Actions */}
             <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
               {ch.isInternal ? (
-                <span className="text-xs text-muted-foreground">Reservations created in Shanyraq are attributed to this channel.</span>
+                <span className="text-xs text-muted-foreground">{t.channelsPage.cards.internalNote}</span>
               ) : ch.status === "DISCONNECTED" ? (
                 <Button size="sm" onClick={() => setDialogChannel(ch)}>
-                  <Cable className="mr-1.5 size-3.5" /> Connect
+                  <Cable className="mr-1.5 size-3.5" /> {t.common.connect}
                 </Button>
               ) : (
                 <>
@@ -129,16 +131,16 @@ export function ChannelCards({ channels, internalRoomTypes, internalRatePlans }:
                     ) : (
                       <RefreshCw className="mr-1.5 size-3.5" />
                     )}
-                    Sync
+                    {t.channelsPage.cards.sync}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setDialogChannel(ch)}>
-                    <Settings2 className="mr-1.5 size-3.5" /> Mapping
+                    <Settings2 className="mr-1.5 size-3.5" /> {t.channelsPage.cards.mapping}
                   </Button>
                   <Link
                     href={`/dashboard/channels/${ch.id}`}
                     className="ml-auto inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                   >
-                    Logs
+                    {t.channelsPage.cards.logs}
                   </Link>
                 </>
               )}
@@ -146,7 +148,7 @@ export function ChannelCards({ channels, internalRoomTypes, internalRatePlans }:
           </div>
         ))}
         {channels.every((c) => c.isInternal) ? (
-          <EmptyState icon={Cable} title="No channels available" />
+          <EmptyState icon={Cable} title={t.channelsPage.cards.empty} />
         ) : null}
       </div>
 
@@ -169,15 +171,4 @@ export function ChannelCards({ channels, internalRoomTypes, internalRatePlans }:
       )}
     </>
   );
-}
-
-function formatAgo(iso: string | null): string {
-  if (!iso) return "Never";
-  const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
-  if (seconds < 60) return "Just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
 }

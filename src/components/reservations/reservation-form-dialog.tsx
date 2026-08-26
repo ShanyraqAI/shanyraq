@@ -28,6 +28,7 @@ import { createReservationAction, updateReservationAction } from "@/server/actio
 import type { GuestVM, RatePlanVM, RoomVM } from "@/lib/types";
 import { CHANNEL_CODES } from "@/lib/constants";
 import { formatMoney } from "@/lib/utils";
+import { t, channelLabel } from "@/lib/i18n";
 
 export interface ReservationFormProps {
   mode: "create" | "edit";
@@ -126,10 +127,10 @@ export function ReservationFormDialog({
         };
         const result = await createReservationAction(payload);
         if (!result.ok) {
-          toast.error(result.error ?? "Could not create reservation");
+          toast.error(result.error ?? t.reservations.toasts.createFailed);
           return;
         }
-        toast.success(result.message ?? "Reservation created");
+        toast.success(result.message ?? t.reservations.toasts.created);
       } else {
         const result = await updateReservationAction({
           id: initial!.id,
@@ -145,10 +146,10 @@ export function ReservationFormDialog({
           notes: notes || undefined,
         });
         if (!result.ok) {
-          toast.error(result.error ?? "Could not update reservation");
+          toast.error(result.error ?? t.reservations.toasts.updateFailed);
           return;
         }
-        toast.success(result.message ?? "Reservation updated");
+        toast.success(result.message ?? t.reservations.toasts.updated);
       }
       onOpenChange(false);
       router.refresh();
@@ -161,22 +162,22 @@ export function ReservationFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{mode === "create" ? "Create reservation" : "Edit reservation"}</DialogTitle>
+          <DialogTitle>{mode === "create" ? t.reservations.form.createTitle : t.reservations.form.editTitle}</DialogTitle>
           <DialogDescription>
             {mode === "create"
-              ? "Book a room directly. Inventory and availability are checked automatically."
-              : "Update stay details. Changes re-price the booking from the current rate calendar."}
+              ? t.reservations.form.createDescription
+              : t.reservations.form.editDescription}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Guest */}
           <div className="space-y-1.5">
-            <Label>Guest</Label>
+            <Label>{t.reservations.form.guest}</Label>
             {guests.length > 0 && (
               <Select value={guestChoice} onValueChange={setGuestChoice}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select guest" />
+                  <SelectValue placeholder={t.reservations.form.selectGuest} />
                 </SelectTrigger>
                 <SelectContent>
                   {guests.map((g) => (
@@ -184,20 +185,20 @@ export function ReservationFormDialog({
                       {g.fullName}
                     </SelectItem>
                   ))}
-                  <SelectItem value={NEW_GUEST}>+ New guest…</SelectItem>
+                  <SelectItem value={NEW_GUEST}>{t.reservations.form.newGuestOption}</SelectItem>
                 </SelectContent>
               </Select>
             )}
             {guestChoice === NEW_GUEST && (
               <div className="mt-2 grid gap-2">
                 <Input
-                  placeholder="Full name"
+                  placeholder={t.reservations.form.fullNamePlaceholder}
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   required
                 />
                 <Input
-                  placeholder="Email (optional)"
+                  placeholder={t.reservations.form.emailPlaceholder}
                   type="email"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
@@ -208,7 +209,7 @@ export function ReservationFormDialog({
 
           {/* Room */}
           <div className="space-y-1.5">
-            <Label>Room</Label>
+            <Label>{t.reservations.form.room}</Label>
             <Select
               value={roomId}
               onValueChange={(v) => {
@@ -217,12 +218,12 @@ export function ReservationFormDialog({
               }}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select room" />
+                <SelectValue placeholder={t.reservations.form.selectRoom} />
               </SelectTrigger>
               <SelectContent>
                 {rooms.map((r) => (
                   <SelectItem key={r.id} value={r.id} disabled={r.status === "OUT_OF_ORDER"}>
-                    {r.number} · {r.roomTypeName} ({r.status.toLowerCase().replace("_", " ")})
+                    {r.number} · {r.roomTypeName} ({t.statuses.room[r.status as keyof typeof t.statuses.room]})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -232,7 +233,7 @@ export function ReservationFormDialog({
           {/* Dates */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="checkin">Check-in</Label>
+              <Label htmlFor="checkin">{t.reservations.form.checkIn}</Label>
               <Input
                 id="checkin"
                 type="date"
@@ -242,7 +243,7 @@ export function ReservationFormDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="checkout">Check-out</Label>
+              <Label htmlFor="checkout">{t.reservations.form.checkOut}</Label>
               <Input
                 id="checkout"
                 type="date"
@@ -257,7 +258,7 @@ export function ReservationFormDialog({
           {/* Occupancy + plan */}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
-              <Label>Adults</Label>
+              <Label>{t.reservations.form.adults}</Label>
               <Select value={adults} onValueChange={setAdults}>
                 <SelectTrigger>
                   <SelectValue />
@@ -272,7 +273,7 @@ export function ReservationFormDialog({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Children</Label>
+              <Label>{t.reservations.form.children}</Label>
               <Select value={children} onValueChange={setChildren}>
                 <SelectTrigger>
                   <SelectValue />
@@ -287,7 +288,7 @@ export function ReservationFormDialog({
               </Select>
             </div>
             <div className="col-span-1 space-y-1.5">
-              <Label>Source</Label>
+              <Label>{t.reservations.form.source}</Label>
               {mode === "create" ? (
                 <Select value={channel} onValueChange={setChannel}>
                   <SelectTrigger>
@@ -296,41 +297,42 @@ export function ReservationFormDialog({
                   <SelectContent>
                     {CHANNEL_CODES.map((c) => (
                       <SelectItem key={c} value={c}>
-                        {c === "booking" ? "Booking.com" : c.charAt(0).toUpperCase() + c.slice(1)}
+                        {channelLabel(c)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               ) : (
-                <div className="pt-2 text-sm text-muted-foreground">unchanged</div>
+                <div className="pt-2 text-sm text-muted-foreground">{t.reservations.form.unchanged}</div>
               )}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label>Rate plan</Label>
+            <Label>{t.reservations.form.ratePlan}</Label>
             <Select value={effectivePlanId} onValueChange={setPlanId}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select rate plan" />
+                <SelectValue placeholder={t.reservations.form.selectRatePlan} />
               </SelectTrigger>
               <SelectContent>
                 {plansForType.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
-                    {p.name} — {formatMoney(p.basePrice)}/night
+                    {p.name} — {formatMoney(p.basePrice)}
+                    {t.reservations.form.perNight}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {selectedRoom && plansForType.length === 0 && (
-              <p className="text-xs text-destructive">No rate plans configured for this room type.</p>
+              <p className="text-xs text-destructive">{t.reservations.form.noPlansWarning}</p>
             )}
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="res-notes">Notes</Label>
+            <Label htmlFor="res-notes">{t.reservations.form.notes}</Label>
             <Textarea
               id="res-notes"
-              placeholder="Special requests, arrival time…"
+              placeholder={t.reservations.form.notesPlaceholder}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
@@ -341,18 +343,18 @@ export function ReservationFormDialog({
 
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
-              {nights} night{nights === 1 ? "" : "s"} × {selectedPlan?.name ?? "—"}
+              {t.reservations.form.nightsSummary(nights, selectedPlan?.name ?? "—")}
             </span>
             <span className="font-semibold tabular-nums">≈ {formatMoney(estimate)}</span>
           </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button type="submit" disabled={saving || !effectivePlanId}>
               {saving && <Loader2 className="mr-2 size-4 animate-spin" />}
-              {mode === "create" ? "Create reservation" : "Save changes"}
+              {mode === "create" ? t.reservations.createButton : t.reservations.form.saveChanges}
             </Button>
           </DialogFooter>
         </form>

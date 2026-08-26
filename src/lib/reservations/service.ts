@@ -54,7 +54,7 @@ async function assertNoRoomOverlap(
     },
     select: { id: true },
   });
-  if (clash) throw new OverbookingError("This room already has a reservation for the selected dates.");
+  if (clash) throw new OverbookingError("В этом номере уже есть бронь на выбранные даты.");
 }
 
 /**
@@ -85,14 +85,14 @@ async function assertTypeAvailability(
     const night = addDays(checkIn, i);
     const reserved = reservations.filter((r) => r.checkIn <= night && r.checkOut > night).length;
     if (reserved >= totalRooms) {
-      throw new OverbookingError(`No ${await roomTypeName(roomTypeId)} left for ${night.toISOString().slice(0, 10)} — sold out.`);
+      throw new OverbookingError(`Свободные номера категории «${await roomTypeName(roomTypeId)}» на ${night.toISOString().slice(0, 10)} закончились.`);
     }
   }
 }
 
 async function roomTypeName(roomTypeId: string): Promise<string> {
   const rt = await db.roomType.findUnique({ where: { id: roomTypeId }, select: { name: true } });
-  return rt?.name ?? "rooms";
+  return rt?.name ?? "номеров";
 }
 
 export class OverbookingError extends Error {
@@ -122,7 +122,7 @@ export async function createReservation(params: CreateReservationParams) {
   const checkOut = parseISODate(params.checkOut);
 
   const room = await db.room.findUnique({ where: { id: params.roomId } });
-  if (!room || room.hotelId !== params.hotelId) throw new Error("Room not found");
+  if (!room || room.hotelId !== params.hotelId) throw new Error("Номер не найден");
 
   await assertNoRoomOverlap(params.hotelId, room.id, checkIn, checkOut);
   await assertTypeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut);
@@ -173,12 +173,12 @@ export async function updateReservationDetails(params: UpdateReservationParams) 
   const existing = await db.reservation.findFirst({
     where: { id: params.id, hotelId: params.hotelId },
   });
-  if (!existing) throw new Error("Reservation not found");
+  if (!existing) throw new Error("Бронирование не найдено");
 
   const checkIn = parseISODate(params.checkIn);
   const checkOut = parseISODate(params.checkOut);
   const room = await db.room.findUnique({ where: { id: params.roomId } });
-  if (!room || room.hotelId !== params.hotelId) throw new Error("Room not found");
+  if (!room || room.hotelId !== params.hotelId) throw new Error("Номер не найден");
 
   // Price is always derived from the current rate calendar.
   const totalAmount = await computeStayTotal(params.ratePlanId, checkIn, checkOut);
@@ -223,7 +223,7 @@ export async function setReservationStatus(hotelId: string, reservationId: strin
   const reservation = await db.reservation.findFirst({
     where: { id: reservationId, hotelId },
   });
-  if (!reservation) throw new Error("Reservation not found");
+  if (!reservation) throw new Error("Бронирование не найдено");
 
   const updated = await db.reservation.update({ where: { id: reservation.id }, data: { status } });
 

@@ -1,0 +1,37 @@
+import { Hotel } from "lucide-react";
+import { t } from "@/lib/i18n";
+
+/** Centered brand card used by /login and /register. */
+export function AuthShell({
+  title,
+  subtitle,
+  children,
+  footer,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+}) {
+  return (
+    <div className="w-full max-w-md">
+      <div className="mb-6 flex flex-col items-center gap-3 text-center">
+        <div className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+          <Hotel className="size-5" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border bg-card p-6 shadow-sm sm:p-8">
+        {children}
+      </div>
+
+      {footer ? <div className="mt-4 text-center text-sm text-muted-foreground">{footer}</div> : null}
+
+      <p className="mt-6 text-center text-xs text-muted-foreground/70">{t.tagline}</p>
+    </div>
+  );
+}

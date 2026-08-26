@@ -15,6 +15,7 @@ import { RoomStatusBadge } from "@/components/shared/status-badge";
 import { setRoomStatusAction } from "@/server/actions/rooms";
 import type { RoomVM } from "@/lib/types";
 import type { RoomStatus } from "@/lib/constants";
+import { t } from "@/lib/i18n";
 
 const ROOM_STATUSES: RoomStatus[] = ["AVAILABLE", "OCCUPIED", "CLEANING", "MAINTENANCE", "OUT_OF_ORDER"];
 
@@ -39,7 +40,7 @@ export function RoomsGrid({ rooms }: { rooms: RoomVM[] }) {
   if (rooms.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-        No rooms configured yet.
+        {t.rooms.emptyGrid}
       </div>
     );
   }
@@ -59,7 +60,7 @@ export function RoomsGrid({ rooms }: { rooms: RoomVM[] }) {
               <div className="leading-tight">
                 <div className="text-base font-semibold">{room.number}</div>
                 <div className="text-xs text-muted-foreground">
-                  Floor {room.floor} · {room.roomTypeName}
+                  {t.rooms.floorLabel(room.floor)} · {room.roomTypeName}
                 </div>
               </div>
             </div>
@@ -68,19 +69,19 @@ export function RoomsGrid({ rooms }: { rooms: RoomVM[] }) {
 
           {room.guestTonight ? (
             <p className="mt-3 truncate rounded-md bg-secondary/60 px-2 py-1 text-xs text-secondary-foreground">
-              Tonight: {room.guestTonight}
+              {t.rooms.tonight(room.guestTonight)}
             </p>
           ) : null}
 
           <div className="mt-3">
             <Select value={room.status} onValueChange={(v) => changeStatus(room.id, v)} disabled={pendingId === room.id}>
-              <SelectTrigger size="sm" className="w-full" aria-label={`Change status of ${room.number}`}>
+              <SelectTrigger size="sm" className="w-full" aria-label={t.rooms.changeStatusAria(room.number)}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {ROOM_STATUSES.map((s) => (
                   <SelectItem key={s} value={s}>
-                    {s.replace("_", " ").toLowerCase()}
+                    {t.statuses.room[s]}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { getCurrentHotelId } from "@/lib/db";
+import { requireSessionHotelId } from "@/server/guards";
 import { createReservationSchema, updateReservationSchema, reservationStatusSchema, firstZodError, type ReservationStatus } from "@/lib/constants";
 import {
   createReservation,
@@ -12,6 +12,7 @@ import {
 import { parseISODate } from "@/lib/dates";
 import { ok, fail, type ActionResult } from "@/server/types";
 import { toErrorMessage } from "@/server/errors";
+import { t } from "@/lib/i18n";
 
 function revalidateAll() {
   revalidatePath("/dashboard");
@@ -30,7 +31,7 @@ async function resolveGuest(
     if (existing) return existing.id;
   }
   const name = input.guestName?.trim();
-  if (!name) throw new Error("Guest is required");
+  if (!name) throw new Error(t.reservations.errors.guestRequired);
   const byName = await db.guest.findFirst({
     where: { hotelId, fullName: { equals: name } },
     select: { id: true },
@@ -52,16 +53,16 @@ export async function createReservationAction(input: unknown): Promise<ActionRes
   try {
     const parsed = createReservationSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await getCurrentHotelId();
+    const hotelId = await requireSessionHotelId();
     const data = parsed.data;
 
     // Room-type consistency for the rate plan.
     const room = await db.room.findFirst({ where: { id: data.roomId, hotelId }, include: { roomType: true } });
-    if (!room) return fail("Room not found");
+    if (!room) return fail(t.reservations.errors.roomNotFound);
     const plan = await db.ratePlan.findFirst({ where: { id: data.ratePlanId, hotelId } });
-    if (!plan) return fail("Rate plan not found");
+    if (!plan) return fail(t.reservations.errors.ratePlanNotFound);
     if (plan.roomTypeId !== room.roomTypeId) {
-      return fail(`Selected rate plan does not apply to ${room.roomType.name}`);
+      return fail(t.reservations.errors.planMismatch(room.roomType.name));
     }
 
     const guestId = await resolveGuest(hotelId, data);
@@ -79,7 +80,7 @@ export async function createReservationAction(input: unknown): Promise<ActionRes
       status: "CONFIRMED",
     });
     revalidateAll();
-    return ok({ id: reservation.id }, "Reservation created");
+    return ok({ id: reservation.id }, t.reservations.toasts.created);
   } catch (error) {
     return fail(toErrorMessage(error));
   }
@@ -89,7 +90,7 @@ export async function updateReservationAction(input: unknown): Promise<ActionRes
   try {
     const parsed = updateReservationSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await getCurrentHotelId();
+    const hotelId = await requireSessionHotelId();
     const data = parsed.data;
     await updateReservationDetails({
       id: data.id,
@@ -104,7 +105,7 @@ export async function updateReservationAction(input: unknown): Promise<ActionRes
       notes: data.notes ?? null,
     });
     revalidateAll();
-    return ok({ id: data.id }, "Reservation updated");
+    return ok({ id: data.id }, t.reservations.toasts.updated);
   } catch (error) {
     return fail(toErrorMessage(error));
   }
@@ -114,10 +115,10 @@ export async function setReservationStatusAction(input: unknown): Promise<Action
   try {
     const parsed = reservationStatusSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await getCurrentHotelId();
+    const hotelId = await requireSessionHotelId();
     await setReservationStatus(hotelId, parsed.data.id, parsed.data.status as ReservationStatus);
     revalidateAll();
-    return ok(undefined, `Reservation marked as ${parsed.data.status.replace("_", " ").toLowerCase()}`);
+    return ok(undefined, t.reservations.toasts.statusChanged(t.statuses.reservation[parsed.data.status]));
   } catch (error) {
     return fail(toErrorMessage(error));
   }
@@ -125,10 +126,10 @@ export async function setReservationStatusAction(input: unknown): Promise<Action
 
 export async function cancelReservationAction(reservationId: string): Promise<ActionResult> {
   try {
-    const hotelId = await getCurrentHotelId();
+    const hotelId = await requireSessionHotelId();
     await setReservationStatus(hotelId, reservationId, "CANCELLED");
     revalidateAll();
-    return ok(undefined, "Reservation cancelled");
+    return ok(undefined, t.reservations.toasts.cancelled);
   } catch (error) {
     return fail(toErrorMessage(error));
   }
@@ -141,18 +142,18 @@ export async function moveReservationAction(
   newCheckOut: string | undefined,
 ): Promise<ActionResult> {
   try {
-    const hotelId = await getCurrentHotelId();
+    const hotelId = await requireSessionHotelId();
     const res = await db.reservation.findFirst({ where: { id: reservationId, hotelId } });
-    if (!res) return fail("Reservation not found");
+    if (!res) return fail(t.reservations.errors.reservationNotFound);
     const roomId = newRoomId ?? res.roomId;
     const checkIn = toISOSafe(newCheckIn ? parseISODate(newCheckIn) : res.checkIn);
     const checkOut = toISOSafe(newCheckOut ? parseISODate(newCheckOut) : res.checkOut);
-    if (checkOut <= checkIn) return fail("Check-out must be after check-in");
+    if (checkOut <= checkIn) return fail(t.validation.checkoutAfterCheckin);
 
     const room = await db.room.findFirst({ where: { id: roomId, hotelId }, include: { roomType: true } });
-    if (!room) return fail("Room not found");
+    if (!room) return fail(t.reservations.errors.roomNotFound);
     const plan = await db.ratePlan.findFirst({ where: { roomTypeId: room.roomTypeId, hotelId } });
-    if (!plan) return fail("No rate plan configured for this room type");
+    if (!plan) return fail(t.reservations.errors.noPlanForType);
 
     await updateReservationDetails({
       id: res.id,
@@ -167,7 +168,7 @@ export async function moveReservationAction(
       notes: res.notes,
     });
     revalidateAll();
-    return ok(undefined, `Moved to room ${room.number}`);
+    return ok(undefined, t.reservations.toasts.movedToRoom(room.number));
   } catch (error) {
     return fail(toErrorMessage(error));
   }

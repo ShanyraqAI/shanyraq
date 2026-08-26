@@ -3,6 +3,7 @@ import { getAllReservations } from "@/lib/stats";
 import { toReservationVM, type GuestVM, type RatePlanVM, type RoomVM } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { ReservationsTable } from "@/components/reservations/reservations-table";
+import { t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -52,8 +53,8 @@ export default async function ReservationsPage() {
   return (
     <div>
       <PageHeader
-        title="Reservations"
-        description="Every booking across all channels — normalized in one place."
+        title={t.reservations.title}
+        description={t.reservations.description}
       />
       <ReservationsTable
         reservations={reservations.map(toReservationVM)}

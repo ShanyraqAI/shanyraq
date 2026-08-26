@@ -30,6 +30,7 @@ import { setReservationStatusAction, cancelReservationAction } from "@/server/ac
 import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
+import { t, channelLabel } from "@/lib/i18n";
 
 export interface ReservationDetailsProps {
   reservation: ReservationVM;
@@ -79,7 +80,7 @@ export function ReservationDetailsDialog({
   }
 
   async function cancel() {
-    if (!window.confirm(`Cancel the reservation for ${r.guestName}? Inventory will be released.`)) return;
+    if (!window.confirm(t.reservations.details.cancelConfirm(r.guestName))) return;
     setBusy("CANCELLED");
     try {
       const result = await cancelReservationAction(r.id);
@@ -101,13 +102,14 @@ export function ReservationDetailsDialog({
           <DialogHeader>
             <div className="flex items-center justify-between gap-3 pr-6">
               <DialogTitle className="text-base">
-                Reservation <span className="font-mono text-muted-foreground">#{r.id.slice(-8).toUpperCase()}</span>
+                {t.reservations.details.title}{" "}
+                <span className="font-mono text-muted-foreground">#{r.id.slice(-8).toUpperCase()}</span>
               </DialogTitle>
               <ReservationStatusBadge status={r.status} />
             </div>
             <DialogDescription>
-              Created {formatMediumDate(new Date(r.createdAt))}
-              {r.externalReservationId ? ` · imported from ${r.channel}` : ""}
+              {t.reservations.details.createdBy(formatMediumDate(new Date(r.createdAt)))}
+              {r.externalReservationId ? t.reservations.details.importedFrom(channelLabel(r.channel)) : ""}
             </DialogDescription>
           </DialogHeader>
 
@@ -119,30 +121,30 @@ export function ReservationDetailsDialog({
               <div className="min-w-0 flex-1 leading-tight">
                 <div className="truncate text-sm font-semibold">{r.guestName}</div>
                 <div className="truncate text-xs text-muted-foreground">
-                  {r.guestEmail ?? "no email"} · {r.guestPhone ?? "no phone"}
+                  {r.guestEmail ?? t.reservations.details.noEmail} · {r.guestPhone ?? t.reservations.details.noPhone}
                 </div>
               </div>
             </div>
 
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-              <Field label="Room" value={`${r.roomNumber} · ${r.roomTypeName}`} />
-              <Field label="Guests" value={`${r.adults} adult${r.adults === 1 ? "" : "s"}${r.children ? `, ${r.children} child${r.children === 1 ? "" : "ren"}` : ""}`} />
-              <Field label="Channel" value={<ChannelLabel channel={r.channel} />} />
-              <Field label="Check-in" value={formatMediumDate(new Date(`${r.checkIn}T00:00:00Z`))} />
-              <Field label="Check-out" value={formatMediumDate(new Date(`${r.checkOut}T00:00:00Z`))} />
-              <Field label="Nights" value={Math.round((Date.parse(`${r.checkOut}T00:00:00Z`) - Date.parse(`${r.checkIn}T00:00:00Z`)) / 86_400_000)} />
+              <Field label={t.dashboard.table.room} value={`${r.roomNumber} · ${r.roomTypeName}`} />
+              <Field label={t.reservations.details.guestsLabel} value={t.reservations.details.guestsField(r.adults, r.children)} />
+              <Field label={t.dashboard.table.channel} value={<ChannelLabel channel={r.channel} />} />
+              <Field label={t.reservations.form.checkIn} value={formatMediumDate(new Date(`${r.checkIn}T00:00:00Z`))} />
+              <Field label={t.reservations.form.checkOut} value={formatMediumDate(new Date(`${r.checkOut}T00:00:00Z`))} />
+              <Field label={t.dashboard.table.nights} value={Math.round((Date.parse(`${r.checkOut}T00:00:00Z`) - Date.parse(`${r.checkIn}T00:00:00Z`)) / 86_400_000)} />
             </dl>
 
             <Separator />
 
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
-                <div className="text-xs font-medium text-muted-foreground">Total</div>
+                <div className="text-xs font-medium text-muted-foreground">{t.reservations.details.total}</div>
                 <div className="text-lg font-semibold tabular-nums">{formatMoney(r.totalAmount)}</div>
               </div>
               {r.externalReservationId ? (
                 <div className="text-right">
-                  <div className="text-xs font-medium text-muted-foreground">External ID</div>
+                  <div className="text-xs font-medium text-muted-foreground">{t.reservations.details.externalId}</div>
                   <div className="font-mono text-xs">{r.externalReservationId}</div>
                 </div>
               ) : null}
@@ -161,34 +163,34 @@ export function ReservationDetailsDialog({
               {r.status === "PENDING" && (
                 <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => changeStatus("CONFIRMED")}>
                   {busy === "CONFIRMED" ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <CheckCheck className="mr-1.5 size-3.5" />}
-                  Confirm
+                  {t.reservations.confirm}
                 </Button>
               )}
               {(r.status === "CONFIRMED" || r.status === "PENDING") && (
                 <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => changeStatus("CHECKED_IN")}>
                   {busy === "CHECKED_IN" ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <LogIn className="mr-1.5 size-3.5" />}
-                  Check in
+                  {t.reservations.checkIn}
                 </Button>
               )}
               {r.status === "CHECKED_IN" && (
                 <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => changeStatus("CHECKED_OUT")}>
                   {busy === "CHECKED_OUT" ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <LogOut className="mr-1.5 size-3.5" />}
-                  Check out
+                  {t.reservations.checkOut}
                 </Button>
               )}
               {r.status === "NO_SHOW" && (
                 <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => changeStatus("CONFIRMED")}>
-                  Restore
+                  {t.reservations.details.restore}
                 </Button>
               )}
             </div>
 
             <div className="grid w-full grid-cols-3 gap-2">
               <Button size="sm" onClick={() => setEditing(true)}>
-                <Pencil className="mr-1.5 size-3.5" /> Edit
+                <Pencil className="mr-1.5 size-3.5" /> {t.common.edit}
               </Button>
-              <Button size="sm" variant="outline" title="Move or re-book" onClick={() => setEditing(true)}>
-                <CalendarRange className="mr-1.5 size-3.5" /> Move
+              <Button size="sm" variant="outline" title={t.reservations.details.moveTooltip} onClick={() => setEditing(true)}>
+                <CalendarRange className="mr-1.5 size-3.5" /> {t.reservations.details.move}
               </Button>
               <Button
                 size="sm"
@@ -198,7 +200,7 @@ export function ReservationDetailsDialog({
                 onClick={cancel}
               >
                 {busy === "CANCELLED" ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Ban className="mr-1.5 size-3.5" />}
-                Cancel
+                {t.common.cancel}
               </Button>
             </div>
           </DialogFooter>

@@ -71,25 +71,25 @@ export function isSameDay(a: Date, b: Date): boolean {
   return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
 }
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const WEEKDAYS_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+const MONTHS_SHORT = ["янв", "февр", "мар", "апр", "мая", "июн", "июл", "авг", "сент", "окт", "нояб", "дек"];
+export const WEEKDAYS_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 export function formatMonthYear(date: Date): string {
   return `${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
 }
 
 export function formatShortDate(date: Date): string {
-  return `${MONTHS_SHORT[date.getUTCMonth()]} ${date.getUTCDate()}`;
+  return `${date.getUTCDate()} ${MONTHS_SHORT[date.getUTCMonth()]}`;
 }
 
 export function formatMediumDate(date: Date): string {
-  return `${WEEKDAYS_SHORT[(date.getUTCDay() + 6) % 7]}, ${MONTHS_SHORT[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}`;
+  return `${WEEKDAYS_SHORT[(date.getUTCDay() + 6) % 7]}, ${date.getUTCDate()} ${MONTHS_SHORT[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
 }
 
 export function formatDayRange(checkIn: Date, checkOut: Date): string {
   if (checkIn.getUTCMonth() === checkOut.getUTCMonth()) {
-    return `${MONTHS_SHORT[checkIn.getUTCMonth()]} ${checkIn.getUTCDate()} – ${checkOut.getUTCDate()}`;
+    return `${checkIn.getUTCDate()} ${MONTHS_SHORT[checkIn.getUTCMonth()]} – ${checkOut.getUTCDate()}`;
   }
   return `${formatShortDate(checkIn)} – ${formatShortDate(checkOut)}`;
 }

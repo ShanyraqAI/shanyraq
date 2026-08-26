@@ -3,12 +3,8 @@ import { getChannelProvider } from "./provider-registry";
 import type { ChannelConnectionContext, ExternalReservation } from "./types";
 import type { ChannelCredentials, AvailabilityUpdate, RateUpdate } from "./types";
 import { parseISODate, addDays, toISODate } from "@/lib/dates";
-import {
-  createReservation,
-  findFreeRoom,
-  hasAvailabilityForStay,
-  writeAudit,
-} from "@/lib/reservations/service";
+import { createReservation, findFreeRoom, hasAvailabilityForStay, writeAudit } from "@/lib/reservations/service";
+import { t, pluralize } from "@/lib/i18n";
 
 /**
  * Synchronization engine.
@@ -57,16 +53,16 @@ export async function runChannelSync(connectionId: string): Promise<SyncSummary>
 
   try {
     if (connection.status !== "CONNECTED") {
-      throw new Error("Channel is not connected.");
+      throw new Error("Канал не подключён.");
     }
     const provider = getChannelProvider(connection.channelId);
     const context = buildContext(connection);
 
     // 1. Verify connection is alive.
-    if (!connection.credentialsJson) throw new Error("Missing credentials for this connection.");
+    if (!connection.credentialsJson) throw new Error("Для этого подключения не заданы учётные данные.");
     const credentials = parseCredentials(connection.credentialsJson);
     const verification = await provider.verifyCredentials(credentials);
-    if (!verification.ok) throw new Error(`Connection check failed: ${verification.error}`);
+    if (!verification.ok) throw new Error(`Проверка подключения не пройдена: ${verification.error}`);
 
     // 2-4. Pull, normalize and store reservations (with overbooking guards).
     const pull = await provider.pullReservations(context);
@@ -76,7 +72,7 @@ export async function runChannelSync(connectionId: string): Promise<SyncSummary>
       else if (outcome === "skipped") skipped++;
       else if (outcome === "blocked") {
         skipped++;
-        notes.push(`${external.guestName}: sold out — blocked by overbooking protection`);
+        notes.push(`${external.guestName}: нет свободных номеров — бронь заблокирована защитой от овербукинга`);
       }
     }
 
@@ -96,12 +92,14 @@ export async function runChannelSync(connectionId: string): Promise<SyncSummary>
 
     // 8. Record outcome.
     const parts = [
-      reservationsImported === 0 ? "No new reservations" : `Imported ${reservationsImported} reservation${reservationsImported === 1 ? "" : "s"}`,
-      `pushed ${ratesUpdated} rate updates`,
-      `pushed ${availabilityUpdated} availability updates`,
+      reservationsImported === 0
+        ? "Новых броней нет"
+        : `Импортировано ${reservationsImported} ${pluralize(reservationsImported, "бронирование", "бронирования", "бронирований")}`,
+      `отправлено цен: ${ratesUpdated}`,
+      `отправлено записей доступности: ${availabilityUpdated}`,
     ];
     let message = parts.join(" · ");
-    if (skipped > 0) message += ` · ${skipped} skipped`;
+    if (skipped > 0) message += ` · пропущено: ${skipped}`;
     if (notes.length > 0) message += ` — ${notes[0]}`;
 
     const status: SyncSummary["status"] = skipped > 0 ? "PARTIAL" : "SUCCESS";
@@ -112,7 +110,7 @@ export async function runChannelSync(connectionId: string): Promise<SyncSummary>
       message,
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown synchronization error";
+    const errorMessage = error instanceof Error ? error.message : "Неизвестная ошибка синхронизации";
     return finishLog(log.id, connection, "FAILED", {
       reservationsImported,
       ratesUpdated,
@@ -218,7 +216,7 @@ async function guessRatePlanId(connectionId: string, roomTypeId: string): Promis
   });
   if (mapped) return mapped.ratePlanId;
   const plan = await db.ratePlan.findFirst({ where: { roomTypeId }, select: { id: true } });
-  if (!plan) throw new Error("No rate plan exists for the mapped room type");
+  if (!plan) throw new Error(t.reservations.errors.noPlanForType);
   return plan.id;
 }
 
