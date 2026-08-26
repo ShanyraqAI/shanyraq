@@ -114,6 +114,48 @@ so moving to PostgreSQL is:
 - Tenant access funnels through `getCurrentHotelId()` — the seam where real
   authentication plugs in later
 
+## Deployment — free demo hosting on Vercel
+
+The app is Vercel-ready: on an empty database it **bootstraps itself** (applies
+the schema DDL, then loads the demo dataset inside one transaction — safe
+against concurrent cold starts).
+
+### Important SQLite limitation (read this)
+
+Vercel serverless functions have an **ephemeral filesystem**: only `/tmp` is
+writable and every cold start begins from an empty file. With
+`DATABASE_URL="file:/tmp/shanyraq-demo.db"` this means:
+
+- ✅ the site always renders a complete, fresh demo (seed runs on cold start,
+  dates are anchored to "today", so the demo never looks stale)
+- ⚠️ **writes are not persistent** — created reservations survive only until
+  the instance recycles, and two parallel instances keep separate databases
+
+Honest summary: *Vercel hosting works, but SQLite persistence needs a separate
+solution.* For viewing/demo purposes this is fine; for shared interactive use,
+add persistence.
+
+### Recommended persistence upgrade (still SQLite, no PostgreSQL migration)
+
+[Turso](https://turso.tech) has a free tier and speaks the same SQLite dialect:
+
+1. Create a database in Turso, get `DATABASE_URL` (libsql://…) + auth token
+2. `npm i @prisma/adapter-libsql @libsql/client`
+3. In `schema.prisma`: add `previewFeatures = ["driverAdapters"]`
+4. In `src/lib/db.ts`: construct `PrismaClient` with the libSQL adapter when
+   `TURSO_DATABASE_URL` is set (keep the file fallback for local dev)
+5. Push the schema once: `npm run gen:sql`, then apply `DB_INIT_SQL` via the
+   Turso shell (or run `db:reset` against a local copy and upload)
+
+Local development stays exactly as it is — plain `file:./dev.db`.
+
+### Steps to deploy
+
+1. Push this repository to GitHub
+2. In Vercel: **Add New → Project → Import** the repo (framework auto-detected)
+3. Environment variable: `DATABASE_URL = file:/tmp/shanyraq-demo.db`
+4. Deploy — first visit auto-provisions the demo data
+
 ## Project layout
 
 ```
