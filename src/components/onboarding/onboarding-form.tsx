@@ -46,9 +46,9 @@ const TIMEZONES = [
 interface RoomTypeInput {
   id: string;
   name: string;
-  count: number;
-  capacity: number;
-  basePrice: number;
+  count: number | "";
+  capacity: number | "";
+  basePrice: number | "";
 }
 
 export function OnboardingForm() {
@@ -77,6 +77,12 @@ export function OnboardingForm() {
     e.preventDefault();
     setSaving(true);
     try {
+      const payloadRoomTypes = roomTypes.map((r) => ({
+        ...r,
+        count: parseRoomNumber(r.count),
+        capacity: parseRoomNumber(r.capacity),
+        basePrice: parseRoomNumber(r.basePrice),
+      }));
       const response = await fetch("/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -88,7 +94,7 @@ export function OnboardingForm() {
           currency,
           timezone,
           propertyType,
-          roomTypes,
+          roomTypes: payloadRoomTypes,
         }),
       });
 
@@ -139,9 +145,19 @@ export function OnboardingForm() {
     setRoomTypes(roomTypes.filter((r) => r.id !== id));
   }
 
-  function updateRoomType(id: string, field: keyof RoomTypeInput, value: string | number) {
+  function updateRoomType(id: string, field: keyof RoomTypeInput, value: string | number | "") {
     setRoomTypes(roomTypes.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   }
+
+  function parseRoomNumber(value: number | ""): number {
+    if (value === "" || value === null) return 0;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  const COUNT_OPTIONS = Array.from({ length: 30 }, (_, i) => i + 1);
+  const CAPACITY_OPTIONS = [1, 2, 3, 4, 5, 6];
+  const PRICE_OPTIONS = [0, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 48000, 50000, 60000, 70000, 80000];
 
   const steps = [
     { label: t.onboarding.step1Title, description: t.onboarding.step1Desc },
@@ -337,37 +353,93 @@ export function OnboardingForm() {
                               </div>
                               <div className="space-y-1.5">
                                 <Label htmlFor={`count-${room.id}`}>{t.onboarding.roomCount}</Label>
-                                <Input
-                                  id={`count-${room.id}`}
-                                  type="number"
-                                  min={1}
-                                  value={room.count}
-                                  onChange={(e) => updateRoomType(room.id, "count", parseInt(e.target.value) || 1)}
-                                  required
-                                />
+                                <div className="flex gap-1">
+                                  <Input
+                                    id={`count-${room.id}`}
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    placeholder="10"
+                                    value={room.count}
+                                    onChange={(e) => {
+                                      const v = e.target.value.replace(/\D/g, "");
+                                      updateRoomType(room.id, "count", v === "" ? "" : parseInt(v, 10));
+                                    }}
+                                    onBlur={(e) => {
+                                      if (e.target.value === "" || parseRoomNumber(room.count) < 1) updateRoomType(room.id, "count", 1);
+                                    }}
+                                    required
+                                  />
+                                  <Select value={String(parseRoomNumber(room.count) || "")} onValueChange={(v) => updateRoomType(room.id, "count", parseInt(v, 10))}>
+                                    <SelectTrigger className="w-[70px] shrink-0">
+                                      <SelectValue placeholder="#" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {COUNT_OPTIONS.map((n) => (
+                                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
                               </div>
                               <div className="space-y-1.5">
                                 <Label htmlFor={`capacity-${room.id}`}>{t.onboarding.capacity}</Label>
-                                <Input
-                                  id={`capacity-${room.id}`}
-                                  type="number"
-                                  min={1}
-                                  value={room.capacity}
-                                  onChange={(e) => updateRoomType(room.id, "capacity", parseInt(e.target.value) || 1)}
-                                  required
-                                />
+                                <div className="flex gap-1">
+                                  <Input
+                                    id={`capacity-${room.id}`}
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    placeholder="2"
+                                    value={room.capacity}
+                                    onChange={(e) => {
+                                      const v = e.target.value.replace(/\D/g, "");
+                                      updateRoomType(room.id, "capacity", v === "" ? "" : parseInt(v, 10));
+                                    }}
+                                    onBlur={(e) => {
+                                      if (e.target.value === "" || parseRoomNumber(room.capacity) < 1) updateRoomType(room.id, "capacity", 1);
+                                    }}
+                                    required
+                                  />
+                                  <Select value={String(parseRoomNumber(room.capacity) || "")} onValueChange={(v) => updateRoomType(room.id, "capacity", parseInt(v, 10))}>
+                                    <SelectTrigger className="w-[70px] shrink-0">
+                                      <SelectValue placeholder="#" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {CAPACITY_OPTIONS.map((n) => (
+                                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
                               </div>
                               <div className="space-y-1.5">
                                 <Label htmlFor={`price-${room.id}`}>{t.onboarding.basePrice}</Label>
-                                <Input
-                                  id={`price-${room.id}`}
-                                  type="number"
-                                  min={0}
-                                  step={1000}
-                                  value={room.basePrice}
-                                  onChange={(e) => updateRoomType(room.id, "basePrice", parseInt(e.target.value) || 0)}
-                                  required
-                                />
+                                <div className="flex gap-1">
+                                  <Input
+                                    id={`price-${room.id}`}
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    placeholder="35000"
+                                    value={room.basePrice}
+                                    onChange={(e) => {
+                                      const v = e.target.value.replace(/\D/g, "");
+                                      updateRoomType(room.id, "basePrice", v === "" ? "" : parseInt(v, 10));
+                                    }}
+                                    required
+                                  />
+                                  <Select value={String(parseRoomNumber(room.basePrice) || "")} onValueChange={(v) => updateRoomType(room.id, "basePrice", parseInt(v, 10))}>
+                                    <SelectTrigger className="w-[90px] shrink-0">
+                                      <SelectValue placeholder="₸" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {PRICE_OPTIONS.map((n) => (
+                                        <SelectItem key={n} value={String(n)}>{n === 0 ? "0" : `₸${n.toLocaleString("ru-RU")}`}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
                               </div>
                             </div>
                           </div>
