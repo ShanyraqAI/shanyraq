@@ -1,17 +1,20 @@
 /**
- * Standalone seed entrypoint (npm run db:seed / db:reset).
- * The seeding logic itself lives in src/lib/demo-seed.ts so the runtime
- * bootstrap can reuse it on ephemeral hosts.
+ * Standalone seed entrypoint (npm run db:seed).
+ * 
+ * This is the SAFE production seed - it only creates system-level data
+ * (channels, etc.) and does NOT delete or create demo users/hotels.
+ * 
+ * For demo data, use: npm run db:seed:demo
  */
 import { PrismaClient } from "@prisma/client";
-import { seedDemoData } from "../src/lib/demo-seed";
+import { seedSystemData } from "../src/lib/system-seed";
 
 const db = new PrismaClient();
 
 async function main() {
-  console.log("Seeding Shanyraq demo data...");
-  await seedDemoData(db);
-  console.log("Seed complete.");
+  console.log("Seeding system data (channels, etc.)...");
+  await seedSystemData(db);
+  console.log("System seed complete.");
 }
 
 main()

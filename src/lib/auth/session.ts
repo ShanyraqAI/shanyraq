@@ -19,6 +19,11 @@ export interface SessionUser {
   phone: string | null;
   fullName: string;
   avatarUrl: string | null;
+  onboardingCompleted: boolean;
+  membershipId: string | null;
+  hotelId: string | null;
+  organizationId: string | null;
+  role: string | null;
 }
 
 function hashToken(token: string): string {
@@ -52,22 +57,68 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const session = await db.session.findUnique({
-    where: { tokenHash: hashToken(token) },
-    select: {
-      expiresAt: true,
-      user: {
-        select: { id: true, email: true, phone: true, fullName: true, avatarUrl: true },
+  try {
+    const session = await db.session.findUnique({
+      where: { tokenHash: hashToken(token) },
+      select: {
+        expiresAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            phone: true,
+            fullName: true,
+            avatarUrl: true,
+            onboardingCompleted: true,
+            memberships: {
+              where: { role: { not: "STAFF" } },
+              take: 1,
+              select: {
+                id: true,
+                role: true,
+                organizationId: true,
+                hotelId: true,
+              },
+            },
+          },
+        },
       },
-    },
-  });
-  if (!session || session.expiresAt < new Date()) return null;
-  return session.user;
+    });
+    if (!session || session.expiresAt < new Date()) return null;
+
+    const membership = session.user.memberships[0] || null;
+    return {
+      id: session.user.id,
+      email: session.user.email,
+      phone: session.user.phone,
+      fullName: session.user.fullName,
+      avatarUrl: session.user.avatarUrl,
+      onboardingCompleted: session.user.onboardingCompleted,
+      membershipId: membership?.id ?? null,
+      hotelId: membership?.hotelId ?? null,
+      organizationId: membership?.organizationId ?? null,
+      role: membership?.role ?? null,
+    };
+  } catch (error) {
+    // Table missing on fresh DB before bootstrap — treat as no session
+    if (error instanceof Error && /does not exist|no such table/i.test(error.message)) {
+      return null;
+    }
+    throw error;
+  }
 });
 
 export async function requireUser(): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) redirect("/login");
+  return user;
+}
+
+export async function requireOnboardingComplete(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!user.onboardingCompleted) {
+    redirect("/onboarding");
+  }
   return user;
 }
 

@@ -38,18 +38,48 @@ export async function GET(request: Request) {
   }
 
   const email = profile.email.toLowerCase();
-  let user = await db.user.findUnique({ where: { email }, select: { id: true } });
+  let user = await db.user.findUnique({ where: { email }, select: { id: true, onboardingCompleted: true } });
+
   if (!user) {
-    user = await db.user.create({
+    const displayName = profile.name?.trim() || email.split("@")[0];
+    const newUser = await db.user.create({
       data: {
         email,
-        fullName: profile.name?.trim() || email.split("@")[0],
+        fullName: displayName,
         avatarUrl: profile.picture ?? null,
       },
-      select: { id: true },
+      select: { id: true, onboardingCompleted: true },
     });
+
+    const org = await db.organization.create({
+      data: { name: `${displayName} — Организация` },
+    });
+
+    const hotel = await db.hotel.create({
+      data: {
+        orgId: org.id,
+        slug: `hotel-${newUser.id.slice(0, 8)}-${Date.now().toString(36)}`,
+        name: `Отель ${displayName.split(" ")[0]}`,
+        timezone: "Asia/Almaty",
+        currency: "KZT",
+        country: "Казахстан",
+      },
+    });
+
+    await db.membership.create({
+      data: {
+        organizationId: org.id,
+        userId: newUser.id,
+        hotelId: hotel.id,
+        role: "OWNER",
+      },
+    });
+
+    user = newUser;
   }
 
   await createSession(user.id);
-  return NextResponse.redirect(new URL("/dashboard", url.origin));
+
+  const redirectUrl = user.onboardingCompleted ? "/dashboard" : "/onboarding";
+  return NextResponse.redirect(new URL(redirectUrl, url.origin));
 }

@@ -97,13 +97,13 @@ timezone conversion. The hotel's IANA timezone is stored on the hotel record.
 
 ### Database provider
 
-The local MVP uses **SQLite** (zero setup). The schema avoids engine-specific
-features (no native enums — statuses are strings validated by Zod/TS unions),
-so moving to PostgreSQL is:
+Продакшен использует **PostgreSQL (Neon)**. Схема не использует engine-specific фичи (статусы — строки, валидация через Zod/TS), поэтому локально можно было использовать SQLite, но сейчас проект полностью на PostgreSQL:
 
-1. Change `provider = "postgresql"` in `prisma/schema.prisma`
-2. Point `DATABASE_URL` at your Postgres instance (see `.env.example`)
+1. `provider = "postgresql"` в `prisma/schema.prisma`
+2. `DATABASE_URL` — Neon connection string (см. `.env` / `.env.example`)
 3. `npm run db:push && npm run db:seed`
+
+Локальные `*.db` файлы удалены, `src/lib/db-init-sql.ts` и `gen:sql` больше не нужны — схема управляется `prisma db push`.
 
 ### Security notes
 
@@ -114,47 +114,19 @@ so moving to PostgreSQL is:
 - Tenant access funnels through `getCurrentHotelId()` — the seam where real
   authentication plugs in later
 
-## Deployment — free demo hosting on Vercel
+## Deployment — Vercel + Neon PostgreSQL
 
-The app is Vercel-ready: on an empty database it **bootstraps itself** (applies
-the schema DDL, then loads the demo dataset inside one transaction — safe
-against concurrent cold starts).
+Приложение готово к деплою на Vercel с Neon PostgreSQL (персистентность, сессии не теряются при холодных стартах).
 
-### Important SQLite limitation (read this)
+### Шаги деплоя
 
-Vercel serverless functions have an **ephemeral filesystem**: only `/tmp` is
-writable and every cold start begins from an empty file. With
-`DATABASE_URL="file:/tmp/shanyraq-demo.db"` this means:
-
-- ✅ the site always renders a complete, fresh demo (seed runs on cold start,
-  dates are anchored to "today", so the demo never looks stale)
-- ⚠️ **writes are not persistent** — created reservations survive only until
-  the instance recycles, and two parallel instances keep separate databases
-
-Honest summary: *Vercel hosting works, but SQLite persistence needs a separate
-solution.* For viewing/demo purposes this is fine; for shared interactive use,
-add persistence.
-
-### Recommended persistence upgrade (still SQLite, no PostgreSQL migration)
-
-[Turso](https://turso.tech) has a free tier and speaks the same SQLite dialect:
-
-1. Create a database in Turso, get `DATABASE_URL` (libsql://…) + auth token
-2. `npm i @prisma/adapter-libsql @libsql/client`
-3. In `schema.prisma`: add `previewFeatures = ["driverAdapters"]`
-4. In `src/lib/db.ts`: construct `PrismaClient` with the libSQL adapter when
-   `TURSO_DATABASE_URL` is set (keep the file fallback for local dev)
-5. Push the schema once: `npm run gen:sql`, then apply `DB_INIT_SQL` via the
-   Turso shell (or run `db:reset` against a local copy and upload)
-
-Local development stays exactly as it is — plain `file:./dev.db`.
-
-### Steps to deploy
-
-1. Push this repository to GitHub
-2. In Vercel: **Add New → Project → Import** the repo (framework auto-detected)
-3. Environment variable: `DATABASE_URL = file:/tmp/shanyraq-demo.db`
-4. Deploy — first visit auto-provisions the demo data
+1. Push репозиторий в GitHub
+2. В Vercel: **Add New → Project → Import** репозиторий (framework auto-detected)
+3. Environment variables:
+   - `DATABASE_URL` — pooled connection string из Neon Console (`postgresql://...?sslmode=require`)
+   - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — из Google Cloud Console (Authorized redirect URI: `https://<vercel-app>.vercel.app/api/auth/google/callback`)
+4. Deploy — схема применяется `prisma db push` (или `prisma migrate`), затем `src/lib/bootstrap.ts` сидирует системные `Channel` один раз
+5. Проверьте логи: не должно быть `Session table does not exist` — bootstrap больше не зависит от SQLite DDL
 
 ## Project layout
 

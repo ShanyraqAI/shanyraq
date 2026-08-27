@@ -12,35 +12,38 @@ export const db =
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
 
 /**
- * Single-tenant MVP: resolves the active demo hotel.
- *
- * When authentication lands, this becomes `requireSession()` → membership →
- * hotel from the URL/host. Every server action and query funnels through this
- * function so tenant isolation only has to be enforced in one place.
- *
- * The database self-provisions on first access: on an empty database the
- * bootstrap applies the schema DDL and loads the demo dataset. This is what
- * keeps the ephemeral Vercel demo alive across cold starts; locally it is a
- * fast no-op.
+ * Get the current hotel ID from the authenticated user's membership.
+ * This replaces the old DEMO_HOTEL_SLUG-based lookup.
  */
 export async function getCurrentHotelId(): Promise<string> {
   await ensureDatabaseReady();
-  const hotel = await db.hotel.findFirst({
-    where: { slug: DEMO_HOTEL_SLUG },
-    select: { id: true },
-  });
-  if (!hotel) throw new Error("Демо-отель не найден. Выполните npm run db:reset.");
+  const { getCurrentHotel } = await import("@/lib/tenant");
+  const hotel = await getCurrentHotel();
+  if (!hotel) throw new Error("Отель не найден. Завершите онбординг или войдите в аккаунт.");
   return hotel.id;
 }
 
-/** Same as getCurrentHotelId but returns the full hotel record. */
-export async function getDemoHotel() {
+/**
+ * Get the current hotel record from the authenticated user's membership.
+ */
+export async function getCurrentHotel() {
   await ensureDatabaseReady();
-  const hotel = await db.hotel.findFirst({
-    where: { slug: DEMO_HOTEL_SLUG },
-  });
-  if (!hotel) throw new Error("Демо-отель не найден. Выполните npm run db:reset.");
+  const { getCurrentHotel: getHotel } = await import("@/lib/tenant");
+  const hotel = await getHotel();
+  if (!hotel) throw new Error("Отель не найден. Завершите онбординг или войдите в аккаунт.");
   return hotel;
 }
 
+/**
+ * @deprecated Use getCurrentHotelId() instead.
+ * Kept for backward compatibility with legacy code.
+ */
 export const DEMO_HOTEL_SLUG = "shanyraq-astana";
+
+/**
+ * @deprecated Use getCurrentHotel() instead.
+ * Kept for backward compatibility with legacy code.
+ */
+export async function getDemoHotel() {
+  return getCurrentHotel();
+}

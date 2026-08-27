@@ -1,5 +1,4 @@
-import { getSessionUser } from "@/lib/auth/session";
-import { getCurrentHotelId } from "@/lib/db";
+import { getCurrentHotelId } from "@/lib/tenant";
 
 /**
  * Authorization guard for server actions.
@@ -11,7 +10,5 @@ import { getCurrentHotelId } from "@/lib/db";
  * supplied by the client.
  */
 export async function requireSessionHotelId(): Promise<string> {
-  const user = await getSessionUser();
-  if (!user) throw new Error("Требуется вход в аккаунт");
   return getCurrentHotelId();
 }

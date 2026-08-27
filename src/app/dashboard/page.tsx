@@ -13,6 +13,7 @@ import { toReservationVM, type GuestVM, type RatePlanVM, type RoomVM } from "@/l
 import { today, formatMediumDate } from "@/lib/dates";
 import { formatMoney, formatPercent } from "@/lib/utils";
 import { t } from "@/lib/i18n";
+import { getCurrentUser } from "@/lib/tenant";
 import { PageHeader, EmptyState } from "@/components/shared/page-header";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { RecentReservationsTable } from "@/components/dashboard/recent-reservations-table";
@@ -35,7 +36,8 @@ export default async function DashboardPage() {
   const hotel = await db.hotel.findUniqueOrThrow({ where: { id: hotelId } });
   const day = today();
 
-  const [stats, recent, channelHealth, roomTypes, roomsRaw, ratePlansRaw, guestsRaw] = await Promise.all([
+  const [user, stats, recent, channelHealth, roomTypes, roomsRaw, ratePlansRaw, guestsRaw] = await Promise.all([
+    getCurrentUser(),
     getDashboardStats(hotelId, day),
     getRecentReservations(hotelId, 20),
     getChannelHealth(hotelId),
@@ -80,7 +82,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Good ${greeting()}, Aisultan`}
+        title={`Good ${greeting()}, ${user?.fullName || "User"}`}
         description={`${hotel.name} · ${formatMediumDate(day)}`}
       >
         <SyncAllButton />

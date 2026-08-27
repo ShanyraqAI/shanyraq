@@ -45,6 +45,30 @@ export async function registerAction(input: unknown): Promise<ActionResult> {
       select: { id: true },
     });
 
+    const org = await db.organization.create({
+      data: { name: `${fullName} — Организация` },
+    });
+
+    const hotel = await db.hotel.create({
+      data: {
+        orgId: org.id,
+        slug: `hotel-${user.id.slice(0, 8)}-${Date.now().toString(36)}`,
+        name: `Отель ${fullName.split(" ")[0]}`,
+        timezone: "Asia/Almaty",
+        currency: "KZT",
+        country: "Казахстан",
+      },
+    });
+
+    await db.membership.create({
+      data: {
+        organizationId: org.id,
+        userId: user.id,
+        hotelId: hotel.id,
+        role: "OWNER",
+      },
+    });
+
     await createSession(user.id);
     return ok(undefined);
   } catch (error) {

@@ -14,7 +14,9 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const [{ error }, user] = await Promise.all([searchParams, getSessionUser()]);
-  if (user) redirect("/dashboard");
+  if (user) {
+    redirect(user.onboardingCompleted ? "/dashboard" : "/onboarding");
+  }
 
   return (
     <AuthShell

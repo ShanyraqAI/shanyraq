@@ -1,10 +1,10 @@
 // Shanyraq AI — Prisma schema
 //
 // NOTE ON DATABASE PROVIDER
-// The local MVP demo runs on SQLite (zero-setup, file based). The schema is kept
-// portable: no native enums (status fields are strings validated with Zod/TS unions),
-// so switching to PostgreSQL later is a matter of changing the datasource provider
-// and DATABASE_URL, then running `prisma db push`.
+// PostgreSQL (hosted, e.g. Neon via the Vercel marketplace) is the primary
+// target — it keeps users and sessions persistent across serverless cold
+// starts. The schema is portable: no native enums (status fields are strings
+// validated with Zod/TS unions).
 //
 // NOTE ON DATES
 // Hotel-business dates (checkIn/checkOut/rate dates) are stored as UTC midnight
@@ -19,7 +19,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -39,14 +39,15 @@ model Organization {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String?   @unique // nullable: phone-only accounts are allowed
-  phone        String?   @unique
-  fullName     String
-  passwordHash String?
-  avatarUrl    String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  email               String?   @unique // nullable: phone-only accounts are allowed
+  phone               String?   @unique
+  fullName            String
+  passwordHash        String?
+  avatarUrl           String?
+  onboardingCompleted Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   memberships   Membership[]
   organizations Organization[] // implicit m-n via Organization.users
@@ -71,27 +72,32 @@ model Membership {
   id             String   @id @default(cuid())
   organizationId String
   userId         String
+  hotelId        String?
   role           String // OWNER | MANAGER | STAFF (validated in app layer)
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hotel        Hotel?       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
 }
 
 model Hotel {
-  id        String   @id @default(cuid())
-  orgId     String?
-  slug      String   @unique
-  name      String
-  address   String?
-  city      String?
-  country   String?
-  timezone  String   @default("Asia/Almaty")
-  currency  String   @default("KZT")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  orgId        String?
+  slug         String   @unique
+  name         String
+  propertyType String?
+  language     String   @default("ru")
+  address      String?
+  city         String?
+  country      String?
+  timezone     String   @default("Asia/Almaty")
+  currency     String   @default("KZT")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  memberships  Membership[]
 
   roomTypes     RoomType[]
   rooms         Room[]

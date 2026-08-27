@@ -10,7 +10,9 @@ export const dynamic = "force-dynamic";
 
 export default async function RegisterPage() {
   const user = await getSessionUser();
-  if (user) redirect("/dashboard");
+  if (user) {
+    redirect(user.onboardingCompleted ? "/dashboard" : "/onboarding");
+  }
 
   return (
     <AuthShell

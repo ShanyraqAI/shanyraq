@@ -1,10 +1,16 @@
-import { getDemoHotel } from "@/lib/db";
-import { requireUser } from "@/lib/auth/session";
+import { requireOnboardingComplete } from "@/lib/auth/session";
+import { getCurrentHotel } from "@/lib/tenant";
 import { DesktopSidebar } from "@/components/layout/app-sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [user, hotel] = await Promise.all([requireUser(), getDemoHotel()]);
+  const user = await requireOnboardingComplete();
+  const hotel = await getCurrentHotel();
+  
+  if (!hotel) {
+    return <div className="min-h-screen flex items-center justify-center">Отель не найден</div>;
+  }
+  
   const hotelName = hotel.name;
   const userName = user.fullName;
 
