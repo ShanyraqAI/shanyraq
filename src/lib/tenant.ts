@@ -13,17 +13,17 @@ export interface CurrentUser {
   fullName: string;
   avatarUrl: string | null;
   onboardingCompleted: boolean;
-  membershipId: string;
-  hotelId: string;
-  organizationId: string;
-  role: string;
+  membershipId: string | null;
+  hotelId: string | null;
+  organizationId: string | null;
+  role: string | null;
 }
 
 export interface CurrentMembership {
   id: string;
   role: string;
   organizationId: string;
-  hotelId: string;
+  hotelId: string | null;
   userId: string;
 }
 
@@ -55,9 +55,22 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       memberships: { take: 1, select: { id: true, role: true, organizationId: true, hotelId: true } },
     },
   });
-  if (!user || !user.memberships.length) return null;
+  if (!user) return null;
+  if (!user.memberships.length) {
+    return {
+      id: user.id,
+      email: user.email,
+      phone: user.phone,
+      fullName: user.fullName,
+      avatarUrl: user.avatarUrl,
+      onboardingCompleted: user.onboardingCompleted,
+      membershipId: null,
+      hotelId: null,
+      organizationId: null,
+      role: null,
+    };
+  }
   const m = user.memberships[0];
-  if (!m.hotelId) return null;
   return {
     id: user.id,
     email: user.email,
@@ -74,13 +87,13 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
 export async function getCurrentMembership(): Promise<CurrentMembership | null> {
   const user = await getCurrentUser();
-  if (!user) return null;
+  if (!user || !user.membershipId || !user.organizationId || !user.hotelId || !user.role) return null;
   return { id: user.membershipId, role: user.role, organizationId: user.organizationId, hotelId: user.hotelId, userId: user.id };
 }
 
 export async function getCurrentHotel(): Promise<CurrentHotel | null> {
   const membership = await getCurrentMembership();
-  if (!membership) return null;
+  if (!membership || !membership.hotelId) return null;
   const hotel = await db.hotel.findUnique({
     where: { id: membership.hotelId },
     select: { id: true, orgId: true, slug: true, name: true, propertyType: true, address: true, city: true, country: true, timezone: true, currency: true },

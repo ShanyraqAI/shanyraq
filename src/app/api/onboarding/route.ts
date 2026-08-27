@@ -40,19 +40,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "Добавьте хотя бы один тип номера" }, { status: 400 });
     }
 
-    // Update hotel with onboarding data
-    await db.hotel.update({
-      where: { id: user.hotelId },
-      data: {
-        name: hotelName,
-        city,
-        country,
-        propertyType,
-        language: language || "ru",
-        timezone,
-        currency,
-      },
-    });
+    // Update or create hotel with onboarding data
+    let hotelId = user.hotelId;
+    if (hotelId) {
+      await db.hotel.update({
+        where: { id: hotelId },
+        data: { name: hotelName, city, country, propertyType, language: language || "ru", timezone, currency },
+      });
+    } else {
+      // Legacy user without hotel — create one now
+      const org = user.organizationId
+        ? await db.organization.findUnique({ where: { id: user.organizationId } })
+        : await db.organization.create({ data: { name: `${hotelName} — Организация` } });
+      const newHotel = await db.hotel.create({
+        data: {
+          orgId: org!.id,
+          slug: `hotel-${user.id.slice(0, 8)}-${Date.now().toString(36)}`,
+          name: hotelName,
+          city,
+          country,
+          propertyType,
+          language: language || "ru",
+          timezone,
+          currency,
+        },
+      });
+      hotelId = newHotel.id;
+      if (user.membershipId) {
+        await db.membership.update({ where: { id: user.membershipId }, data: { hotelId } });
+      } else if (user.organizationId) {
+        await db.membership.create({ data: { organizationId: user.organizationId, userId: user.id, hotelId, role: "OWNER" } });
+      }
+    }
 
     // Update user preferences
     await db.user.update({
@@ -67,7 +86,7 @@ export async function POST(request: Request) {
     for (const rt of roomTypes) {
       const roomType = await db.roomType.create({
         data: {
-          hotelId: user.hotelId,
+          hotelId: hotelId!,
           name: rt.name,
           capacity: rt.capacity,
           basePrice: rt.basePrice,
@@ -82,7 +101,7 @@ export async function POST(request: Request) {
         // 101..110, 201..210 etc. For count <=10: 101..110
         const roomNumber = rt.count <= 10 ? `${100 + i}` : number;
         rooms.push({
-          hotelId: user.hotelId,
+          hotelId: hotelId!,
           roomTypeId: roomType.id,
           number: roomNumber,
           floor,
@@ -93,11 +112,11 @@ export async function POST(request: Request) {
     }
 
     // Create a default rate plan for the first room type
-    const firstRoomType = await db.roomType.findFirst({ where: { hotelId: user.hotelId }, select: { id: true } });
+    const firstRoomType = await db.roomType.findFirst({ where: { hotelId: hotelId! }, select: { id: true } });
     if (firstRoomType) {
       await db.ratePlan.create({
         data: {
-          hotelId: user.hotelId,
+          hotelId: hotelId!,
           roomTypeId: firstRoomType.id,
           name: "Базовый тариф",
           basePrice: roomTypes[0]?.basePrice || 35000,
