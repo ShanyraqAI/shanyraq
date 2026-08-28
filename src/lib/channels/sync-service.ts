@@ -196,7 +196,7 @@ async function importExternalReservation(
     hotelId,
     guestId: guest.id,
     roomId: room.id,
-    ratePlanId: await guessRatePlanId(connection.id, mapping.roomTypeId),
+    ratePlanId: await guessRatePlanId(hotelId, connection.id, mapping.roomTypeId),
     checkIn: external.checkIn,
     checkOut: external.checkOut,
     adults: external.adults,
@@ -209,13 +209,13 @@ async function importExternalReservation(
   return "imported";
 }
 
-async function guessRatePlanId(connectionId: string, roomTypeId: string): Promise<string> {
+async function guessRatePlanId(hotelId: string, connectionId: string, roomTypeId: string): Promise<string> {
   const mapped = await db.channelRateMapping.findFirst({
-    where: { connectionId, ratePlan: { roomTypeId } },
+    where: { connectionId, ratePlan: { hotelId, roomTypeId } },
     select: { ratePlanId: true },
   });
   if (mapped) return mapped.ratePlanId;
-  const plan = await db.ratePlan.findFirst({ where: { roomTypeId }, select: { id: true } });
+  const plan = await db.ratePlan.findFirst({ where: { hotelId, roomTypeId }, select: { id: true } });
   if (!plan) throw new Error(t.reservations.errors.noPlanForType);
   return plan.id;
 }

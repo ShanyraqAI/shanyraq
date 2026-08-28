@@ -12,7 +12,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:demo": "tsx prisma/seed-demo.ts",
     "db:reset": "prisma db push --force-reset && tsx prisma/seed-demo.ts",
-    "test:smoke": "tsx scripts/smoke.ts"
+    "test:smoke": "tsx scripts/smoke.ts",
+    "test:room-tenancy": "tsx scripts/audit-room-tenancy.ts"
   },
   "engines": {
     "node": ">=18.18.0"

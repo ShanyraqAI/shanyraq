@@ -30,6 +30,8 @@ export interface RoomVM {
   status: RoomStatus;
   roomTypeId: string;
   roomTypeName: string;
+  capacity?: number;
+  basePrice?: number;
   guestTonight: string | null;
 }
 

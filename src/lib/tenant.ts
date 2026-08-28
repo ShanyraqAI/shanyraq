@@ -43,45 +43,17 @@ export interface CurrentHotel {
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const sessionUser = await getSessionUser();
   if (!sessionUser) return null;
-  const user = await db.user.findUnique({
-    where: { id: sessionUser.id },
-    select: {
-      id: true,
-      email: true,
-      phone: true,
-      fullName: true,
-      avatarUrl: true,
-      onboardingCompleted: true,
-      memberships: { take: 1, select: { id: true, role: true, organizationId: true, hotelId: true } },
-    },
-  });
-  if (!user) return null;
-  if (!user.memberships.length) {
-    return {
-      id: user.id,
-      email: user.email,
-      phone: user.phone,
-      fullName: user.fullName,
-      avatarUrl: user.avatarUrl,
-      onboardingCompleted: user.onboardingCompleted,
-      membershipId: null,
-      hotelId: null,
-      organizationId: null,
-      role: null,
-    };
-  }
-  const m = user.memberships[0];
   return {
-    id: user.id,
-    email: user.email,
-    phone: user.phone,
-    fullName: user.fullName,
-    avatarUrl: user.avatarUrl,
-    onboardingCompleted: user.onboardingCompleted,
-    membershipId: m.id,
-    hotelId: m.hotelId,
-    organizationId: m.organizationId,
-    role: m.role,
+    id: sessionUser.id,
+    email: sessionUser.email,
+    phone: sessionUser.phone,
+    fullName: sessionUser.fullName,
+    avatarUrl: sessionUser.avatarUrl,
+    onboardingCompleted: sessionUser.onboardingCompleted,
+    membershipId: sessionUser.membershipId,
+    hotelId: sessionUser.hotelId,
+    organizationId: sessionUser.organizationId,
+    role: sessionUser.role,
   };
 }
 
@@ -94,8 +66,8 @@ export async function getCurrentMembership(): Promise<CurrentMembership | null> 
 export async function getCurrentHotel(): Promise<CurrentHotel | null> {
   const membership = await getCurrentMembership();
   if (!membership || !membership.hotelId) return null;
-  const hotel = await db.hotel.findUnique({
-    where: { id: membership.hotelId },
+  const hotel = await db.hotel.findFirst({
+    where: { id: membership.hotelId, orgId: membership.organizationId },
     select: { id: true, orgId: true, slug: true, name: true, propertyType: true, address: true, city: true, country: true, timezone: true, currency: true },
   });
   return hotel;

@@ -43,14 +43,6 @@ const TIMEZONES = [
   "UTC",
 ];
 
-interface RoomTypeInput {
-  id: string;
-  name: string;
-  count: number | "";
-  capacity: number | "";
-  basePrice: number | "";
-}
-
 export function OnboardingForm() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -67,22 +59,10 @@ export function OnboardingForm() {
   // Step 2: Property type
   const [propertyType, setPropertyType] = useState("");
 
-  // Step 3: Room types
-  const [roomTypes, setRoomTypes] = useState<RoomTypeInput[]>([
-    { id: "1", name: "Стандарт", count: 10, capacity: 2, basePrice: 35000 },
-    { id: "2", name: "Делюкс", count: 5, capacity: 3, basePrice: 48000 },
-  ]);
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
-      const payloadRoomTypes = roomTypes.map((r) => ({
-        ...r,
-        count: parseRoomNumber(r.count),
-        capacity: parseRoomNumber(r.capacity),
-        basePrice: parseRoomNumber(r.basePrice),
-      }));
       const response = await fetch("/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -94,7 +74,6 @@ export function OnboardingForm() {
           currency,
           timezone,
           propertyType,
-          roomTypes: payloadRoomTypes,
         }),
       });
 
@@ -122,42 +101,12 @@ export function OnboardingForm() {
       toast.error("Выберите тип объекта");
       return;
     }
-    if (step === 3 && roomTypes.length === 0) {
-      toast.error("Добавьте хотя бы один тип номера");
-      return;
-    }
     if (step < 3) setStep(step + 1);
   }
 
   function prevStep() {
     if (step > 1) setStep(step - 1);
   }
-
-  function addRoomType() {
-    setRoomTypes([...roomTypes, { id: Date.now().toString(), name: "", count: 1, capacity: 1, basePrice: 0 }]);
-  }
-
-  function removeRoomType(id: string) {
-    if (roomTypes.length <= 1) {
-      toast.error("Должен быть хотя бы один тип номера");
-      return;
-    }
-    setRoomTypes(roomTypes.filter((r) => r.id !== id));
-  }
-
-  function updateRoomType(id: string, field: keyof RoomTypeInput, value: string | number | "") {
-    setRoomTypes(roomTypes.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
-  }
-
-  function parseRoomNumber(value: number | ""): number {
-    if (value === "" || value === null) return 0;
-    const n = Number(value);
-    return Number.isFinite(n) ? n : 0;
-  }
-
-  const COUNT_OPTIONS = Array.from({ length: 30 }, (_, i) => i + 1);
-  const CAPACITY_OPTIONS = [1, 2, 3, 4, 5, 6];
-  const PRICE_OPTIONS = [0, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 48000, 50000, 60000, 70000, 80000];
 
   const steps = [
     { label: t.onboarding.step1Title, description: t.onboarding.step1Desc },
@@ -322,142 +271,14 @@ export function OnboardingForm() {
                 </div>
               )}
 
-              {/* Step 3: Room types */}
+              {/* Step 3: inventory starts empty and is managed from Rooms. */}
               {step === 3 && (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <Label>{t.onboarding.roomTypes}</Label>
-                    <Button type="button" variant="outline" size="sm" onClick={addRoomType}>
-                      <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      {t.onboarding.addRoomType}
-                    </Button>
-                  </div>
-
-                  <div className="space-y-4">
-                    {roomTypes.map((room) => (
-                      <Card key={room.id} className="p-4">
-                        <div className="flex items-start justify-between gap-4 mb-4">
-                          <div className="flex-1 space-y-3">
-                            <div className="grid gap-3 sm:grid-cols-4">
-                              <div className="space-y-1.5">
-                                <Label htmlFor={`name-${room.id}`}>{t.onboarding.roomName}</Label>
-                                <Input
-                                  id={`name-${room.id}`}
-                                  value={room.name}
-                                  onChange={(e) => updateRoomType(room.id, "name", e.target.value)}
-                                  placeholder={t.onboarding.roomNamePlaceholder}
-                                  required
-                                />
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label htmlFor={`count-${room.id}`}>{t.onboarding.roomCount}</Label>
-                                <div className="flex gap-1">
-                                  <Input
-                                    id={`count-${room.id}`}
-                                    type="text"
-                                    inputMode="numeric"
-                                    pattern="[0-9]*"
-                                    placeholder="10"
-                                    value={room.count}
-                                    onChange={(e) => {
-                                      const v = e.target.value.replace(/\D/g, "");
-                                      updateRoomType(room.id, "count", v === "" ? "" : parseInt(v, 10));
-                                    }}
-                                    onBlur={(e) => {
-                                      if (e.target.value === "" || parseRoomNumber(room.count) < 1) updateRoomType(room.id, "count", 1);
-                                    }}
-                                    required
-                                  />
-                                  <Select value={String(parseRoomNumber(room.count) || "")} onValueChange={(v) => updateRoomType(room.id, "count", parseInt(v, 10))}>
-                                    <SelectTrigger className="w-[70px] shrink-0">
-                                      <SelectValue placeholder="#" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {COUNT_OPTIONS.map((n) => (
-                                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label htmlFor={`capacity-${room.id}`}>{t.onboarding.capacity}</Label>
-                                <div className="flex gap-1">
-                                  <Input
-                                    id={`capacity-${room.id}`}
-                                    type="text"
-                                    inputMode="numeric"
-                                    pattern="[0-9]*"
-                                    placeholder="2"
-                                    value={room.capacity}
-                                    onChange={(e) => {
-                                      const v = e.target.value.replace(/\D/g, "");
-                                      updateRoomType(room.id, "capacity", v === "" ? "" : parseInt(v, 10));
-                                    }}
-                                    onBlur={(e) => {
-                                      if (e.target.value === "" || parseRoomNumber(room.capacity) < 1) updateRoomType(room.id, "capacity", 1);
-                                    }}
-                                    required
-                                  />
-                                  <Select value={String(parseRoomNumber(room.capacity) || "")} onValueChange={(v) => updateRoomType(room.id, "capacity", parseInt(v, 10))}>
-                                    <SelectTrigger className="w-[70px] shrink-0">
-                                      <SelectValue placeholder="#" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {CAPACITY_OPTIONS.map((n) => (
-                                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label htmlFor={`price-${room.id}`}>{t.onboarding.basePrice}</Label>
-                                <div className="flex gap-1">
-                                  <Input
-                                    id={`price-${room.id}`}
-                                    type="text"
-                                    inputMode="numeric"
-                                    pattern="[0-9]*"
-                                    placeholder="35000"
-                                    value={room.basePrice}
-                                    onChange={(e) => {
-                                      const v = e.target.value.replace(/\D/g, "");
-                                      updateRoomType(room.id, "basePrice", v === "" ? "" : parseInt(v, 10));
-                                    }}
-                                    required
-                                  />
-                                  <Select value={String(parseRoomNumber(room.basePrice) || "")} onValueChange={(v) => updateRoomType(room.id, "basePrice", parseInt(v, 10))}>
-                                    <SelectTrigger className="w-[90px] shrink-0">
-                                      <SelectValue placeholder="₸" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {PRICE_OPTIONS.map((n) => (
-                                        <SelectItem key={n} value={String(n)}>{n === 0 ? "0" : `₸${n.toLocaleString("ru-RU")}`}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:bg-red-50"
-                            onClick={() => removeRoomType(room.id)}
-                          >
-                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </Button>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
+                <div className="rounded-xl border bg-muted/30 p-6 text-center">
+                  <h3 className="font-semibold">Номерной фонд начнётся пустым</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    После завершения настройки добавьте свои номера или квартиры в разделе «Номера».
+                    Система не создаёт общие или демонстрационные номера автоматически.
+                  </p>
                 </div>
               )}
             </CardContent>

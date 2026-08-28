@@ -125,6 +125,12 @@ export async function saveRoomMappingsAction(input: unknown): Promise<ActionResu
     });
     if (!connection) return fail(t.channelsPage.errors.connectionNotFound);
 
+    const requestedTypeIds = [...new Set(parsed.data.mappings.map((mapping) => mapping.roomTypeId))];
+    const ownedTypes = await db.roomType.count({
+      where: { hotelId, id: { in: requestedTypeIds } },
+    });
+    if (ownedTypes !== requestedTypeIds.length) return fail("Одна из категорий номера не принадлежит текущему отелю");
+
     // Replace-all keeps mapping state consistent with the UI.
     await db.$transaction([
       db.channelRoomMapping.deleteMany({ where: { connectionId: connection.id } }),
@@ -158,6 +164,12 @@ export async function saveRateMappingsAction(input: unknown): Promise<ActionResu
       where: { id: parsed.data.connectionId, hotelId },
     });
     if (!connection) return fail(t.channelsPage.errors.connectionNotFound);
+
+    const requestedPlanIds = [...new Set(parsed.data.mappings.map((mapping) => mapping.ratePlanId))];
+    const ownedPlans = await db.ratePlan.count({
+      where: { hotelId, id: { in: requestedPlanIds } },
+    });
+    if (ownedPlans !== requestedPlanIds.length) return fail("Один из тарифов не принадлежит текущему отелю");
 
     await db.$transaction([
       db.channelRateMapping.deleteMany({ where: { connectionId: connection.id } }),

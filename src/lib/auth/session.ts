@@ -71,7 +71,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
             avatarUrl: true,
             onboardingCompleted: true,
             memberships: {
-              where: { role: { not: "STAFF" } },
+              orderBy: { createdAt: "asc" },
               take: 1,
               select: {
                 id: true,

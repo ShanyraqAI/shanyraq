@@ -54,7 +54,7 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
   const org = await db.organization.create({
     data: { name: "Shanyraq Hospitality Group" },
   });
-  await db.user.create({
+  const demoUser = await db.user.create({
     data: {
       email: "manager@shanyraq.kz",
       fullName: "Aisultan Nazar",
@@ -74,6 +74,10 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
       timezone: "Asia/Almaty",
       currency: "KZT",
     },
+  });
+  await db.membership.updateMany({
+    where: { userId: demoUser.id, organizationId: org.id },
+    data: { hotelId: hotel.id },
   });
 
   // -------------------------------------------------------------- room types

@@ -33,17 +33,3 @@ export async function getCurrentHotel() {
   if (!hotel) throw new Error("Отель не найден. Завершите онбординг или войдите в аккаунт.");
   return hotel;
 }
-
-/**
- * @deprecated Use getCurrentHotelId() instead.
- * Kept for backward compatibility with legacy code.
- */
-export const DEMO_HOTEL_SLUG = "shanyraq-astana";
-
-/**
- * @deprecated Use getCurrentHotel() instead.
- * Kept for backward compatibility with legacy code.
- */
-export async function getDemoHotel() {
-  return getCurrentHotel();
-}

@@ -134,6 +134,20 @@ export const roomStatusSchema = z.object({
   status: z.enum(ROOM_STATUSES),
 });
 
+export const upsertRoomSchema = z.object({
+  id: z.string().min(1).optional(),
+  number: z.string().trim().min(1, "Укажите название или номер").max(80),
+  floor: z.coerce.number().int().min(-20).max(300),
+  roomTypeName: z.string().trim().min(1, "Укажите тип номера").max(120),
+  capacity: z.coerce.number().int().min(1).max(100),
+  basePrice: z.coerce.number().min(0).max(100_000_000),
+  status: z.enum(ROOM_STATUSES),
+});
+
+export const deleteRoomSchema = z.object({
+  roomId: z.string().min(1),
+});
+
 export const hotelSettingsSchema = z.object({
   name: z.string().trim().min(1).max(120),
   address: z.string().trim().max(240).optional(),

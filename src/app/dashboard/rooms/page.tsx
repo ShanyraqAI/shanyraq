@@ -16,7 +16,7 @@ export default async function RoomsPage() {
   const hotelId = await getCurrentHotelId();
   const day = today();
 
-  const [roomTypes, roomsRaw, availabilityToday] = await Promise.all([
+  const [roomTypes, roomsRaw] = await Promise.all([
     db.roomType.findMany({
       where: { hotelId },
       include: { rooms: { orderBy: { number: "asc" } } },
@@ -24,10 +24,9 @@ export default async function RoomsPage() {
     }),
     db.room.findMany({
       where: { hotelId },
-      include: { roomType: { select: { name: true } } },
+      include: { roomType: { select: { name: true, capacity: true, basePrice: true } } },
       orderBy: [{ floor: "asc" }, { number: "asc" }],
     }),
-    db.availability.findMany({ where: { hotelId, date: day } }),
   ]);
 
   // Who is in each room tonight (for hints on room cards).
@@ -52,18 +51,22 @@ export default async function RoomsPage() {
     status: r.status as never as import("@/lib/constants").RoomStatus,
     roomTypeId: r.roomTypeId,
     roomTypeName: r.roomType.name,
+    capacity: r.roomType.capacity,
+    basePrice: r.roomType.basePrice,
     guestTonight: guestByRoom.get(r.id) ?? null,
   }));
+  const populatedRoomTypes = roomTypes.filter((type) => type.rooms.length > 0);
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t.rooms.title} description={t.rooms.description} />
+      <PageHeader title={t.rooms.title} description={t.rooms.description}>
+        <RoomsGrid rooms={[]} roomTypes={roomTypes.map((type) => type.name)} addButtonOnly />
+      </PageHeader>
 
       {/* Room type summary cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {roomTypes.map((type) => {
-          const availRow = availabilityToday.find((a) => a.roomTypeId === type.id);
-          const available = availRow ? availRow.availableRooms : type.rooms.length;
+        {populatedRoomTypes.map((type) => {
+          const available = type.rooms.filter((room) => room.status === "AVAILABLE").length;
           const occupancy = type.rooms.length === 0 ? 0 : 1 - available / type.rooms.length;
           return (
             <Card key={type.id} className="shadow-sm">
@@ -106,7 +109,7 @@ export default async function RoomsPage() {
       {/* All rooms by floor */}
       <section>
         <h2 className="mb-3 text-base font-semibold">{t.rooms.allRooms}</h2>
-        <RoomsGrid rooms={rooms} />
+        <RoomsGrid rooms={rooms} roomTypes={roomTypes.map((type) => type.name)} />
       </section>
     </div>
   );

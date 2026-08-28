@@ -342,13 +342,13 @@ export const t = {
 
   rooms: {
     title: "Номера",
-    description: "Номерной фонд и статус уборки.",
+    description: "Управление номерами, категориями, ценами и статусами.",
     fullBadge: (percent: string) => `Загрузка ${percent}`,
     terms: { count: "Номеров", capacity: "Вместимость", from: "От" },
     availableForDate: (available: number, total: number, date: string) =>
       `${available} из ${total} свободны на ${date}`,
     allRooms: "Все номера",
-    emptyGrid: "Номера ещё не добавлены.",
+    emptyGrid: "У вас пока нет номеров",
     floorLabel: (floor: number) => `Этаж ${floor}`,
     tonight: (guest: string) => `Сегодня: ${guest}`,
     changeStatusAria: (number: string) => `Изменить статус номера ${number}`,

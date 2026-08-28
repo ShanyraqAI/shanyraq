@@ -32,10 +32,12 @@ import {
   diffDays,
   eachDay,
   endOfMonth,
+  formatShortDate,
   formatMonthYear,
   isSameDay,
   parseISODate,
   startOfMonth,
+  toISODate,
   today as getToday,
   weekdayShort,
 } from "@/lib/dates";
@@ -54,7 +56,7 @@ const CHANNEL_BLOCK_STYLES: Record<string, string> = {
 export function CalendarBoard(data: CalendarBoardData & { initialView?: CalendarViewMode }) {
   const { rooms, reservations, ratePlans, guests, hotelCurrency } = data;
   const [view, setView] = useState<CalendarViewMode>(data.initialView ?? "week");
-  const [anchorISO, setAnchorISO] = useState(() => getToday().toISOString().slice(0, 10));
+  const [anchorISO, setAnchorISO] = useState(() => toISODate(getToday()));
   const [filters, setFilters] = useState({ roomTypeId: "all", channelId: "all", statusId: "all" });
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] = useState<ReservationVM | null>(null);
@@ -71,8 +73,9 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
   const range = useMemo(() => {
     if (view === "day") return { start: anchor, days: 1 };
     if (view === "week") {
-      const dow = (anchor.getUTCDay() + 6) % 7; // Monday-based
-      return { start: addDays(anchor, -dow), days: 7 };
+      // The selected date is always the first column. It keeps "Сегодня" at
+      // the very start of the timetable instead of hiding it mid-week.
+      return { start: anchor, days: 7 };
     }
     return {
       start: startOfMonth(anchor),
@@ -120,9 +123,9 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
   }
 
   function shift(dir: 1 | -1) {
-    if (view === "day") setAnchorISO(addDays(anchor, dir).toISOString().slice(0, 10));
-    else if (view === "week") setAnchorISO(addDays(anchor, 7 * dir).toISOString().slice(0, 10));
-    else setAnchorISO(addMonths(anchor, dir).toISOString().slice(0, 10));
+    if (view === "day") setAnchorISO(toISODate(addDays(anchor, dir)));
+    else if (view === "week") setAnchorISO(toISODate(addDays(anchor, 7 * dir)));
+    else setAnchorISO(toISODate(addMonths(anchor, dir)));
   }
 
   async function handleDrop(reservationId: string, roomId: string, dateISO: string) {
@@ -136,7 +139,7 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
         reservationId,
         roomId,
         dateISO,
-        addDays(parseISODate(dateISO), nights).toISOString().slice(0, 10),
+        toISODate(addDays(parseISODate(dateISO), nights)),
       );
       if (!result.ok) toast.error(result.error);
       else toast.success(result.message ?? t.calendar.movedToast);
@@ -157,17 +160,42 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" onClick={() => shift(-1)} aria-label={t.common.back}>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => shift(-1)}
+            aria-label={view === "month" ? "Предыдущий месяц" : view === "week" ? "Предыдущая неделя" : "Предыдущий день"}
+          >
             <ChevronLeft className="size-4" />
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setAnchorISO(today.toISOString().slice(0, 10))}>
+          <Button variant="outline" size="sm" onClick={() => setAnchorISO(toISODate(today))}>
             {t.common.today}
           </Button>
-          <Button variant="outline" size="icon" onClick={() => shift(1)} aria-label={t.common.next}>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => shift(1)}
+            aria-label={view === "month" ? "Следующий месяц" : view === "week" ? "Следующая неделя" : "Следующий день"}
+          >
             <ChevronRight className="size-4" />
           </Button>
         </div>
-        <div className="text-sm font-semibold">{formatMonthYear(range.start)}</div>
+        <label className="flex items-center gap-2 text-sm font-semibold">
+          <span className="sr-only">Выбрать дату</span>
+          <input
+            type="date"
+            value={anchorISO}
+            onChange={(event) => event.target.value && setAnchorISO(event.target.value)}
+            className="h-8 rounded-md border border-input bg-background px-2 text-sm font-medium shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+          />
+          <span className="hidden sm:inline">
+            {view === "month"
+              ? formatMonthYear(range.start)
+              : view === "week"
+                ? `${formatShortDate(range.start)} — ${formatShortDate(addDays(range.start, 6))}`
+                : formatShortDate(range.start)}
+          </span>
+        </label>
 
         <Tabs value={view} onValueChange={(v) => setView(v as CalendarViewMode)}>
           <TabsList className="ml-2">
@@ -290,14 +318,15 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                 </div>
               </div>
 
-              {/* Room rows — только название как задал пользователь */}
+              {/* Actual room rows. Room type remains supporting metadata. */}
               {rooms.map((room) => (
                 <div key={room.id} className="relative flex h-[68px] border-b last:border-b-0">
                   <div
                     className="sticky left-0 z-20 flex shrink-0 flex-col justify-center border-r bg-card px-3"
                     style={{ width: LABEL_W }}
                   >
-                    <span className="text-sm font-semibold leading-tight truncate" title={room.roomTypeName}>{room.roomTypeName}</span>
+                    <span className="truncate text-sm font-semibold leading-tight" title={room.number}>{room.number}</span>
+                    <span className="truncate text-xs text-muted-foreground" title={room.roomTypeName}>{room.roomTypeName}</span>
                   </div>
                   <div className="relative" style={{ width: range.days * dayWidth }}>
                     {/* clickable cells */}
@@ -313,7 +342,7 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                           <button
                             key={iso}
                             type="button"
-                            aria-label={t.calendar.newReservationCell(room.roomTypeName, iso)}
+                            aria-label={t.calendar.newReservationCell(room.number, iso)}
                             onClick={() => setCreateState({ open: true, roomId: room.id, date: iso })}
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={(e) => {
