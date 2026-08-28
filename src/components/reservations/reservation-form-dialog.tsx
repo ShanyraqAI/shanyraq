@@ -232,7 +232,7 @@ export function ReservationFormDialog({
               <SelectContent>
                 {rooms.map((r) => (
                   <SelectItem key={r.id} value={r.id} disabled={r.status === "OUT_OF_ORDER"}>
-                    {r.number} · {r.roomTypeName} ({t.statuses.room[r.status as keyof typeof t.statuses.room]})
+                    {r.roomTypeName} · №{r.number} ({t.statuses.room[r.status as keyof typeof t.statuses.room]})
                   </SelectItem>
                 ))}
               </SelectContent>

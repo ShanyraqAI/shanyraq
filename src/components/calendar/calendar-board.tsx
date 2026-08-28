@@ -290,15 +290,15 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                 </div>
               </div>
 
-              {/* Room rows */}
+              {/* Room rows — персонализировано: название как задал пользователь */}
               {rooms.map((room) => (
                 <div key={room.id} className="relative flex h-[68px] border-b last:border-b-0">
                   <div
                     className="sticky left-0 z-20 flex shrink-0 flex-col justify-center border-r bg-card px-3"
                     style={{ width: LABEL_W }}
                   >
-                    <span className="text-sm font-semibold leading-tight">{room.number}</span>
-                    <span className="text-xs text-muted-foreground">{room.roomTypeName}</span>
+                    <span className="text-sm font-semibold leading-tight truncate" title={room.roomTypeName}>{room.roomTypeName}</span>
+                    <span className="text-xs text-muted-foreground">№{room.number}</span>
                   </div>
                   <div className="relative" style={{ width: range.days * dayWidth }}>
                     {/* clickable cells */}

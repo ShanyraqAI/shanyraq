@@ -58,9 +58,9 @@ export function RoomsGrid({ rooms }: { rooms: RoomVM[] }) {
                 <BedDouble className="size-4" />
               </div>
               <div className="leading-tight">
-                <div className="text-base font-semibold">{room.number}</div>
+                <div className="text-base font-semibold truncate" title={room.roomTypeName}>{room.roomTypeName}</div>
                 <div className="text-xs text-muted-foreground">
-                  {t.rooms.floorLabel(room.floor)} · {room.roomTypeName}
+                  №{room.number} · {t.rooms.floorLabel(room.floor)}
                 </div>
               </div>
             </div>
