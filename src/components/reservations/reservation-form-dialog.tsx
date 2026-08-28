@@ -230,21 +230,11 @@ export function ReservationFormDialog({
                 <SelectValue placeholder={t.reservations.form.selectRoom} />
               </SelectTrigger>
               <SelectContent>
-                {(() => {
-                  const counts = new Map<string, number>();
-                  const labels = new Map<string, string>();
-                  for (const r of rooms) {
-                    const idx = (counts.get(r.roomTypeId) ?? 0) + 1;
-                    counts.set(r.roomTypeId, idx);
-                    const total = rooms.filter((x) => x.roomTypeId === r.roomTypeId).length;
-                    labels.set(r.id, total > 1 ? `${r.roomTypeName} · ${idx}` : r.roomTypeName);
-                  }
-                  return rooms.map((r) => (
-                    <SelectItem key={r.id} value={r.id} disabled={r.status === "OUT_OF_ORDER"}>
-                      {labels.get(r.id)} ({t.statuses.room[r.status as keyof typeof t.statuses.room]})
-                    </SelectItem>
-                  ));
-                })()}
+                {rooms.map((r) => (
+                  <SelectItem key={r.id} value={r.id} disabled={r.status === "OUT_OF_ORDER"}>
+                    {r.roomTypeName} ({t.statuses.room[r.status as keyof typeof t.statuses.room]})
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

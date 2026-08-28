@@ -45,24 +45,6 @@ export function RoomsGrid({ rooms }: { rooms: RoomVM[] }) {
     );
   }
 
-  const typeCounters = new Map<string, number>();
-  const getLabel = (room: RoomVM) => {
-    const idx = (typeCounters.get(room.roomTypeId) ?? 0) + 1;
-    typeCounters.set(room.roomTypeId, idx);
-    const total = rooms.filter((r) => r.roomTypeId === room.roomTypeId).length;
-    return total > 1 ? `${room.roomTypeName} · ${idx}` : room.roomTypeName;
-  };
-  // Сбрасываем счетчики для рендера меток (карта выше уже прошла, но для меток ниже нужен тот же порядок)
-  const labelMap = new Map<string, string>();
-  {
-    const c = new Map<string, number>();
-    for (const r of rooms) {
-      const idx = (c.get(r.roomTypeId) ?? 0) + 1;
-      c.set(r.roomTypeId, idx);
-      const total = rooms.filter((x) => x.roomTypeId === r.roomTypeId).length;
-      labelMap.set(r.id, total > 1 ? `${r.roomTypeName} · ${idx}` : r.roomTypeName);
-    }
-  }
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {rooms.map((room) => (
@@ -76,7 +58,7 @@ export function RoomsGrid({ rooms }: { rooms: RoomVM[] }) {
                 <BedDouble className="size-4" />
               </div>
               <div className="leading-tight">
-                <div className="text-base font-semibold truncate" title={labelMap.get(room.id)}>{labelMap.get(room.id)}</div>
+                <div className="text-base font-semibold truncate" title={room.roomTypeName}>{room.roomTypeName}</div>
                 <div className="text-xs text-muted-foreground">
                   {t.rooms.floorLabel(room.floor)}
                 </div>
