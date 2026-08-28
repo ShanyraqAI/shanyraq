@@ -290,14 +290,21 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                 </div>
               </div>
 
-              {/* Room rows — персонализировано: название как задал пользователь */}
-              {rooms.map((room) => (
+              {/* Room rows — персонализировано + различимо для одного типа */}
+              {(() => {
+                const typeCount = new Map<string, number>();
+                return rooms.map((room) => {
+                  const idx = (typeCount.get(room.roomTypeId) ?? 0) + 1;
+                  typeCount.set(room.roomTypeId, idx);
+                  const sameTypeTotal = rooms.filter((r) => r.roomTypeId === room.roomTypeId).length;
+                  const label = sameTypeTotal > 1 ? `${room.roomTypeName} · ${idx}` : room.roomTypeName;
+                  return (
                 <div key={room.id} className="relative flex h-[68px] border-b last:border-b-0">
                   <div
                     className="sticky left-0 z-20 flex shrink-0 flex-col justify-center border-r bg-card px-3"
                     style={{ width: LABEL_W }}
                   >
-                    <span className="text-sm font-semibold leading-tight truncate" title={room.roomTypeName}>{room.roomTypeName}</span>
+                    <span className="text-sm font-semibold leading-tight truncate" title={label}>{label}</span>
                   </div>
                   <div className="relative" style={{ width: range.days * dayWidth }}>
                     {/* clickable cells */}
@@ -370,7 +377,9 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                     ))}
                   </div>
                 </div>
-              ))}
+                  );
+                });
+              })()}
             </div>
           </div>
         </div>
