@@ -60,7 +60,7 @@ export function RoomsGrid({ rooms }: { rooms: RoomVM[] }) {
               <div className="leading-tight">
                 <div className="text-base font-semibold truncate" title={room.roomTypeName}>{room.roomTypeName}</div>
                 <div className="text-xs text-muted-foreground">
-                  №{room.number} · {t.rooms.floorLabel(room.floor)}
+                  {t.rooms.floorLabel(room.floor)}
                 </div>
               </div>
             </div>
@@ -75,7 +75,7 @@ export function RoomsGrid({ rooms }: { rooms: RoomVM[] }) {
 
           <div className="mt-3">
             <Select value={room.status} onValueChange={(v) => changeStatus(room.id, v)} disabled={pendingId === room.id}>
-              <SelectTrigger size="sm" className="w-full" aria-label={t.rooms.changeStatusAria(room.number)}>
+              <SelectTrigger size="sm" className="w-full" aria-label={t.rooms.changeStatusAria(room.roomTypeName)}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

@@ -298,7 +298,6 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                     style={{ width: LABEL_W }}
                   >
                     <span className="text-sm font-semibold leading-tight truncate" title={room.roomTypeName}>{room.roomTypeName}</span>
-                    <span className="text-xs text-muted-foreground">№{room.number}</span>
                   </div>
                   <div className="relative" style={{ width: range.days * dayWidth }}>
                     {/* clickable cells */}
@@ -314,7 +313,7 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                           <button
                             key={iso}
                             type="button"
-                            aria-label={t.calendar.newReservationCell(room.number, iso)}
+                            aria-label={t.calendar.newReservationCell(room.roomTypeName, iso)}
                             onClick={() => setCreateState({ open: true, roomId: room.id, date: iso })}
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={(e) => {
