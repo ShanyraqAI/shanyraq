@@ -56,13 +56,34 @@ export async function createReservationAction(input: unknown): Promise<ActionRes
     const hotelId = await requireSessionHotelId();
     const data = parsed.data;
 
-    // Room-type consistency for the rate plan.
     const room = await db.room.findFirst({ where: { id: data.roomId, hotelId }, include: { roomType: true } });
     if (!room) return fail(t.reservations.errors.roomNotFound);
-    const plan = await db.ratePlan.findFirst({ where: { id: data.ratePlanId, hotelId } });
-    if (!plan) return fail(t.reservations.errors.ratePlanNotFound);
-    if (plan.roomTypeId !== room.roomTypeId) {
-      return fail(t.reservations.errors.planMismatch(room.roomType.name));
+
+    // Тариф теперь необязателен: если не выбран — используем базовую цену типа номера
+    let ratePlanId = data.ratePlanId;
+    if (ratePlanId) {
+      const plan = await db.ratePlan.findFirst({ where: { id: ratePlanId, hotelId } });
+      if (!plan) return fail(t.reservations.errors.ratePlanNotFound);
+      if (plan.roomTypeId !== room.roomTypeId) {
+        return fail(t.reservations.errors.planMismatch(room.roomType.name));
+      }
+    } else {
+      const fallbackPlan = await db.ratePlan.findFirst({ where: { roomTypeId: room.roomTypeId, hotelId } });
+      if (fallbackPlan) {
+        ratePlanId = fallbackPlan.id;
+      } else {
+        // Создаем временный тариф на лету из базовой цены типа номера
+        const tempPlan = await db.ratePlan.create({
+          data: {
+            hotelId,
+            roomTypeId: room.roomTypeId,
+            name: `Базовый — ${room.roomType.name}`,
+            basePrice: room.roomType.basePrice,
+            currency: "KZT",
+          },
+        });
+        ratePlanId = tempPlan.id;
+      }
     }
 
     const guestId = await resolveGuest(hotelId, data);
@@ -70,7 +91,7 @@ export async function createReservationAction(input: unknown): Promise<ActionRes
       hotelId,
       guestId,
       roomId: data.roomId,
-      ratePlanId: data.ratePlanId,
+      ratePlanId: ratePlanId!,
       checkIn: data.checkIn,
       checkOut: data.checkOut,
       adults: data.adults,

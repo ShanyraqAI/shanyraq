@@ -81,8 +81,11 @@ export async function POST(request: Request) {
       },
     });
 
-    // Create room types and rooms (101, 102, ... per type)
+    // Create room types and rooms — персонализировано под пользователя
+    // Нумерация сквозная: 101,102... для всех типов, без дублей
     let roomSortOrder = 0;
+    let nextRoomNumber = 101;
+    const createdRoomTypes: { id: string; name: string; basePrice: number }[] = [];
     for (const rt of roomTypes) {
       const roomType = await db.roomType.create({
         data: {
@@ -93,17 +96,16 @@ export async function POST(request: Request) {
           sortOrder: roomSortOrder++,
         },
       });
+      createdRoomTypes.push({ id: roomType.id, name: rt.name, basePrice: rt.basePrice });
 
       const rooms = [];
-      for (let i = 1; i <= rt.count; i++) {
-        const floor = Math.ceil(i / 10);
-        const number = `${floor}${String(i).padStart(2, "0")}`;
-        // 101..110, 201..210 etc. For count <=10: 101..110
-        const roomNumber = rt.count <= 10 ? `${100 + i}` : number;
+      for (let i = 0; i < rt.count; i++) {
+        const number = nextRoomNumber++;
+        const floor = Math.floor((number - 101) / 10) + 1;
         rooms.push({
           hotelId: hotelId!,
           roomTypeId: roomType.id,
-          number: roomNumber,
+          number: String(number),
           floor,
           status: "AVAILABLE",
         });
@@ -111,15 +113,14 @@ export async function POST(request: Request) {
       await db.room.createMany({ data: rooms });
     }
 
-    // Create a default rate plan for the first room type
-    const firstRoomType = await db.roomType.findFirst({ where: { hotelId: hotelId! }, select: { id: true } });
-    if (firstRoomType) {
+    // Тариф для каждого типа номера (персонализировано)
+    for (const rt of createdRoomTypes) {
       await db.ratePlan.create({
         data: {
           hotelId: hotelId!,
-          roomTypeId: firstRoomType.id,
-          name: "Базовый тариф",
-          basePrice: roomTypes[0]?.basePrice || 35000,
+          roomTypeId: rt.id,
+          name: rt.name === createdRoomTypes[0].name ? "Базовый тариф" : `Тариф — ${rt.name}`,
+          basePrice: rt.basePrice || 10000,
           currency,
           refundable: true,
           breakfastIncluded: false,

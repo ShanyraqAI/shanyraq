@@ -68,7 +68,7 @@ export const createReservationSchema = z
     checkOut: isoDate,
     adults: z.coerce.number().int().min(1).max(10),
     children: z.coerce.number().int().min(0).max(10).default(0),
-    ratePlanId: z.string().min(1),
+    ratePlanId: z.string().min(1).optional(),
     sourceChannel: z.enum(CHANNEL_CODES).default("direct"),
     notes: z.string().max(2000).optional(),
   })

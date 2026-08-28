@@ -53,7 +53,7 @@ export default async function RatesPage() {
         title={t.rates.title}
         description={t.rates.description(HORIZON)}
       />
-      <RatesBoard plans={planVMs} dates={dates} prices={prices} />
+      <RatesBoard plans={planVMs} dates={dates} prices={prices} roomTypes={roomTypes} />
     </div>
   );
 }

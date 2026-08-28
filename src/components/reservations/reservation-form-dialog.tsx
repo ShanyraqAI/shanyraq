@@ -90,13 +90,20 @@ export function ReservationFormDialog({
   const [notes, setNotes] = useState(initial?.notes ?? "");
 
   const selectedRoom = rooms.find((r) => r.id === roomId);
+  // Для персонализации: берем базовую цену типа номера как fallback, если тарифов нет
+  const selectedRoomTypeBasePrice = useMemo(() => {
+    // пробуем найти цену из любого тарифа этого типа, иначе 0 — сервер подставит реальную цену типа
+    const anyPlan = ratePlans.find((p) => p.roomTypeId === selectedRoom?.roomTypeId);
+    return anyPlan?.basePrice ?? 0;
+  }, [ratePlans, selectedRoom]);
   const plansForType = useMemo(
     () => ratePlans.filter((p) => p.roomTypeId === selectedRoom?.roomTypeId),
     [ratePlans, selectedRoom],
   );
   const [planId, setPlanId] = useState(initial?.ratePlanId ?? "");
+  // Тариф теперь необязателен: если нет тарифов для типа — используем базовую цену типа
   const effectivePlanId =
-    plansForType.find((p) => p.id === planId)?.id ?? plansForType[0]?.id ?? "";
+    plansForType.length === 0 ? "" : (plansForType.find((p) => p.id === planId)?.id ?? plansForType[0]?.id ?? "");
 
   const nights = Math.max(
     1,
@@ -105,7 +112,9 @@ export function ReservationFormDialog({
     ),
   );
   const selectedPlan = ratePlans.find((p) => p.id === effectivePlanId);
-  const estimate = (selectedPlan?.basePrice ?? 0) * nights;
+  const estimate = (selectedPlan?.basePrice ?? selectedRoomTypeBasePrice) * nights;
+  const hasPlansForType = plansForType.length > 0;
+  const canSubmit = hasPlansForType ? !!effectivePlanId : true;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -121,7 +130,7 @@ export function ReservationFormDialog({
           checkOut,
           adults: Number(adults),
           children: Number(children),
-          ratePlanId: effectivePlanId,
+          ratePlanId: hasPlansForType ? effectivePlanId : undefined,
           sourceChannel: channel as (typeof CHANNEL_CODES)[number],
           notes: notes || undefined,
         };
@@ -309,22 +318,26 @@ export function ReservationFormDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>{t.reservations.form.ratePlan}</Label>
-            <Select value={effectivePlanId} onValueChange={setPlanId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={t.reservations.form.selectRatePlan} />
-              </SelectTrigger>
-              <SelectContent>
-                {plansForType.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name} — {formatMoney(p.basePrice)}
-                    {t.reservations.form.perNight}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedRoom && plansForType.length === 0 && (
-              <p className="text-xs text-destructive">{t.reservations.form.noPlansWarning}</p>
+            <Label>{t.reservations.form.ratePlan} <span className="font-normal text-muted-foreground">(необязательно)</span></Label>
+            {hasPlansForType ? (
+              <Select value={effectivePlanId} onValueChange={setPlanId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t.reservations.form.selectRatePlan} />
+                </SelectTrigger>
+                <SelectContent>
+                  {plansForType.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} — {formatMoney(p.basePrice)}
+                      {t.reservations.form.perNight}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="rounded-lg border border-dashed bg-muted/30 px-3 py-2.5 text-sm">
+                <div className="font-medium">Базовая цена номера — {formatMoney(selectedRoomTypeBasePrice)}{t.reservations.form.perNight}</div>
+                <div className="text-xs text-muted-foreground">Для этой категории пока нет тарифов. При создании брони будет использована базовая цена типа номера. Создайте тариф на странице «Тарифы».</div>
+              </div>
             )}
           </div>
 
@@ -343,7 +356,7 @@ export function ReservationFormDialog({
 
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
-              {t.reservations.form.nightsSummary(nights, selectedPlan?.name ?? "—")}
+              {t.reservations.form.nightsSummary(nights, selectedPlan?.name ?? (hasPlansForType ? "—" : "Базовая цена"))}
             </span>
             <span className="font-semibold tabular-nums">≈ {formatMoney(estimate)}</span>
           </div>
@@ -352,7 +365,7 @@ export function ReservationFormDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t.common.cancel}
             </Button>
-            <Button type="submit" disabled={saving || !effectivePlanId}>
+            <Button type="submit" disabled={saving || !canSubmit}>
               {saving && <Loader2 className="mr-2 size-4 animate-spin" />}
               {mode === "create" ? t.reservations.createButton : t.reservations.form.saveChanges}
             </Button>

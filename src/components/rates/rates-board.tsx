@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { PencilLine, Tag } from "lucide-react";
+import { Loader2, PencilLine, Tag } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -26,19 +26,21 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/shared/page-header";
-import { bulkUpdateRatesAction } from "@/server/actions/rates";
+import { bulkUpdateRatesAction, createRatePlanAction } from "@/server/actions/rates";
 import type { RatePlanVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { WEEKDAYS_SHORT } from "@/lib/dates";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export interface RatesBoardProps {
   plans: (RatePlanVM & { availableToday: number | null })[];
   dates: string[]; // ISO dates for columns
   prices: Record<string, (number | null)[]>; // planId → price per date
+  roomTypes: { id: string; name: string }[];
 }
 
-export function RatesBoard({ plans, dates, prices }: RatesBoardProps) {
+export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps) {
   const router = useRouter();
   const [planForUpdate, setPlanForUpdate] = useState<RatePlanVM | null>(null);
   const [from, setFrom] = useState(dates[0] ?? "");
@@ -46,6 +48,13 @@ export function RatesBoard({ plans, dates, prices }: RatesBoardProps) {
   const [price, setPrice] = useState("");
   const [weekendsOnly, setWeekendsOnly] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newPlanRoomTypeId, setNewPlanRoomTypeId] = useState(roomTypes[0]?.id ?? "");
+  const [newPlanName, setNewPlanName] = useState("");
+  const [newPlanPrice, setNewPlanPrice] = useState("");
+  const [newPlanRefundable, setNewPlanRefundable] = useState(true);
+  const [newPlanBreakfast, setNewPlanBreakfast] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   async function saveBulk() {
     if (!planForUpdate) return;
@@ -71,12 +80,80 @@ export function RatesBoard({ plans, dates, prices }: RatesBoardProps) {
     }
   }
 
+  async function handleCreatePlan() {
+    if (!newPlanRoomTypeId || !newPlanName.trim() || !newPlanPrice) {
+      toast.error("Заполните все поля");
+      return;
+    }
+    setCreating(true);
+    try {
+      const result = await createRatePlanAction({
+        roomTypeId: newPlanRoomTypeId,
+        name: newPlanName.trim(),
+        basePrice: Number(newPlanPrice),
+        refundable: newPlanRefundable,
+        breakfastIncluded: newPlanBreakfast,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(result.message);
+      setCreateOpen(false);
+      setNewPlanName("");
+      setNewPlanPrice("");
+      router.refresh();
+    } finally {
+      setCreating(false);
+    }
+  }
+
   if (plans.length === 0) {
-    return <EmptyState icon={Tag} title={t.rates.emptyTitle} description={t.rates.emptyDescription} />;
+    return (
+      <>
+        <EmptyState
+          icon={Tag}
+          title={t.rates.emptyTitle}
+          description={t.rates.emptyDescription}
+          action={
+            <Button onClick={() => setCreateOpen(true)} disabled={roomTypes.length === 0}>
+              <Tag className="mr-2 size-4" /> Создать тариф
+            </Button>
+          }
+        />
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Новый тариф</DialogTitle>
+              <DialogDescription>Создайте тариф для категории номера. Базовая цена будет использоваться по умолчанию при бронировании.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Категория номера</Label>
+                <Select value={newPlanRoomTypeId} onValueChange={setNewPlanRoomTypeId}>
+                  <SelectTrigger><SelectValue placeholder="Выберите категорию" /></SelectTrigger>
+                  <SelectContent>{roomTypes.map((rt) => <SelectItem key={rt.id} value={rt.id}>{rt.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label>Название тарифа</Label><Input value={newPlanName} onChange={(e) => setNewPlanName(e.target.value)} placeholder="Например, Базовый" /></div>
+              <div className="space-y-1.5"><Label>Базовая цена за ночь</Label><Input type="number" value={newPlanPrice} onChange={(e) => setNewPlanPrice(e.target.value)} placeholder="35000" /></div>
+              <label className="flex items-center gap-2 text-sm"><Checkbox checked={newPlanRefundable} onCheckedChange={(v) => setNewPlanRefundable(v === true)} /> Возвратный</label>
+              <label className="flex items-center gap-2 text-sm"><Checkbox checked={newPlanBreakfast} onCheckedChange={(v) => setNewPlanBreakfast(v === true)} /> Завтрак включен</label>
+            </div>
+            <DialogFooter><Button variant="outline" onClick={() => setCreateOpen(false)}>Отмена</Button><Button onClick={handleCreatePlan} disabled={creating}>{creating ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Создать</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
   }
 
   return (
     <>
+      <div className="mb-4 flex justify-end">
+        <Button onClick={() => setCreateOpen(true)} variant="outline" size="sm" disabled={roomTypes.length === 0}>
+          <Tag className="mr-2 size-4" /> Создать тариф
+        </Button>
+      </div>
       <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
         <Table>
           <TableHeader>
@@ -194,6 +271,28 @@ export function RatesBoard({ plans, dates, prices }: RatesBoardProps) {
               {t.rates.bulkDialog.apply}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Новый тариф</DialogTitle>
+            <DialogDescription>Создайте тариф для категории номера. Базовая цена будет использоваться по умолчанию при бронировании.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Категория номера</Label>
+              <Select value={newPlanRoomTypeId} onValueChange={setNewPlanRoomTypeId}>
+                <SelectTrigger><SelectValue placeholder="Выберите категорию" /></SelectTrigger>
+                <SelectContent>{roomTypes.map((rt) => <SelectItem key={rt.id} value={rt.id}>{rt.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5"><Label>Название тарифа</Label><Input value={newPlanName} onChange={(e) => setNewPlanName(e.target.value)} placeholder="Например, Базовый" /></div>
+            <div className="space-y-1.5"><Label>Базовая цена за ночь</Label><Input type="number" value={newPlanPrice} onChange={(e) => setNewPlanPrice(e.target.value)} placeholder="35000" /></div>
+            <label className="flex items-center gap-2 text-sm"><Checkbox checked={newPlanRefundable} onCheckedChange={(v) => setNewPlanRefundable(v === true)} /> Возвратный</label>
+            <label className="flex items-center gap-2 text-sm"><Checkbox checked={newPlanBreakfast} onCheckedChange={(v) => setNewPlanBreakfast(v === true)} /> Завтрак включен</label>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setCreateOpen(false)}>Отмена</Button><Button onClick={handleCreatePlan} disabled={creating}>{creating ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}Создать</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </>
