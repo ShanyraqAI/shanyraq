@@ -4,10 +4,12 @@ import { toReservationVM } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { GuestsTable, type GuestRow } from "@/components/guests/guests-table";
 import { t } from "@/lib/i18n";
+import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
 
 export default async function GuestsPage() {
+  await requireSectionAccess("FULL");
   const hotelId = await getCurrentHotelId();
   const [guestsRaw, reservationsRaw] = await Promise.all([
     db.guest.findMany({ where: { hotelId }, orderBy: { fullName: "asc" } }),

@@ -1,12 +1,14 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { ChangeEvent, useRef, useState, useTransition } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Check, ChevronDown, ImagePlus, LifeBuoy, Hotel, LogOut, Plus, Settings2, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
-import { signOutAction } from "@/server/actions/auth";
+import { signOutAction, uploadAvatarAction } from "@/server/actions/auth";
+import { createHotelAction, switchHotelAction } from "@/server/actions/settings";
+import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -15,14 +17,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NAV_MAIN, NAV_SECONDARY } from "./nav-config";
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks({ onNavigate, accessLevel = "FULL" }: { onNavigate?: () => void; accessLevel?: string }) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
 
   return (
     <nav className="flex flex-col gap-1 px-3">
-      {NAV_MAIN.map((item) => (
+      {NAV_MAIN.filter((item) => accessLevel === "FULL" || item.href === "/dashboard" || (accessLevel === "CALENDAR" && item.href === "/dashboard/calendar")).map((item) => (
         <Link
           key={item.href}
           href={item.href}
@@ -38,10 +40,10 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
           {item.title}
         </Link>
       ))}
-      <div className="mt-4 px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+      {accessLevel === "FULL" ? <div className="mt-4 px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
         {t.sidebar.manage}
-      </div>
-      {NAV_SECONDARY.map((item) => (
+      </div> : null}
+      {accessLevel === "FULL" ? NAV_SECONDARY.map((item) => (
         <Link
           key={item.href}
           href={item.href}
@@ -56,7 +58,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
           <item.icon className={cn("size-4 shrink-0", isActive(item.href) && "text-primary")} />
           {item.title}
         </Link>
-      ))}
+      )) : null}
     </nav>
   );
 }
@@ -65,65 +67,65 @@ export function SidebarContent({
   hotelName,
   userName,
   userAvatarUrl,
+  hotels,
+  activeHotelId,
+  accessLevel,
+  canManageHotels,
 }: {
   hotelName: string;
   userName: string;
   userAvatarUrl?: string | null;
+  hotels: { id: string; name: string }[];
+  activeHotelId: string;
+  accessLevel?: string;
+  canManageHotels: boolean;
 }) {
-  const [hotels, setHotels] = useState(() => [hotelName]);
-  const [activeHotel, setActiveHotel] = useState(hotelName);
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const [newHotelName, setNewHotelName] = useState("");
   const [hotelDialogOpen, setHotelDialogOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [localAvatar, setLocalAvatar] = useState<string | null>(null);
+  const [avatarSrc, setAvatarSrc] = useState(userAvatarUrl ?? null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const storedHotels = window.localStorage.getItem("shanyraq-demo-hotels");
-    const storedActiveHotel = window.localStorage.getItem("shanyraq-demo-active-hotel");
-    const storedAvatar = window.localStorage.getItem("shanyraq-demo-avatar");
-    if (storedHotels) {
-      try {
-        const parsed = JSON.parse(storedHotels) as string[];
-        if (parsed.length) setHotels(parsed);
-      } catch {
-        window.localStorage.removeItem("shanyraq-demo-hotels");
-      }
-    }
-    if (storedActiveHotel) setActiveHotel(storedActiveHotel);
-    if (storedAvatar) setLocalAvatar(storedAvatar);
-  }, []);
-
-  function selectHotel(name: string) {
-    setActiveHotel(name);
-    window.localStorage.setItem("shanyraq-demo-active-hotel", name);
+  function selectHotel(hotelId: string) {
+    startTransition(async () => {
+      const result = await switchHotelAction(hotelId);
+      if (!result.ok) toast.error(result.error);
+      else router.refresh();
+    });
   }
 
   function addHotel() {
-    const name = newHotelName.trim();
-    if (!name) return;
-    const nextHotels = hotels.includes(name) ? hotels : [...hotels, name];
-    setHotels(nextHotels);
-    selectHotel(name);
-    window.localStorage.setItem("shanyraq-demo-hotels", JSON.stringify(nextHotels));
-    setNewHotelName("");
-    setHotelDialogOpen(false);
+    startTransition(async () => {
+      const result = await createHotelAction({ name: newHotelName });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(result.message);
+      setNewHotelName("");
+      setHotelDialogOpen(false);
+      router.refresh();
+    });
   }
 
-  function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
+  async function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/") || file.size > 2 * 1024 * 1024) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") return;
-      setLocalAvatar(reader.result);
-      window.localStorage.setItem("shanyraq-demo-avatar", reader.result);
-    };
-    reader.readAsDataURL(file);
+    const formData = new FormData();
+    formData.set("avatar", file);
+    startTransition(async () => {
+      const result = await uploadAvatarAction(formData);
+      if (!result.ok || !result.data) {
+        toast.error(result.error);
+        return;
+      }
+      setAvatarSrc(result.data);
+      toast.success(result.message);
+      router.refresh();
+    });
   }
-
-  const avatarSrc = localAvatar ?? userAvatarUrl;
 
   return (
     <div className="flex h-full flex-col">
@@ -144,29 +146,31 @@ export function SidebarContent({
           <button className="mx-3 mt-4 flex items-center rounded-lg border bg-secondary/50 px-3 py-2.5 text-left transition-colors hover:bg-secondary">
             <span className="min-w-0 flex-1">
               <span className="block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{t.sidebar.property}</span>
-              <span className="block truncate text-sm font-semibold" title={activeHotel}>{activeHotel}</span>
+              <span className="block truncate text-sm font-semibold" title={hotelName}>{hotelName}</span>
             </span>
             <ChevronDown className="size-4 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-60" align="start">
           <DropdownMenuLabel>Ваши отели</DropdownMenuLabel>
-          {hotels.map((name) => (
-            <DropdownMenuItem key={name} onSelect={() => selectHotel(name)} className="py-2">
+          {hotels.map((hotel) => (
+            <DropdownMenuItem key={hotel.id} onSelect={() => selectHotel(hotel.id)} className="py-2" disabled={pending}>
               <Hotel className="size-4" />
-              <span className="flex-1 truncate">{name}</span>
-              {name === activeHotel ? <Check className="size-4 text-primary" /> : null}
+              <span className="flex-1 truncate">{hotel.name}</span>
+              {hotel.id === activeHotelId ? <Check className="size-4 text-primary" /> : null}
             </DropdownMenuItem>
           ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => setHotelDialogOpen(true)} className="py-2 text-primary">
-            <Plus className="size-4" /> Добавить отель
-          </DropdownMenuItem>
+          {canManageHotels ? <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setHotelDialogOpen(true)} className="py-2 text-primary">
+              <Plus className="size-4" /> Добавить отель
+            </DropdownMenuItem>
+          </> : null}
         </DropdownMenuContent>
       </DropdownMenu>
 
       <div className="mt-4 flex-1 overflow-y-auto">
-        <NavLinks />
+        <NavLinks accessLevel={accessLevel} />
       </div>
 
       {/* Footer */}
@@ -208,11 +212,10 @@ export function SidebarContent({
           <div className="space-y-2">
             <Label htmlFor="new-hotel-name">Название отеля</Label>
             <Input id="new-hotel-name" value={newHotelName} onChange={(event) => setNewHotelName(event.target.value)} placeholder="Например, Almaty City Hotel" autoFocus />
-            <p className="text-xs text-muted-foreground">Демо: отель сохраняется в этом браузере.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setHotelDialogOpen(false)}>Отмена</Button>
-            <Button onClick={addHotel} disabled={!newHotelName.trim()}><Plus className="size-4" /> Добавить</Button>
+            <Button onClick={addHotel} disabled={!newHotelName.trim() || pending}><Plus className="size-4" /> Добавить</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -230,15 +233,15 @@ export function SidebarContent({
             </Avatar>
             <div className="min-w-0">
               <p className="truncate font-medium">{userName}</p>
-              <p className="text-xs text-muted-foreground">PNG, JPG или WebP · до 2 МБ</p>
+              <p className="text-xs text-muted-foreground">PNG, JPG или WebP · до 1 МБ</p>
               <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseAvatar} className="sr-only" />
-              <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => fileInputRef.current?.click()}>
+              <Button type="button" variant="outline" size="sm" className="mt-2" disabled={pending} onClick={() => fileInputRef.current?.click()}>
                 <ImagePlus className="size-4" /> Выбрать фото
               </Button>
             </div>
           </div>
           <DialogFooter className="sm:justify-between">
-            <Button asChild variant="outline"><Link href="/dashboard/settings" onClick={() => setProfileOpen(false)}>Настройки профиля</Link></Button>
+            {accessLevel === "FULL" ? <Button asChild variant="outline"><Link href="/dashboard/settings" onClick={() => setProfileOpen(false)}>Настройки профиля</Link></Button> : <span />}
             <form action={signOutAction}><Button type="submit" variant="ghost"><LogOut className="size-4" /> {t.account.signOut}</Button></form>
           </DialogFooter>
         </DialogContent>
@@ -251,14 +254,22 @@ export function DesktopSidebar({
   hotelName,
   userName,
   userAvatarUrl,
+  hotels,
+  activeHotelId,
+  accessLevel,
+  canManageHotels,
 }: {
   hotelName: string;
   userName: string;
   userAvatarUrl?: string | null;
+  hotels: { id: string; name: string }[];
+  activeHotelId: string;
+  accessLevel?: string;
+  canManageHotels: boolean;
 }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r bg-sidebar lg:block">
-      <SidebarContent hotelName={hotelName} userName={userName} userAvatarUrl={userAvatarUrl} />
+      <SidebarContent hotelName={hotelName} userName={userName} userAvatarUrl={userAvatarUrl} hotels={hotels} activeHotelId={activeHotelId} accessLevel={accessLevel} canManageHotels={canManageHotels} />
     </aside>
   );
 }

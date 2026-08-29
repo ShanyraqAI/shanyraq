@@ -120,13 +120,31 @@ export async function updateProfileAction(input: unknown): Promise<ActionResult>
       where: { id: current.id },
       data: {
         fullName: parsed.data.fullName,
-        avatarUrl: parsed.data.avatarUrl || null,
+        ...(parsed.data.avatarUrl !== undefined ? { avatarUrl: parsed.data.avatarUrl || null } : {}),
       },
     });
 
     revalidatePath("/dashboard/settings");
     revalidatePath("/dashboard", "layout");
     return ok(undefined, t.account.saved);
+  } catch (error) {
+    return fail(toErrorMessage(error));
+  }
+}
+
+export async function uploadAvatarAction(formData: FormData): Promise<ActionResult<string>> {
+  try {
+    const current = await getSessionUser();
+    if (!current) return fail("Требуется вход в аккаунт");
+    const file = formData.get("avatar");
+    if (!(file instanceof File)) return fail("Выберите изображение");
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return fail("Поддерживаются PNG, JPG и WebP");
+    if (file.size > 1024 * 1024) return fail("Размер изображения не должен превышать 1 МБ");
+    const dataUrl = `data:${file.type};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}`;
+    await db.user.update({ where: { id: current.id }, data: { avatarUrl: dataUrl } });
+    revalidatePath("/dashboard", "layout");
+    revalidatePath("/dashboard/settings");
+    return ok(dataUrl, "Фото профиля сохранено");
   } catch (error) {
     return fail(toErrorMessage(error));
   }

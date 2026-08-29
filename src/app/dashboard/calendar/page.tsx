@@ -3,10 +3,12 @@ import { PageHeader } from "@/components/shared/page-header";
 import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { toReservationVM, type GuestVM, type RatePlanVM, type RoomVM } from "@/lib/types";
 import { t } from "@/lib/i18n";
+import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
 
 export default async function CalendarPage() {
+  await requireSectionAccess("CALENDAR");
   const hotelId = await getCurrentHotelId();
   const [hotel, roomTypes, roomsRaw, ratePlansRaw, guestsRaw, reservationsRaw] = await Promise.all([
     db.hotel.findUniqueOrThrow({ where: { id: hotelId } }),

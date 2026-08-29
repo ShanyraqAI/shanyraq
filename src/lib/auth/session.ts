@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
  */
 
 const SESSION_COOKIE = "shanyraq_session";
+export const ACTIVE_HOTEL_COOKIE = "shanyraq_active_hotel";
 const SESSION_TTL_MS = 30 * 86_400_000; // 30 days
 
 export interface SessionUser {
@@ -24,6 +25,7 @@ export interface SessionUser {
   hotelId: string | null;
   organizationId: string | null;
   role: string | null;
+  accessLevel: string | null;
 }
 
 function hashToken(token: string): string {
@@ -55,6 +57,7 @@ export async function createSession(userId: string): Promise<void> {
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
+  const activeHotelId = store.get(ACTIVE_HOTEL_COOKIE)?.value;
   if (!token) return null;
 
   try {
@@ -72,12 +75,12 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
             onboardingCompleted: true,
             memberships: {
               orderBy: { createdAt: "asc" },
-              take: 1,
               select: {
                 id: true,
                 role: true,
                 organizationId: true,
                 hotelId: true,
+                accessLevel: true,
               },
             },
           },
@@ -86,7 +89,10 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     });
     if (!session || session.expiresAt < new Date()) return null;
 
-    const membership = session.user.memberships[0] || null;
+    const membership =
+      session.user.memberships.find((item) => item.hotelId === activeHotelId) ??
+      session.user.memberships[0] ??
+      null;
     return {
       id: session.user.id,
       email: session.user.email,
@@ -98,6 +104,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
       hotelId: membership?.hotelId ?? null,
       organizationId: membership?.organizationId ?? null,
       role: membership?.role ?? null,
+      accessLevel: membership?.accessLevel ?? null,
     };
   } catch (error) {
     // Table missing on fresh DB before bootstrap — treat as no session

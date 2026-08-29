@@ -2,6 +2,7 @@ import { requireOnboardingComplete } from "@/lib/auth/session";
 import { getCurrentHotel } from "@/lib/tenant";
 import { DesktopSidebar } from "@/components/layout/app-sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { db } from "@/lib/db";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireOnboardingComplete();
@@ -13,6 +14,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   
   const hotelName = hotel.name;
   const userName = user.fullName;
+  const hotels = await db.membership.findMany({
+    where: { userId: user.id, hotelId: { not: null } },
+    orderBy: { createdAt: "asc" },
+    select: { hotel: { select: { id: true, name: true } } },
+  });
+  const hotelOptions = hotels.flatMap((item) => item.hotel ? [item.hotel] : []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -20,6 +27,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
         hotelName={hotelName}
         userName={userName}
         userAvatarUrl={user.avatarUrl}
+        hotels={hotelOptions}
+        activeHotelId={hotel.id}
+        accessLevel={user.accessLevel ?? "FULL"}
+        canManageHotels={user.role === "OWNER"}
       />
       <div className="lg:pl-64">
         {/* Mobile top bar */}
@@ -28,6 +39,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
             hotelName={hotelName}
             userName={userName}
             userAvatarUrl={user.avatarUrl}
+            hotels={hotelOptions}
+            activeHotelId={hotel.id}
+            accessLevel={user.accessLevel ?? "FULL"}
+            canManageHotels={user.role === "OWNER"}
           />
           <span className="text-[15px] font-semibold tracking-tight">Shanyraq AI</span>
         </header>

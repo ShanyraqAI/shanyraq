@@ -4,10 +4,12 @@ import { ChannelCards, type ChannelCardVM } from "@/components/channels/channel-
 import { SyncAllButton } from "@/components/channels/sync-all-button";
 import type { RatePlanVM } from "@/lib/types";
 import { t } from "@/lib/i18n";
+import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
 
 export default async function ChannelsPage() {
+  await requireSectionAccess("FULL");
   const hotelId = await getCurrentHotelId();
 
   const [channelsRaw, connections, roomTypes, ratePlansRaw] = await Promise.all([

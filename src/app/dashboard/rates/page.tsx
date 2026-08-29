@@ -4,12 +4,14 @@ import { PageHeader } from "@/components/shared/page-header";
 import { RatesBoard } from "@/components/rates/rates-board";
 import type { RatePlanVM } from "@/lib/types";
 import { t } from "@/lib/i18n";
+import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
 
 const HORIZON = 14;
 
 export default async function RatesPage() {
+  await requireSectionAccess("FULL");
   const hotelId = await getCurrentHotelId();
   const start = today();
 

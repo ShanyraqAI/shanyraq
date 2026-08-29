@@ -4,10 +4,12 @@ import { toReservationVM, type GuestVM, type RatePlanVM, type RoomVM } from "@/l
 import { PageHeader } from "@/components/shared/page-header";
 import { ReservationsTable } from "@/components/reservations/reservations-table";
 import { t } from "@/lib/i18n";
+import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReservationsPage() {
+  await requireSectionAccess("FULL");
   const hotelId = await getCurrentHotelId();
   const [hotel, roomsRaw, roomTypes, ratePlansRaw, guestsRaw, reservations] = await Promise.all([
     db.hotel.findUniqueOrThrow({ where: { id: hotelId } }),

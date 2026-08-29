@@ -74,13 +74,15 @@ model Membership {
   userId         String
   hotelId        String?
   role           String // OWNER | MANAGER | STAFF (validated in app layer)
+  accessLevel    String   @default("FULL") // OVERVIEW | CALENDAR | FULL
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   hotel        Hotel?       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
-  @@unique([organizationId, userId])
+  @@unique([userId, hotelId])
+  @@index([organizationId, userId])
 }
 
 model Hotel {

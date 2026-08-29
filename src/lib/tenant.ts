@@ -17,14 +17,16 @@ export interface CurrentUser {
   hotelId: string | null;
   organizationId: string | null;
   role: string | null;
+  accessLevel: string | null;
 }
 
 export interface CurrentMembership {
   id: string;
   role: string;
   organizationId: string;
-  hotelId: string | null;
+  hotelId: string;
   userId: string;
+  accessLevel: string;
 }
 
 export interface CurrentHotel {
@@ -54,13 +56,14 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     hotelId: sessionUser.hotelId,
     organizationId: sessionUser.organizationId,
     role: sessionUser.role,
+    accessLevel: sessionUser.accessLevel,
   };
 }
 
 export async function getCurrentMembership(): Promise<CurrentMembership | null> {
   const user = await getCurrentUser();
-  if (!user || !user.membershipId || !user.organizationId || !user.hotelId || !user.role) return null;
-  return { id: user.membershipId, role: user.role, organizationId: user.organizationId, hotelId: user.hotelId, userId: user.id };
+  if (!user || !user.membershipId || !user.organizationId || !user.hotelId || !user.role || !user.accessLevel) return null;
+  return { id: user.membershipId, role: user.role, accessLevel: user.accessLevel, organizationId: user.organizationId, hotelId: user.hotelId, userId: user.id };
 }
 
 export async function getCurrentHotel(): Promise<CurrentHotel | null> {

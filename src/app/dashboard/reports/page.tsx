@@ -11,10 +11,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage() {
+  await requireSectionAccess("FULL");
   const hotelId = await getCurrentHotelId();
   const day = today();
 

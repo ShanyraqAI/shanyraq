@@ -20,7 +20,10 @@ export interface AccountValues {
 /** Minimal profile personalization: display name + avatar URL. */
 export function AccountForm({ initial }: { initial: AccountValues }) {
   const router = useRouter();
-  const [values, setValues] = useState(initial);
+  const [values, setValues] = useState({
+    ...initial,
+    avatarUrl: initial.avatarUrl.startsWith("data:") ? "" : initial.avatarUrl,
+  });
   const [saving, setSaving] = useState(false);
 
   async function save(e: React.FormEvent) {
@@ -29,7 +32,7 @@ export function AccountForm({ initial }: { initial: AccountValues }) {
     try {
       const result = await updateProfileAction({
         fullName: values.fullName,
-        avatarUrl: values.avatarUrl,
+        avatarUrl: values.avatarUrl || undefined,
       });
       if (!result.ok) toast.error(result.error);
       else {

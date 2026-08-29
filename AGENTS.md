@@ -1,6 +1,6 @@
 # Shanyraq AI — Agent Instructions
 
-SaaS platform for hotels. Long-term goal: hotel management system + channel manager connecting to Booking.com, Ostrovok, Krisha.kz, and other channels.
+Production SaaS platform for real hotel businesses: hotel management system + channel manager connecting to Booking.com, Ostrovok, Krisha.kz, and other channels.
 
 ## Incremental development (critical)
 
@@ -9,17 +9,13 @@ SaaS platform for hotels. Long-term goal: hotel management system + channel mana
 - If a feature can be implemented simply, choose the simpler solution. Do not over-engineer or create infrastructure for features not currently being built.
 - If something is unspecified, make the smallest reasonable implementation.
 
-## Current stage
+## Product standard
 
-Building the basic dashboard UI: dashboard layout, sidebar, header, overview page, demo data.
-
-Do NOT implement until explicitly requested:
-- Authentication (and never create fake auth systems)
-- Database / Prisma
-- Real API integrations (Booking.com, Ostrovok, Krisha.kz)
-- Payments
-- Channel sync / adapters
-- AI features
+- Build production-ready functionality for real customers, with persistent data, authorization, validation, tenant isolation, and useful error states.
+- Do not label completed product functionality as demo, prototype, mock, or MVP.
+- Never substitute browser-only state for business data that must survive across devices or sessions.
+- Mock external providers only when their real credentials or API access are unavailable, and make that boundary explicit in the relevant integration screen.
+- Authentication and PostgreSQL/Prisma are active parts of the product. Extend them carefully when a requested feature needs them.
 
 ## Stack
 
@@ -38,7 +34,7 @@ Modern premium B2B SaaS look: clean, minimal, professional, hotel-focused. Don't
 
 Sidebar sections (implement only what's requested per task): Overview, Calendar, Reservations, Rooms, Guests, Channels, Reports, Settings.
 
-Future data model (context only, don't build yet): Organization → Hotels → Rooms → Reservations → Channels → Channel Connections; external channels via separate adapter modules.
+Core data model: Organization → Hotels → Rooms → Reservations → Channels → Channel Connections; external channels use separate adapter modules.
 
 ## Process per task
 

@@ -11,10 +11,18 @@ export function MobileNav({
   hotelName,
   userName,
   userAvatarUrl,
+  hotels,
+  activeHotelId,
+  accessLevel,
+  canManageHotels,
 }: {
   hotelName: string;
   userName: string;
   userAvatarUrl?: string | null;
+  hotels: { id: string; name: string }[];
+  activeHotelId: string;
+  accessLevel?: string;
+  canManageHotels: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -29,7 +37,7 @@ export function MobileNav({
         <SheetHeader className="sr-only">
           <SheetTitle>{t.a11y.navigation}</SheetTitle>
         </SheetHeader>
-        <SidebarContent hotelName={hotelName} userName={userName} userAvatarUrl={userAvatarUrl} />
+        <SidebarContent hotelName={hotelName} userName={userName} userAvatarUrl={userAvatarUrl} hotels={hotels} activeHotelId={activeHotelId} accessLevel={accessLevel} canManageHotels={canManageHotels} />
       </SheetContent>
     </Sheet>
   );

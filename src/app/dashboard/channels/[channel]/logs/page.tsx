@@ -5,6 +5,7 @@ import { db, getCurrentHotelId } from "@/lib/db";
 import { PageHeader, EmptyState } from "@/components/shared/page-header";
 import { SyncStatusBadge } from "@/components/shared/status-badge";
 import { t } from "@/lib/i18n";
+import { requireSectionAccess } from "@/server/guards";
 import {
   Table,
   TableBody,
@@ -21,6 +22,7 @@ export default async function ChannelLogsPage({
 }: {
   params: Promise<{ channel: string }>;
 }) {
+  await requireSectionAccess("FULL");
   const { channel: channelId } = await params;
   const hotelId = await getCurrentHotelId();
 

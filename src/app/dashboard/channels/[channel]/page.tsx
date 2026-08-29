@@ -10,6 +10,7 @@ import type { ExternalInventory } from "@/lib/channels/types";
 import type { RatePlanVM } from "@/lib/types";
 import { formatTimeAgo } from "@/lib/utils";
 import { t } from "@/lib/i18n";
+import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function ChannelDetailPage({
 }: {
   params: Promise<{ channel: string }>;
 }) {
+  await requireSectionAccess("FULL");
   const { channel: channelId } = await params;
   const hotelId = await getCurrentHotelId();
 
