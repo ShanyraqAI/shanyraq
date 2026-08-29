@@ -80,12 +80,10 @@ export function AccountForm({ initial }: { initial: AccountValues }) {
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
-        <form action={signOutAction}>
-          <Button type="submit" variant="outline">
-            <LogOut className="mr-2 size-4" />
-            {t.account.signOut}
-          </Button>
-        </form>
+        <Button type="submit" formAction={signOutAction} variant="outline">
+          <LogOut className="mr-2 size-4" />
+          {t.account.signOut}
+        </Button>
         <Button type="submit" disabled={saving}>
           {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Save className="mr-2 size-4" />}
           {t.account.save}

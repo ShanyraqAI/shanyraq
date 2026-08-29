@@ -1,6 +1,4 @@
 import {
-  ArrowDown,
-  ArrowUp,
   BedDouble,
   CalendarCheck2,
   CalendarX2,
@@ -82,14 +80,14 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Good ${greeting()}, ${user?.fullName || "User"}`}
+        title={`${greeting()}, ${user?.fullName || "User"}`}
         description={`${hotel.name} · ${formatMediumDate(day)}`}
       >
         <SyncAllButton />
       </PageHeader>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label={t.dashboard.kpi.occupancy}
           value={formatPercent(stats.occupancyTonight)}
@@ -102,18 +100,6 @@ export default async function DashboardPage() {
           value={String(stats.activeReservations)}
           sub={t.dashboard.kpi.reservationsSub}
           icon={CalendarCheck2}
-        />
-        <KpiCard
-          label={t.dashboard.kpi.arrivalsToday}
-          value={String(stats.arrivalsToday.length)}
-          sub={t.dashboard.kpi.arrivalsSub(stats.arrivalsToday.filter((r) => r.status === "CHECKED_IN").length)}
-          icon={ArrowUp}
-        />
-        <KpiCard
-          label={t.dashboard.kpi.departuresToday}
-          value={String(stats.departuresToday.length)}
-          sub={t.dashboard.kpi.departuresSub(stats.departuresToday.filter((r) => r.status === "CHECKED_OUT").length)}
-          icon={ArrowDown}
         />
         <KpiCard
           label={t.dashboard.kpi.revenueMtd}
