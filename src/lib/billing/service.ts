@@ -46,14 +46,14 @@ export function matchesPayment(order: { id: string; providerPaymentId: string | 
 /** Lock the organization before the order so concurrent payments and duplicate callbacks cannot double-extend access. */
 export async function applyPaymentResult(fields: PaymentFields) {
   const order = await db.billingPayment.findUnique({ where: { id: fields.pg_order_id ?? "" } });
-  if (!order || !matchesPayment(order, fields)) throw new BillingError("Payment does not match order");
-  if (!["0", "1", "2"].includes(fields.pg_result)) throw new BillingError("Invalid payment result");
+  if (!order || !matchesPayment(order, fields)) throw new Error("Payment does not match order");
+  if (!["0", "1", "2"].includes(fields.pg_result)) throw new Error("Invalid payment result");
   // Authorization alone is not a captured card payment. Configure single-stage acquiring.
-  if (fields.pg_result === "1" && (fields.pg_captured === "0" || (fields.pg_payment_method === "bankcard" && fields.pg_captured !== "1"))) throw new BillingError("Payment not captured");
+  if (fields.pg_result === "1" && (fields.pg_captured === "0" || (fields.pg_payment_method === "bankcard" && fields.pg_captured !== "1"))) throw new Error("Payment not captured");
   return db.$transaction(async (tx) => {
     await lockBillingOrganization(tx, order.organizationId);
     const current = await tx.billingPayment.findUniqueOrThrow({ where: { id: order.id } });
-    if (!matchesPayment(current, fields)) throw new BillingError("Payment does not match order");
+    if (!matchesPayment(current, fields)) throw new Error("Payment does not match order");
     if (current.status === "SUCCEEDED") return;
     if (fields.pg_result === "2") return;
     if (fields.pg_result === "0") {
@@ -63,7 +63,7 @@ export async function applyPaymentResult(fields: PaymentFields) {
     const now = new Date();
     if (!order.testMode) {
       const subscription = await tx.billingSubscription.findUniqueOrThrow({ where: { organizationId: order.organizationId } });
-      if (subscription.paidUntil && subscription.paidUntil > now && subscription.planId !== order.planId) throw new BillingError("Conflicting paid plans require review");
+      if (subscription.paidUntil && subscription.paidUntil > now && subscription.planId !== order.planId) throw new Error("Conflicting paid plans require review");
       const base = new Date(Math.max(now.getTime(), accessUntil(subscription).getTime()));
       await tx.billingSubscription.update({
         where: { organizationId: order.organizationId },
