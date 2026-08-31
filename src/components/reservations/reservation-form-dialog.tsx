@@ -118,6 +118,7 @@ export function ReservationFormDialog({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
     setSaving(true);
     try {
       if (mode === "create") {
@@ -161,6 +162,9 @@ export function ReservationFormDialog({
         toast.success(result.message ?? t.reservations.toasts.updated);
       }
       onOpenChange(false);
+      router.refresh();
+    } catch {
+      toast.error("Не удалось подтвердить сохранение. Обновите календарь перед повторной попыткой.");
       router.refresh();
     } finally {
       setSaving(false);

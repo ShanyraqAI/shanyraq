@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ACTIVE_RESERVATION_STATUSES } from "@/lib/constants";
+import { clipStay, staysOverlap } from "@/lib/reservations/calendar-range";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -66,6 +69,8 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
     date?: string;
   }>({ open: false });
   const [movingId, setMovingId] = useState<string | null>(null);
+  const movePending = useRef(false);
+  const router = useRouter();
 
   const anchor = parseISODate(anchorISO);
   const today = getToday();
@@ -107,16 +112,13 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
     }[] = [];
     for (const r of visibleReservations) {
       if (r.roomId !== roomId) continue;
-      const checkIn = parseISODate(r.checkIn);
-      const checkOut = parseISODate(r.checkOut);
-      const startOffset = Math.max(0, diffDays(range.start, checkIn));
-      const endOffset = Math.min(range.days, Math.max(1, diffDays(range.start, checkOut)));
-      if (endOffset <= startOffset) continue;
+      const clipped = clipStay(r.checkIn, r.checkOut, range.start, range.days);
+      if (!clipped) continue;
       out.push({
         res: r,
-        left: startOffset * dayWidth,
-        width: (endOffset - startOffset) * dayWidth - 4,
-        clippedStart: startOffset === 0 && checkIn < range.start,
+        left: clipped.start * dayWidth,
+        width: (clipped.end - clipped.start) * dayWidth - 4,
+        clippedStart: clipped.clippedStart,
       });
     }
     return out;
@@ -129,21 +131,35 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
   }
 
   async function handleDrop(reservationId: string, roomId: string, dateISO: string) {
+    if (movePending.current) return;
     // Quick move: drop onto an empty cell → move room + keep nights, anchored at dropped date.
     const res = reservations.find((r) => r.id === reservationId);
-    if (!res) return;
+    if (!res || !ACTIVE_RESERVATION_STATUSES.includes(res.status)) return;
     const nights = diffDays(parseISODate(res.checkIn), parseISODate(res.checkOut));
+    const checkOut = toISODate(addDays(parseISODate(dateISO), nights));
+    // Use all reservations: hidden channels/status filters must never free a room.
+    if (reservations.some((other) => other.id !== res.id && other.roomId === roomId &&
+      ACTIVE_RESERVATION_STATUSES.includes(other.status) && staysOverlap(dateISO, checkOut, other.checkIn, other.checkOut))) {
+      toast.error("В этом номере уже есть бронь на выбранные даты.");
+      return;
+    }
+    movePending.current = true;
     setMovingId(reservationId);
     try {
       const result = await moveReservationAction(
         reservationId,
         roomId,
         dateISO,
-        toISODate(addDays(parseISODate(dateISO), nights)),
+        checkOut,
       );
       if (!result.ok) toast.error(result.error);
       else toast.success(result.message ?? t.calendar.movedToast);
+      router.refresh();
+    } catch {
+      toast.error("Не удалось подтвердить перенос. Обновите календарь перед повторной попыткой.");
+      router.refresh();
     } finally {
+      movePending.current = false;
       setMovingId(null);
     }
   }
@@ -373,7 +389,7 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                           setDetailsOpen(true);
                         }}
                         onDragStart={(e) => e.dataTransfer.setData("text/plain", res.id)}
-                        draggable
+                        draggable={!movingId && ACTIVE_RESERVATION_STATUSES.includes(res.status)}
                         style={{ left: left + 2, width }}
                         className={cn(
                           "absolute top-[9px] z-10 flex h-[50px] cursor-pointer flex-col justify-center overflow-hidden rounded-md border px-2 text-left shadow-sm transition-all hover:z-20 hover:shadow-md",

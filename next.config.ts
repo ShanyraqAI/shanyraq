@@ -11,6 +11,8 @@ const nextConfig: NextConfig = {
   // Hide the X-Powered-By header (fingerprinting).
   poweredByHeader: false,
   reactStrictMode: true,
+  // Allow multipart overhead; individual profile images are still capped at 1 MiB.
+  experimental: { serverActions: { bodySizeLimit: "2mb" } },
   // Keep heavy native/server-only packages out of the bundler — faster builds
   // and no engine-resolution issues in serverless environments.
   serverExternalPackages: ["@prisma/client", "bcryptjs"],

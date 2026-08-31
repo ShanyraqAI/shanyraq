@@ -113,18 +113,31 @@ export function SidebarContent({
 
   async function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (!file) return;
+    event.target.value = "";
+    if (!file || pending) return;
+    if (!file.size || file.size > 1024 * 1024) {
+      toast.error("Выберите изображение размером до 1 МБ.");
+      return;
+    }
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      toast.error("Поддерживаются PNG, JPG и WebP.");
+      return;
+    }
     const formData = new FormData();
     formData.set("avatar", file);
     startTransition(async () => {
-      const result = await uploadAvatarAction(formData);
-      if (!result.ok || !result.data) {
-        toast.error(result.error);
-        return;
+      try {
+        const result = await uploadAvatarAction(formData);
+        if (!result.ok || !result.data) {
+          toast.error(result.error);
+          return;
+        }
+        setAvatarSrc(result.data);
+        toast.success(result.message);
+        router.refresh();
+      } catch {
+        toast.error("Не удалось загрузить фото. Проверьте соединение и попробуйте снова.");
       }
-      setAvatarSrc(result.data);
-      toast.success(result.message);
-      router.refresh();
     });
   }
 

@@ -17,6 +17,7 @@ import { t } from "@/lib/i18n";
 import { fullNameFromParts } from "@/lib/auth/names";
 import { ok, fail, type ActionResult } from "@/server/types";
 import { toErrorMessage } from "@/server/errors";
+import { prepareProfileImage } from "@/lib/profile-image";
 
 export async function registerAction(input: unknown): Promise<ActionResult> {
   try {
@@ -143,13 +144,11 @@ export async function uploadAvatarAction(formData: FormData): Promise<ActionResu
     if (!current) return fail("Требуется вход в аккаунт");
     const file = formData.get("avatar");
     if (!(file instanceof File)) return fail("Выберите изображение");
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return fail("Поддерживаются PNG, JPG и WebP");
-    if (file.size > 1024 * 1024) return fail("Размер изображения не должен превышать 1 МБ");
-    const dataUrl = `data:${file.type};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}`;
-    await db.user.update({ where: { id: current.id }, data: { avatarUrl: dataUrl } });
+    const avatarUrl = await prepareProfileImage(file);
+    await db.user.update({ where: { id: current.id }, data: { avatarUrl } });
     revalidatePath("/dashboard", "layout");
     revalidatePath("/dashboard/settings");
-    return ok(dataUrl, "Фото профиля сохранено");
+    return ok(avatarUrl, "Фото профиля сохранено");
   } catch (error) {
     return fail(toErrorMessage(error));
   }

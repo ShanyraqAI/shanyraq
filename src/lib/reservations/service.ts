@@ -1,7 +1,11 @@
 import { db } from "@/lib/db";
 import { ACTIVE_RESERVATION_STATUSES, type ReservationStatus } from "@/lib/constants";
-import { addDays, diffDays, parseISODate } from "@/lib/dates";
+import { addDays, diffDays, parseISODate, today } from "@/lib/dates";
 import { recomputeAvailability, remainingUnitsOnDate } from "@/lib/availability/service";
+import { PublicError } from "@/server/errors";
+import type { Prisma } from "@prisma/client";
+
+type ReservationDb = typeof db | Prisma.TransactionClient;
 
 /**
  * Reservation service — all reservation mutations funnel through here so that
@@ -16,24 +20,29 @@ export interface StayInput {
 }
 
 export async function computeStayTotal(
+  hotelId: string,
   ratePlanId: string,
+  roomTypeId: string,
   checkIn: Date,
   checkOut: Date,
-): Promise<number> {
-  const plan = await db.ratePlan.findUniqueOrThrow({ where: { id: ratePlanId } });
-  const nights = Math.max(1, diffDays(checkIn, checkOut));
-  const dailyRates = await db.rate.findMany({
+  client: ReservationDb = db,
+): Promise<{ total: number; currency: string }> {
+  const plan = await client.ratePlan.findFirst({ where: { id: ratePlanId, hotelId, roomTypeId } });
+  if (!plan) throw new PublicError("Тариф не найден или не относится к выбранной категории номера");
+  const nights = diffDays(checkIn, checkOut);
+  if (nights < 1) throw new PublicError("Дата выезда должна быть позже даты заезда");
+  const dailyRates = await client.rate.findMany({
     where: { ratePlanId, date: { gte: checkIn, lt: addDays(checkIn, nights) } },
     select: { date: true, price: true },
   });
-  if (dailyRates.length === 0) return plan.basePrice * nights;
+  if (dailyRates.length === 0) return { total: Number(plan.basePrice) * nights, currency: plan.currency };
   let total = 0;
   for (let i = 0; i < nights; i++) {
     const d = addDays(checkIn, i);
     const rate = dailyRates.find((r) => r.date.getTime() === d.getTime());
-    total += rate ? rate.price : plan.basePrice;
+    total += Number(rate ? rate.price : plan.basePrice);
   }
-  return total;
+  return { total, currency: plan.currency };
 }
 
 async function assertNoRoomOverlap(
@@ -42,8 +51,9 @@ async function assertNoRoomOverlap(
   checkIn: Date,
   checkOut: Date,
   excludeReservationId?: string,
+  client: ReservationDb = db,
 ): Promise<void> {
-  const clash = await db.reservation.findFirst({
+  const clash = await client.reservation.findFirst({
     where: {
       hotelId,
       roomId,
@@ -67,9 +77,10 @@ async function assertTypeAvailability(
   checkIn: Date,
   checkOut: Date,
   excludeReservationId?: string,
+  client: ReservationDb = db,
 ): Promise<void> {
   const nights = Math.max(1, diffDays(checkIn, checkOut));
-  const reservations = await db.reservation.findMany({
+  const reservations = await client.reservation.findMany({
     where: {
       hotelId,
       roomTypeId,
@@ -78,27 +89,33 @@ async function assertTypeAvailability(
     },
     select: { checkIn: true, checkOut: true },
   });
-  const totalRooms = await db.room.count({
-    where: { hotelId, roomTypeId, status: { not: "OUT_OF_ORDER" } },
+  const totalRooms = await client.room.count({
+    where: { hotelId, roomTypeId, status: { notIn: ["OUT_OF_ORDER", "MAINTENANCE"] } },
   });
   for (let i = 0; i < nights; i++) {
     const night = addDays(checkIn, i);
     const reserved = reservations.filter((r) => r.checkIn <= night && r.checkOut > night).length;
     if (reserved >= totalRooms) {
-      throw new OverbookingError(`Свободные номера категории «${await roomTypeName(roomTypeId)}» на ${night.toISOString().slice(0, 10)} закончились.`);
+      throw new OverbookingError(`Свободные номера категории «${await roomTypeName(roomTypeId, client)}» на ${night.toISOString().slice(0, 10)} закончились.`);
     }
   }
 }
 
-async function roomTypeName(roomTypeId: string): Promise<string> {
-  const rt = await db.roomType.findUnique({ where: { id: roomTypeId }, select: { name: true } });
+async function roomTypeName(roomTypeId: string, client: ReservationDb = db): Promise<string> {
+  const rt = await client.roomType.findUnique({ where: { id: roomTypeId }, select: { name: true } });
   return rt?.name ?? "номеров";
 }
 
-export class OverbookingError extends Error {
+export class OverbookingError extends PublicError {
   constructor(message: string) {
     super(message);
     this.name = "OverbookingError";
+  }
+}
+
+async function lockBusinessKeys(tx: Prisma.TransactionClient, keys: string[]): Promise<void> {
+  for (const key of [...new Set(keys)].sort()) {
+    await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
   }
 }
 
@@ -120,40 +137,37 @@ export interface CreateReservationParams {
 export async function createReservation(params: CreateReservationParams) {
   const checkIn = parseISODate(params.checkIn);
   const checkOut = parseISODate(params.checkOut);
+  if (checkOut <= checkIn) throw new PublicError("Дата выезда должна быть позже даты заезда");
 
-  const room = await db.room.findUnique({ where: { id: params.roomId } });
-  if (!room || room.hotelId !== params.hotelId) throw new Error("Номер не найден");
+  const result = await db.$transaction(async (tx) => {
+    await lockBusinessKeys(tx, [`room:${params.roomId}`]);
+    const [room, guest] = await Promise.all([
+      tx.room.findFirst({ where: { id: params.roomId, hotelId: params.hotelId, status: { notIn: ["OUT_OF_ORDER", "MAINTENANCE"] } } }),
+      tx.guest.findFirst({ where: { id: params.guestId, hotelId: params.hotelId }, select: { id: true } }),
+    ]);
+    if (!room) throw new PublicError("Номер не найден или временно недоступен");
+    if (!guest) throw new PublicError("Гость не найден в текущем отеле");
+    await assertNoRoomOverlap(params.hotelId, room.id, checkIn, checkOut, undefined, tx);
+    await assertTypeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, undefined, tx);
+    const price = await computeStayTotal(params.hotelId, params.ratePlanId, room.roomTypeId, checkIn, checkOut, tx);
+    const reservation = await tx.reservation.create({
+      data: {
+        hotelId: params.hotelId, guestId: params.guestId, roomId: room.id, roomTypeId: room.roomTypeId,
+        sourceChannel: params.sourceChannel,
+        externalReservationId: params.externalReservationId ?? null, checkIn, checkOut,
+        adults: params.adults, children: params.children, status: params.status ?? "CONFIRMED",
+        currency: price.currency, totalAmount: price.total, notes: params.notes ?? null,
+      },
+    });
+    return { reservation, roomTypeId: room.roomTypeId };
+  }, { timeout: 15_000 });
 
-  await assertNoRoomOverlap(params.hotelId, room.id, checkIn, checkOut);
-  await assertTypeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut);
-
-  const totalAmount = await computeStayTotal(params.ratePlanId, checkIn, checkOut);
-
-  const reservation = await db.reservation.create({
-    data: {
-      hotelId: params.hotelId,
-      guestId: params.guestId,
-      roomId: room.id,
-      roomTypeId: room.roomTypeId,
-      sourceChannel: params.sourceChannel,
-      externalReservationId: params.externalReservationId ?? null,
-      checkIn,
-      checkOut,
-      adults: params.adults,
-      children: params.children,
-      status: params.status ?? "CONFIRMED",
-      currency: "KZT",
-      totalAmount,
-      notes: params.notes ?? null,
-    },
-  });
-
-  await recomputeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut);
-  await writeAudit(params.hotelId, "reservation.created", "Reservation", reservation.id, {
+  await recomputeAvailability(params.hotelId, result.roomTypeId, checkIn, checkOut);
+  await writeAudit(params.hotelId, "reservation.created", "Reservation", result.reservation.id, {
     channel: params.sourceChannel,
     externalId: params.externalReservationId ?? undefined,
   });
-  return reservation;
+  return result.reservation;
 }
 
 export interface UpdateReservationParams {
@@ -170,36 +184,35 @@ export interface UpdateReservationParams {
 }
 
 export async function updateReservationDetails(params: UpdateReservationParams) {
-  const existing = await db.reservation.findFirst({
-    where: { id: params.id, hotelId: params.hotelId },
-  });
-  if (!existing) throw new Error("Бронирование не найдено");
-
   const checkIn = parseISODate(params.checkIn);
   const checkOut = parseISODate(params.checkOut);
-  const room = await db.room.findUnique({ where: { id: params.roomId } });
-  if (!room || room.hotelId !== params.hotelId) throw new Error("Номер не найден");
-
-  // Price is always derived from the current rate calendar.
-  const totalAmount = await computeStayTotal(params.ratePlanId, checkIn, checkOut);
-
-  await assertNoRoomOverlap(params.hotelId, room.id, checkIn, checkOut, existing.id);
-  await assertTypeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, existing.id);
-
-  const updated = await db.reservation.update({
-    where: { id: existing.id },
-    data: {
-      guestId: params.guestId,
-      roomId: room.id,
-      roomTypeId: room.roomTypeId,
-      checkIn,
-      checkOut,
-      adults: params.adults,
-      children: params.children,
-      totalAmount,
-      notes: params.notes ?? null,
-    },
-  });
+  if (checkOut <= checkIn) throw new PublicError("Дата выезда должна быть позже даты заезда");
+  const result = await db.$transaction(async (tx) => {
+    await lockBusinessKeys(tx, [`reservation:${params.id}`]);
+    const existing = await tx.reservation.findFirst({ where: { id: params.id, hotelId: params.hotelId } });
+    if (!existing) throw new PublicError("Бронирование не найдено");
+    if (!ACTIVE_RESERVATION_STATUSES.includes(existing.status as ReservationStatus)) throw new PublicError("Завершённую или отменённую бронь нельзя переносить.");
+    await lockBusinessKeys(tx, [`room:${existing.roomId}`, `room:${params.roomId}`]);
+    const [room, guest] = await Promise.all([
+      tx.room.findFirst({ where: { id: params.roomId, hotelId: params.hotelId, status: { notIn: ["OUT_OF_ORDER", "MAINTENANCE"] } } }),
+      tx.guest.findFirst({ where: { id: params.guestId, hotelId: params.hotelId }, select: { id: true } }),
+    ]);
+    if (!room) throw new PublicError("Номер не найден или временно недоступен");
+    if (!guest) throw new PublicError("Гость не найден в текущем отеле");
+    const price = await computeStayTotal(params.hotelId, params.ratePlanId, room.roomTypeId, checkIn, checkOut, tx);
+    await assertNoRoomOverlap(params.hotelId, room.id, checkIn, checkOut, existing.id, tx);
+    await assertTypeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, existing.id, tx);
+    const updated = await tx.reservation.update({
+      where: { id: existing.id },
+      data: {
+        guestId: params.guestId, roomId: room.id, roomTypeId: room.roomTypeId,
+        checkIn, checkOut, adults: params.adults, children: params.children,
+        currency: price.currency, totalAmount: price.total, notes: params.notes ?? null,
+      },
+    });
+    return { existing, room, updated };
+  }, { timeout: 15_000 });
+  const { existing, room, updated } = result;
 
   // Availability may change on both old and new ranges.
   await recomputeAvailability(params.hotelId, existing.roomTypeId, existing.checkIn, existing.checkOut);
@@ -219,32 +232,53 @@ const ROOM_STATUS_BY_RESERVATION_STATUS: Partial<Record<ReservationStatus, strin
   CHECKED_OUT: "CLEANING",
 };
 
+const ALLOWED_STATUS_TRANSITIONS: Record<ReservationStatus, readonly ReservationStatus[]> = {
+  PENDING: ["CONFIRMED", "CANCELLED"],
+  CONFIRMED: ["CHECKED_IN", "CANCELLED", "NO_SHOW"],
+  CHECKED_IN: ["CHECKED_OUT"],
+  CHECKED_OUT: [],
+  CANCELLED: [],
+  NO_SHOW: [],
+};
+
 export async function setReservationStatus(hotelId: string, reservationId: string, status: ReservationStatus) {
-  const reservation = await db.reservation.findFirst({
-    where: { id: reservationId, hotelId },
-  });
-  if (!reservation) throw new Error("Бронирование не найдено");
-
-  const updated = await db.reservation.update({ where: { id: reservation.id }, data: { status } });
-
-  const nextRoomStatus = ROOM_STATUS_BY_RESERVATION_STATUS[status];
-  if (nextRoomStatus) {
-    await db.room.update({ where: { id: reservation.roomId }, data: { status: nextRoomStatus } });
-  } else if (status === "CANCELLED" || status === "NO_SHOW") {
-    // Free the physical room only if no other active stay occupies it tonight.
-    const stillOccupied = await db.reservation.count({
-      where: {
-        roomId: reservation.roomId,
-        id: { not: reservation.id },
-        status: { in: [...ACTIVE_RESERVATION_STATUSES] },
-        checkIn: { lte: new Date() },
-        checkOut: { gt: new Date() },
-      },
-    });
-    if (stillOccupied === 0) {
-      await db.room.update({ where: { id: reservation.roomId }, data: { status: "AVAILABLE" } });
+  const { reservation, updated, changed } = await db.$transaction(async (tx) => {
+    await lockBusinessKeys(tx, [`reservation:${reservationId}`]);
+    const current = await tx.reservation.findFirst({ where: { id: reservationId, hotelId } });
+    if (!current) throw new PublicError("Бронирование не найдено");
+    await lockBusinessKeys(tx, [`room:${current.roomId}`]);
+    const currentStatus = current.status as ReservationStatus;
+    if (currentStatus !== status && !ALLOWED_STATUS_TRANSITIONS[currentStatus]?.includes(status)) {
+      throw new PublicError("Недопустимый переход статуса бронирования");
     }
-  }
+    if (currentStatus === status) return { reservation: current, updated: current, changed: false };
+
+    if (ACTIVE_RESERVATION_STATUSES.includes(status)) {
+      await assertNoRoomOverlap(hotelId, current.roomId, current.checkIn, current.checkOut, current.id, tx);
+    }
+    const next = await tx.reservation.update({ where: { id: current.id }, data: { status } });
+    const nextRoomStatus = ROOM_STATUS_BY_RESERVATION_STATUS[status];
+    if (nextRoomStatus) {
+      await tx.room.update({ where: { id: current.roomId }, data: { status: nextRoomStatus } });
+    } else if (status === "CANCELLED" || status === "NO_SHOW") {
+      const businessDate = today();
+      const stillOccupied = await tx.reservation.count({
+        where: {
+          hotelId,
+          roomId: current.roomId,
+          id: { not: current.id },
+          status: { in: [...ACTIVE_RESERVATION_STATUSES] },
+          checkIn: { lte: businessDate },
+          checkOut: { gt: businessDate },
+        },
+      });
+      if (stillOccupied === 0) {
+        await tx.room.update({ where: { id: current.roomId }, data: { status: "AVAILABLE" } });
+      }
+    }
+    return { reservation: current, updated: next, changed: true };
+  }, { timeout: 15_000 });
+  if (!changed) return updated;
 
   // Cancelling/no-show frees inventory.
   if (status === "CANCELLED" || status === "NO_SHOW") {

@@ -14,7 +14,18 @@ export const MS_PER_DAY = 86_400_000;
 export function parseISODate(iso: string): Date {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (!match) throw new Error(`Invalid ISO date: ${iso}`);
-  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  if (toISODate(date) !== iso) throw new Error(`Invalid calendar date: ${iso}`);
+  return date;
+}
+
+export function isISODate(value: string): boolean {
+  try {
+    parseISODate(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Format a hotel date as "YYYY-MM-DD" without timezone shifting. */
