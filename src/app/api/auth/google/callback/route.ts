@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   }
 
   const profile = await exchangeGoogleCode(code, url.origin);
-  if (!profile?.email || profile.email_verified === false) {
+  if (!profile?.email || profile.email_verified !== true) {
     loginUrl.searchParams.set("error", "google");
     return NextResponse.redirect(loginUrl);
   }
@@ -46,6 +46,7 @@ export async function GET(request: Request) {
       data: {
         email,
         fullName: displayName,
+        emailVerifiedAt: new Date(),
         firstName: profile.given_name?.trim() || null,
         lastName: profile.family_name?.trim() ?? null,
         avatarUrl: profile.picture ?? null,

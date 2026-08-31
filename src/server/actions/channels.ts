@@ -224,7 +224,7 @@ export async function syncChannelAction(connectionId: string): Promise<
   }>
 > {
   try {
-    const hotelId = await requireSessionHotelId();
+    const hotelId = await requireSessionHotelId({ allowExpiredSync: true });
     const owned = await db.channelConnection.findFirst({
       where: { id: connectionId, hotelId },
       select: { id: true },
@@ -253,7 +253,7 @@ export async function syncChannelAction(connectionId: string): Promise<
 
 export async function syncAllChannelsAction(): Promise<ActionResult<{ results: { channelId: string; status: string; error: string | null }[] }>> {
   try {
-    const hotelId = await requireSessionHotelId();
+    const hotelId = await requireSessionHotelId({ allowExpiredSync: true });
     const summaries = await syncAllConnectedChannels(hotelId);
     revalidateChannels();
     return ok(

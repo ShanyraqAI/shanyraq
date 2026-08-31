@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireSessionHotelId } from "@/server/guards";
+import { assertRoomCapacity } from "@/lib/billing/service";
 import { deleteRoomSchema, firstZodError, roomStatusSchema, upsertRoomSchema } from "@/lib/constants";
 import { writeAudit } from "@/lib/reservations/service";
 import { ok, fail, type ActionResult } from "@/server/types";
@@ -44,6 +45,7 @@ export async function upsertRoomAction(input: unknown): Promise<ActionResult> {
     const data = parsed.data;
 
     const room = await db.$transaction(async (tx) => {
+      if (!data.id) await assertRoomCapacity(tx, hotelId);
       if (data.id) {
         const owned = await tx.room.findFirst({ where: { id: data.id, hotelId }, select: { id: true } });
         if (!owned) throw new Error(t.rooms.errors.roomNotFound);

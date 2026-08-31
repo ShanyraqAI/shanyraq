@@ -13,6 +13,7 @@ import { requireUser } from "@/lib/auth/session";
 import { ACTIVE_HOTEL_COOKIE } from "@/lib/auth/session";
 import { getCurrentMembership } from "@/lib/tenant";
 import { z } from "zod";
+import { assertBillingWriteAccess } from "@/lib/billing/service";
 
 const createHotelSchema = z.object({ name: z.string().trim().min(2, "Введите название отеля").max(120) });
 const accessLevelSchema = z.enum(["OVERVIEW", "CALENDAR", "FULL"]);
@@ -59,6 +60,7 @@ export async function createHotelAction(input: unknown): Promise<ActionResult<{ 
     const parsed = createHotelSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
     const owner = await requireHotelOwner();
+    await assertBillingWriteAccess(owner.organizationId);
     const slug = `hotel-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const hotel = await db.$transaction(async (tx) => {
       const created = await tx.hotel.create({

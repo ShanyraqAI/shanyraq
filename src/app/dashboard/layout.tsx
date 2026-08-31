@@ -1,3 +1,6 @@
+import { BillingBanner } from "@/components/billing/billing-banner";
+import { getSubscription } from "@/lib/billing/service";
+import { accessUntil, isExpired } from "@/lib/billing/policy";
 import { BrandLogo } from "@/components/shared/brand-logo";
 import { requireOnboardingComplete } from "@/lib/auth/session";
 import { getCurrentHotel } from "@/lib/tenant";
@@ -13,6 +16,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     return <div className="min-h-screen flex items-center justify-center">Отель не найден</div>;
   }
   
+  const subscription = user.organizationId ? await getSubscription(user.organizationId) : null;
   const hotelName = hotel.name;
   const userName = user.fullName;
   const hotels = await db.membership.findMany({
@@ -47,7 +51,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
           />
           <BrandLogo className="h-6 w-auto" />
         </header>
-        <main className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-8 md:py-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-8 md:py-8">
+          {subscription && <BillingBanner endsAt={accessUntil(subscription).toISOString()} paid={Boolean(subscription.paidUntil)} initiallyExpired={isExpired(subscription)} />}
+          {children}
+        </main>
       </div>
     </div>
   );

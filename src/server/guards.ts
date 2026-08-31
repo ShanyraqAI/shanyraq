@@ -1,5 +1,6 @@
 import { getCurrentHotelId, getCurrentMembership } from "@/lib/tenant";
 import { redirect } from "next/navigation";
+import { assertBillingWriteAccess } from "@/lib/billing/service";
 
 export type AccessRequirement = "CALENDAR" | "FULL";
 
@@ -20,7 +21,9 @@ export async function requireSectionAccess(required: AccessRequirement): Promise
  * tenant boundary: the hotel id is resolved server-side and can never be
  * supplied by the client.
  */
-export async function requireSessionHotelId(): Promise<string> {
+export async function requireSessionHotelId(options: { allowExpiredSync?: boolean } = {}): Promise<string> {
   await requireSectionAccess("FULL");
+  const membership = await getCurrentMembership();
+  if (membership && !options.allowExpiredSync) await assertBillingWriteAccess(membership.organizationId);
   return getCurrentHotelId();
 }

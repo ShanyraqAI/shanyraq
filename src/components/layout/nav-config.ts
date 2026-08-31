@@ -8,6 +8,7 @@ import {
   Cable,
   BarChart3,
   Settings,
+  CreditCard,
   type LucideIcon,
 } from "lucide-react";
 import { t } from "@/lib/i18n";
@@ -29,6 +30,7 @@ export const NAV_MAIN: NavItem[] = [
 ];
 
 export const NAV_SECONDARY: NavItem[] = [
+  { title: "Подписка и оплата", href: "/dashboard/billing", icon: CreditCard },
   { title: t.nav.reports, href: "/dashboard/reports", icon: BarChart3 },
   { title: t.nav.settings, href: "/dashboard/settings", icon: Settings },
 ];
