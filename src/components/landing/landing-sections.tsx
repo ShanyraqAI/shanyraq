@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, BedDouble, CalendarCheck2, CalendarDays, Check, CircleCheck, ClipboardList, FileSpreadsheet, FolderCheck, KeyRound, LockKeyhole, LogIn, MessageCircle, MessagesSquare, Plus, ShieldCheck, Sparkles, Upload, Users, Wallet } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BedDouble, CalendarCheck2, CalendarDays, CircleCheck, ClipboardList, FileSpreadsheet, FolderCheck, KeyRound, LockKeyhole, LogIn, MessageCircle, MessagesSquare, Plus, ShieldCheck, Sparkles, Upload, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CalendarPreview } from "./calendar-preview";
 import s from "./landing.module.css";
