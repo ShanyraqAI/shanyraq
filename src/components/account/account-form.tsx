@@ -11,13 +11,14 @@ import { updateProfileAction, signOutAction } from "@/server/actions/auth";
 import { t } from "@/lib/i18n";
 
 export interface AccountValues {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   avatarUrl: string;
   email: string | null;
   phone: string | null;
 }
 
-/** Minimal profile personalization: display name + avatar URL. */
+/** Profile names are stored separately; contact details remain read-only. */
 export function AccountForm({ initial }: { initial: AccountValues }) {
   const router = useRouter();
   const [values, setValues] = useState({
@@ -31,7 +32,8 @@ export function AccountForm({ initial }: { initial: AccountValues }) {
     setSaving(true);
     try {
       const result = await updateProfileAction({
-        fullName: values.fullName,
+        firstName: values.firstName,
+        lastName: values.lastName,
         avatarUrl: values.avatarUrl || undefined,
       });
       if (!result.ok) toast.error(result.error);
@@ -47,16 +49,19 @@ export function AccountForm({ initial }: { initial: AccountValues }) {
   return (
     <form onSubmit={save} className="max-w-2xl space-y-4 rounded-xl border bg-card p-6 shadow-sm">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="account-name">{t.account.fullName}</Label>
-          <Input
-            id="account-name"
-            value={values.fullName}
-            onChange={(e) => setValues((v) => ({ ...v, fullName: e.target.value }))}
-            required
-            minLength={2}
-            maxLength={160}
-          />
+        <div className="space-y-1.5">
+          <Label htmlFor="account-first-name">{t.account.firstName}</Label>
+          <Input id="account-first-name" autoComplete="given-name"
+            value={values.firstName}
+            onChange={(e) => setValues((v) => ({ ...v, firstName: e.target.value }))}
+            required maxLength={80} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="account-last-name">{t.account.lastName}</Label>
+          <Input id="account-last-name" autoComplete="family-name"
+            value={values.lastName}
+            onChange={(e) => setValues((v) => ({ ...v, lastName: e.target.value }))}
+            maxLength={80} />
         </div>
 
         <div className="space-y-1.5">

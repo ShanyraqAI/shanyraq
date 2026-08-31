@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { userNameFields, fullNameFromParts } from "@/lib/auth/names";
 
 // ---------------------------------------------------------------------------
 // Domain enums (string unions — portable across SQLite/PostgreSQL)
@@ -195,7 +196,7 @@ export function normalizePhone(input: string): string {
 
 export const registerSchema = z
   .object({
-    fullName: z.string().trim().min(2, "Укажите имя и фамилию").max(160),
+    ...userNameFields,
     method: z.enum(["email", "phone"]),
     email: z.string().trim().toLowerCase().email("Некорректный email").max(200).optional(),
     phone: z.string().trim().regex(PHONE_INPUT_REGEX, "Некорректный номер телефона").optional(),
@@ -204,7 +205,8 @@ export const registerSchema = z
   .refine((v) => (v.method === "email" ? Boolean(v.email) : Boolean(v.phone)), {
     message: "Заполните контактное поле",
     path: ["method"],
-  });
+  })
+  .transform((value) => ({ ...value, fullName: fullNameFromParts(value) }));
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 export const loginSchema = z.object({
@@ -214,7 +216,7 @@ export const loginSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 
 export const profileSchema = z.object({
-  fullName: z.string().trim().min(2, "Укажите имя и фамилию").max(160),
+  ...userNameFields,
   avatarUrl: z
     .string()
     .trim()

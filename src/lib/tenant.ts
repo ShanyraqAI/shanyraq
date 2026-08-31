@@ -11,6 +11,8 @@ export interface CurrentUser {
   email: string | null;
   phone: string | null;
   fullName: string;
+  firstName: string;
+  lastName: string;
   avatarUrl: string | null;
   onboardingCompleted: boolean;
   membershipId: string | null;
@@ -50,6 +52,8 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     email: sessionUser.email,
     phone: sessionUser.phone,
     fullName: sessionUser.fullName,
+    firstName: sessionUser.firstName,
+    lastName: sessionUser.lastName,
     avatarUrl: sessionUser.avatarUrl,
     onboardingCompleted: sessionUser.onboardingCompleted,
     membershipId: sessionUser.membershipId,

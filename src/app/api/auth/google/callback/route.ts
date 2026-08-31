@@ -46,6 +46,8 @@ export async function GET(request: Request) {
       data: {
         email,
         fullName: displayName,
+        firstName: profile.given_name?.trim() || null,
+        lastName: profile.family_name?.trim() ?? null,
         avatarUrl: profile.picture ?? null,
       },
       select: { id: true, onboardingCompleted: true },

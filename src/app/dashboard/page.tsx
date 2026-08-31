@@ -80,7 +80,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`${greeting()}, ${user?.fullName || "User"}`}
+        title={user?.firstName ? `${greeting()}, ${user.firstName}` : greeting()}
         description={`${hotel.name} · ${formatMediumDate(day)}`}
       >
         <SyncAllButton />

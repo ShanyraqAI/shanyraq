@@ -14,6 +14,7 @@ import {
   firstZodError,
 } from "@/lib/constants";
 import { t } from "@/lib/i18n";
+import { fullNameFromParts } from "@/lib/auth/names";
 import { ok, fail, type ActionResult } from "@/server/types";
 import { toErrorMessage } from "@/server/errors";
 
@@ -23,7 +24,7 @@ export async function registerAction(input: unknown): Promise<ActionResult> {
     if (!parsed.success) return fail(firstZodError(parsed.error));
     await ensureDatabaseReady();
 
-    const { fullName, password, method, email, phone } = parsed.data;
+    const { firstName, lastName, fullName, password, method, email, phone } = parsed.data;
 
     if (method === "email" && email) {
       const existing = await db.user.findUnique({ where: { email }, select: { id: true } });
@@ -38,6 +39,8 @@ export async function registerAction(input: unknown): Promise<ActionResult> {
     const user = await db.user.create({
       data: {
         fullName,
+        firstName,
+        lastName,
         email: method === "email" ? email : null,
         phone: method === "phone" ? normalizePhone(phone ?? "") : null,
         passwordHash: await hashPassword(password),
@@ -119,7 +122,9 @@ export async function updateProfileAction(input: unknown): Promise<ActionResult>
     await db.user.update({
       where: { id: current.id },
       data: {
-        fullName: parsed.data.fullName,
+        fullName: fullNameFromParts(parsed.data),
+        firstName: parsed.data.firstName,
+        lastName: parsed.data.lastName,
         ...(parsed.data.avatarUrl !== undefined ? { avatarUrl: parsed.data.avatarUrl || null } : {}),
       },
     });

@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { db } from "@/lib/db";
+import { resolveUserName } from "@/lib/auth/names";
 
 /**
  * DB-backed sessions. The browser holds a random opaque token in an httpOnly
@@ -19,6 +20,8 @@ export interface SessionUser {
   email: string | null;
   phone: string | null;
   fullName: string;
+  firstName: string;
+  lastName: string;
   avatarUrl: string | null;
   onboardingCompleted: boolean;
   membershipId: string | null;
@@ -71,6 +74,8 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
             email: true,
             phone: true,
             fullName: true,
+            firstName: true,
+            lastName: true,
             avatarUrl: true,
             onboardingCompleted: true,
             memberships: {
@@ -98,6 +103,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
       email: session.user.email,
       phone: session.user.phone,
       fullName: session.user.fullName,
+      ...resolveUserName(session.user),
       avatarUrl: session.user.avatarUrl,
       onboardingCompleted: session.user.onboardingCompleted,
       membershipId: membership?.id ?? null,

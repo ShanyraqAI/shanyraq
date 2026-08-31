@@ -38,7 +38,7 @@ export default async function SettingsPage() {
           <SettingsForm initial={{ name: hotel.name, address: hotel.address, city: hotel.city, country: hotel.country, timezone: hotel.timezone, currency: hotel.currency }} />
         </TabsContent>
         <TabsContent value="profile">
-          <AccountForm initial={{ fullName: user.fullName, avatarUrl: user.avatarUrl ?? "", email: user.email, phone: user.phone }} />
+          <AccountForm initial={{ firstName: user.firstName, lastName: user.lastName, avatarUrl: user.avatarUrl ?? "", email: user.email, phone: user.phone }} />
         </TabsContent>
         <TabsContent value="access"><AccessManagement initialMembers={memberships.map((membership) => ({ id: membership.id, name: membership.user.fullName, email: membership.user.email ?? "—", access: membership.accessLevel as "OVERVIEW" | "CALENDAR" | "FULL", role: membership.role }))} canManage={user.role === "OWNER"} /></TabsContent>
       </Tabs>

@@ -43,6 +43,8 @@ model User {
   email               String?   @unique // nullable: phone-only accounts are allowed
   phone               String?   @unique
   fullName            String
+  firstName           String?
+  lastName            String?
   passwordHash        String?
   avatarUrl           String?
   onboardingCompleted Boolean   @default(false)

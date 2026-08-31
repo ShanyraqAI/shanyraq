@@ -16,7 +16,8 @@ import { t } from "@/lib/i18n";
 export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter();
   const [method, setMethod] = useState<"email" | "phone">("email");
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [contact, setContact] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,7 +27,8 @@ export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
     setLoading(true);
     try {
       const result = await registerAction({
-        fullName,
+        firstName,
+        lastName,
         method,
         email: method === "email" ? contact : undefined,
         phone: method === "phone" ? contact : undefined,
@@ -45,18 +47,19 @@ export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="register-name">{t.auth.fullName}</Label>
-        <Input
-          id="register-name"
-          autoComplete="name"
-          placeholder={t.auth.fullNamePlaceholder}
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          required
-          minLength={2}
-          maxLength={160}
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="register-first-name">{t.auth.firstName}</Label>
+          <Input id="register-first-name" autoComplete="given-name"
+            value={firstName} onChange={(e) => setFirstName(e.target.value)}
+            required maxLength={80} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="register-last-name">{t.auth.lastName}</Label>
+          <Input id="register-last-name" autoComplete="family-name"
+            value={lastName} onChange={(e) => setLastName(e.target.value)}
+            maxLength={80} />
+        </div>
       </div>
 
       <Tabs value={method} onValueChange={(v) => setMethod(v as "email" | "phone")}>
