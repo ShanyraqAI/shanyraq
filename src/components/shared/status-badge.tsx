@@ -71,7 +71,7 @@ const CHANNEL_DOTS: Record<string, string> = {
   booking: "#003580",
   ostrovok: "#ff6d00",
   krisha: "#0ea5e9",
-  direct: "#059669",
+  direct: "var(--color-emerald-500)",
 };
 
 export function ChannelLabel({ channel, className }: { channel: string; className?: string }) {
