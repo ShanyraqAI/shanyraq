@@ -1,3 +1,4 @@
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { requireOnboardingComplete } from "@/lib/auth/session";
 import { getCurrentHotel } from "@/lib/tenant";
 import { DesktopSidebar } from "@/components/layout/app-sidebar";
@@ -22,7 +23,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const hotelOptions = hotels.flatMap((item) => item.hotel ? [item.hotel] : []);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div data-dashboard-theme className="min-h-screen bg-background">
       <DesktopSidebar
         hotelName={hotelName}
         userName={userName}
@@ -44,7 +45,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             accessLevel={user.accessLevel ?? "FULL"}
             canManageHotels={user.role === "OWNER"}
           />
-          <span className="text-[15px] font-semibold tracking-tight">Shanyraq AI</span>
+          <BrandLogo className="h-6 w-auto" />
         </header>
         <main className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-8 md:py-8">{children}</main>
       </div>

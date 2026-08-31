@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { ChangeEvent, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Check, ChevronDown, ImagePlus, LifeBuoy, Hotel, LogOut, Plus, Settings2, UserRound } from "lucide-react";
@@ -128,14 +129,12 @@ export function SidebarContent({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div data-dashboard-sidebar className="flex h-full flex-col">
       {/* Brand */}
       <div className="flex items-center gap-2.5 border-b px-5 py-[18px]">
-        <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-          <Hotel className="size-4" />
-        </div>
+        <BrandLogo variant="mark" inverse className="size-8" />
         <div className="leading-tight">
-          <div className="text-[15px] font-semibold tracking-tight">Shanyraq AI</div>
+          <BrandLogo variant="wordmark" inverse className="h-[18.75px] w-auto" />
           <div className="text-[11px] text-muted-foreground">{t.tagline}</div>
         </div>
       </div>

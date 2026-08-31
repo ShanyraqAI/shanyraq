@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, House, Menu } from "lucide-react";
+import { ArrowUpRight, Menu } from "lucide-react";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import { Button } from "@/components/ui/button";
 import s from "./landing.module.css";
 
 export const landingLinks = [["Возможности", "#features"], ["Безопасность", "#security"], ["Тарифы", "#pricing"], ["FAQ", "#faq"]] as const;
 
 export function LandingLogo() {
-  return <Link href="/" className={s.logo} aria-label="Shanyraq AI — главная"><span className={s.logoMark}><House size={21} strokeWidth={1.7} /></span>Shanyraq<span className={s.logoAi}>AI</span></Link>;
+  return <Link href="/" className={s.logo} aria-label="Shanyraq AI — главная"><BrandLogo className={s.brandLogo} /></Link>;
 }
 
 export function LandingHeader() {

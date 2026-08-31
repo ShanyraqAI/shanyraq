@@ -14,6 +14,8 @@
 .header { position: relative; z-index: 30; border-bottom: 1px solid var(--line); }
 .headerInner { height: 88px; display: flex; align-items: center; gap: 32px; }
 .logo { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 23px; letter-spacing: -1.1px; color: var(--forest); white-space: nowrap; }
+.brandLogo { width: 168px; height: 35px; }
+@media (max-width: 520px) { .brandLogo { width: 144px; height: 30px; } }
 .logoMark { width: 35px; height: 35px; display: grid; place-items: center; background: var(--forest); border-radius: 50%; color: #ead8b5; margin-right: 2px; }
 .logoAi { font-size: 11px; letter-spacing: 0; font-weight: 700; border: 1px solid #c7cebf; border-radius: 5px; padding: 1px 4px; margin-left: -3px; }
 .desktopNav { display: flex; margin-inline: auto; gap: 27px; font-size: 12px; font-weight: 600; }

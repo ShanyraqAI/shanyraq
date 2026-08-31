@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, BedDouble, CalendarDays, Check, ChevronDown, CircleHelp, CreditCard, House, LayoutDashboard, LogIn, Plus, Settings2, Users, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, BedDouble, CalendarDays, Check, ChevronDown, CircleHelp, CreditCard, LayoutDashboard, LogIn, Plus, Settings2, Users, Wallet } from "lucide-react";
+import { BrandLogo } from "@/components/shared/brand-logo";
 import s from "./landing.module.css";
 
 const apartments = ["ЖК «Новые высоты»", "Апартаменты 204", "ЖК «Сезим»", "Студия на Абая", "Апартаменты 305"];
@@ -25,7 +26,7 @@ export function CalendarPreview({ compact = false }: { compact?: boolean }) {
       <div className={s.previewChrome}><span /><span /><span /><p>shanyraq.ai <span>/</span> ваш объект</p><span className={s.exampleLabel}>Демонстрационные данные</span></div>
       <div className={s.productBody}>
         <aside className={s.productSidebar} aria-label="Разделы интерфейса на иллюстрации">
-          <div className={s.productBrand}><House size={20} /> shanyraq<span>AI</span></div>
+          <div className={s.productBrand}><BrandLogo inverse style={{ width: "100%", height: 23 }} /></div>
           <div className={s.propertyName}>Alma Apartments<ChevronDown size={12} /><small>Алматы · 12 квартир</small></div>
           {[{ icon: LayoutDashboard, name: "Обзор" }, { icon: CalendarDays, name: "Календарь" }, { icon: BedDouble, name: "Квартиры" }, { icon: Users, name: "Гости" }, { icon: Wallet, name: "Оплаты" }].map(({ icon: Icon, name }) => <div key={name} className={`${s.sidebarItem} ${name === "Календарь" ? s.sidebarActive : ""}`}><Icon size={15} />{name}</div>)}
           <div className={s.sidebarBottom}><div className={s.sidebarItem}><CircleHelp size={15} />Помощь</div><div className={s.sidebarItem}><Settings2 size={15} />Настройки</div><div className={s.ownerAvatar}><span>АК</span><p>Алия К.<small>Владелец объекта</small></p></div></div>

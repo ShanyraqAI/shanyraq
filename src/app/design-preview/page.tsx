@@ -1,5 +1,6 @@
+import { BrandLogo } from "@/components/shared/brand-logo";
 import {
-  Hotel,
+
   CalendarCheck2,
   BedDouble,
   ArrowUpRight,
@@ -32,9 +33,9 @@ export default function DesignPreviewPage() {
         <div className="mx-auto flex max-w-[1280px] items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
             <div className="flex size-8 items-center justify-center rounded-[10px] bg-[#0E6B5E] text-white">
-              <Hotel className="size-4" />
+              <BrandLogo variant="mark" inverse className="size-4" />
             </div>
-            <span className="text-[15px] font-[650] tracking-[-0.02em]">Shanyraq AI</span>
+            <BrandLogo variant="wordmark" className="h-[15px] w-auto" />
             <span className="hidden sm:inline-flex rounded-full bg-[#0E6B5E]/10 px-2.5 py-1 text-[11px] font-medium tracking-wide text-[#0E6B5E]">
               DESIGN PREVIEW
             </span>
@@ -73,8 +74,8 @@ export default function DesignPreviewPage() {
               <div className="flex items-center justify-between border-b border-black/[0.06] px-8 py-4">
                 <div className="flex items-center gap-8">
                   <div className="flex items-center gap-2.5">
-                    <div className="flex size-7 items-center justify-center rounded-lg bg-[#0E6B5E] text-white"><Hotel className="size-3.5" /></div>
-                    <span className="text-sm font-semibold tracking-tight">Shanyraq AI</span>
+                    <div className="flex size-7 items-center justify-center rounded-lg bg-[#0E6B5E] text-white"><BrandLogo variant="mark" inverse className="size-3.5" /></div>
+                    <BrandLogo variant="wordmark" className="h-3.5 w-auto" />
                   </div>
                   <nav className="hidden items-center gap-6 text-[13px] font-medium text-[#5A6B67] md:flex">
                     <span>Продукт</span><span>Каналы</span><span>Цены</span><span>Контакты</span>
@@ -194,8 +195,8 @@ export default function DesignPreviewPage() {
               <div className="col-span-5 flex flex-col justify-between bg-[#14201E] p-8 text-white">
                 <div>
                   <div className="flex items-center gap-2.5">
-                    <div className="flex size-8 items-center justify-center rounded-lg bg-white text-[#14201E]"><Hotel className="size-4" /></div>
-                    <span className="text-sm font-semibold">Shanyraq AI</span>
+                    <div className="flex size-8 items-center justify-center rounded-lg bg-white text-[#14201E]"><BrandLogo variant="mark" className="size-4" /></div>
+                    <BrandLogo variant="wordmark" inverse className="h-3.5 w-auto" />
                     <span className="rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-white/70">Платформа управления отелем</span>
                   </div>
                   <h3 className="mt-10 text-[30px] font-[650] leading-[1.05] tracking-[-0.03em]">
@@ -278,8 +279,8 @@ export default function DesignPreviewPage() {
               {/* Sidebar */}
               <div className="hidden w-[236px] shrink-0 flex-col border-r border-black/[0.06] bg-[#FCFCF9] lg:flex">
                 <div className="flex items-center gap-2.5 border-b border-black/[0.06] px-5 py-4">
-                  <div className="flex size-7 items-center justify-center rounded-lg bg-[#0E6B5E] text-white"><Hotel className="size-3.5" /></div>
-                  <div className="leading-none"><div className="text-sm font-semibold">Shanyraq AI</div><div className="text-[11px] text-[#8A9A96]">Платформа управления отелем</div></div>
+                  <div className="flex size-7 items-center justify-center rounded-lg bg-[#0E6B5E] text-white"><BrandLogo variant="mark" inverse className="size-3.5" /></div>
+                  <div className="leading-none"><BrandLogo variant="wordmark" className="h-3.5 w-auto" /><div className="text-[11px] text-[#8A9A96]">Платформа управления отелем</div></div>
                 </div>
                 <div className="mx-3 mt-4 rounded-xl border border-black/[0.06] bg-white px-3 py-2.5">
                   <div className="text-[10px] font-semibold uppercase tracking-widest text-[#8A9A96]">Отель</div>
