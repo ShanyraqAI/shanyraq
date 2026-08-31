@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, BedDouble, CalendarCheck2, CalendarDays, Check, CheckCheck, CircleCheck, ClipboardList, Clock3, FileSpreadsheet, FolderCheck, KeyRound, LockKeyhole, LogIn, MessageCircle, MessagesSquare, Plus, ShieldCheck, Sparkles, Upload, Users, Wallet } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BedDouble, CalendarCheck2, CalendarDays, Check, CircleCheck, ClipboardList, FileSpreadsheet, FolderCheck, KeyRound, LockKeyhole, LogIn, MessageCircle, MessagesSquare, Plus, ShieldCheck, Sparkles, Upload, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CalendarPreview } from "./calendar-preview";
 import s from "./landing.module.css";
@@ -10,20 +10,11 @@ export function SectionHeading({ eyebrow, title, description, centered = false }
 
 export function ProblemsSection() {
   const problems = [
-    { icon: MessagesSquare, title: "Брони теряются", text: "WhatsApp, звонки, Excel и заметки не дают единой картины." },
-    { icon: CalendarDays, title: "Возникают накладки", text: "Легко случайно забронировать одну квартиру на одинаковые даты." },
-    { icon: Wallet, title: "Не видно денег", text: "Сложно быстро понять, кто оплатил проживание, а кто ещё должен." },
+    { icon: MessagesSquare, title: "Данные разбросаны" },
+    { icon: CalendarDays, title: "Возможны накладки" },
+    { icon: Wallet, title: "Сложно сверять оплаты" },
   ];
-  return <section className={`${s.section} ${s.container}`} aria-labelledby="problems-heading"><div className={s.problemHeading}><span className={s.sectionEyebrow}>Знакомая ситуация?</span><h2 id="problems-heading">Когда бронирования живут<br />в таблицах, ошибки неизбежны</h2><p>Бизнес растёт. Количество чатов — тоже.<br />Пора собрать всё в одном месте.</p></div><div className={s.problemGrid}>{problems.map(({ icon: Icon, title, text }, i) => <article className={s.problemCard} key={title}><div><Icon size={23} strokeWidth={1.4} /><span>0{i + 1}</span></div><h3>{title}</h3><p>{text}</p></article>)}</div></section>;
-}
-
-function FeatureVisual({ kind }: { kind: number }) {
-  if (kind === 0) return <div className={s.miniWeek} aria-hidden="true"><div><span>ПН</span><span>ВТ</span><span>СР</span><span>ЧТ</span><span>ПТ</span></div><p>Айгерим С. <Check size={10} /></p><p>Данияр А. <Check size={10} /></p><span className={s.miniCursor}><Plus size={11} /> Новая бронь</span></div>;
-  if (kind === 1) return <div className={s.miniUnits} aria-hidden="true">{["Студия на Абая", "Апартаменты 204"].map((name, i) => <div key={name}><span><BedDouble size={19} /></span><p>{name}<small>{i ? "2 гостя · 30 000 ₸" : "2 гостя · 22 000 ₸"}</small></p><i>{i ? "Занято" : "Свободно"}</i></div>)}</div>;
-  if (kind === 2) return <div className={s.miniGuest} aria-hidden="true"><span>АС</span><div><strong>Айгерим Садыкова</strong><small>Постоянный гость</small></div><p><CheckCheck size={12} /> 4 проживания <span>Предпочитает тихий номер</span></p></div>;
-  if (kind === 3) return <div className={s.miniPayment} aria-hidden="true"><span>Сумма бронирования <strong>90 000 ₸</strong></span><div><i /></div><p>Оплачено: 60 000 ₸ <span>Остаток: 30 000 ₸</span></p></div>;
-  if (kind === 4) return <div className={s.miniArrivals} aria-hidden="true"><div><span>14:00</span><LogIn size={16} /><p>Заезд · Данияр А.<small>Апартаменты 204</small></p><Check size={15} /></div><div><span>15:00</span><LogIn size={16} /><p>Заезд · Асель Т.<small>Студия на Абая</small></p><Clock3 size={14} /></div></div>;
-  return <div className={s.miniImport} aria-hidden="true"><FileSpreadsheet size={25} strokeWidth={1.3} /><div><strong>Бронирования.xlsx</strong><small>Данные проверены</small></div><span><Check size={15} /></span></div>;
+  return <section className={`${s.section} ${s.container}`} aria-labelledby="problems-heading"><div className={s.problemHeading}><span className={s.sectionEyebrow}>Проблема большинства объектов</span><h2 id="problems-heading">Ручной учёт усложняет управление</h2><p>С этим сталкиваются многие владельцы до перехода на единую систему.</p></div><div className={s.problemGrid}>{problems.map(({ icon: Icon, title }) => <article className={s.problemCard} key={title}><Icon size={21} strokeWidth={1.5} /><h3>{title}</h3></article>)}</div></section>;
 }
 
 export function FeaturesSection() {
@@ -35,7 +26,7 @@ export function FeaturesSection() {
     { icon: LogIn, title: "Заезды и выезды", text: "Важные задачи на сегодня всегда перед глазами." },
     { icon: FileSpreadsheet, title: "Импорт из Excel", text: "Перенесите существующие брони без ручной переписи." },
   ];
-  return <section id="features" className={`${s.section} ${s.featuresSection}`}><div className={s.container}><SectionHeading centered eyebrow="Один сервис вместо десятка инструментов" title="Всё необходимое для ежедневной работы объекта" description="От первой брони до выезда гостя — понятно вам и вашей команде." /><div className={s.featuresGrid}>{features.map(({ icon: Icon, title, text }, index) => <article className={s.featureCard} key={title}><div className={s.featureVisual}><FeatureVisual kind={index} /></div><div className={s.featureCopy}><Icon size={19} strokeWidth={1.6} /><h3>{title}</h3><p>{text}</p></div></article>)}</div></div></section>;
+  return <section id="features" className={`${s.section} ${s.featuresSection}`}><div className={s.container}><SectionHeading centered eyebrow="Один сервис вместо десятка инструментов" title="Всё необходимое для ежедневной работы объекта" description="От первой брони до выезда гостя — понятно вам и вашей команде." /><div className={s.featuresGrid}>{features.map(({ icon: Icon, title, text }) => <article className={s.featureCard} key={title}><div className={s.featureCopy}><Icon size={19} strokeWidth={1.6} /><h3>{title}</h3><p>{text}</p></div></article>)}</div></div></section>;
 }
 
 export function CalendarSection() {
