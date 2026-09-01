@@ -51,3 +51,15 @@ test("marks unknown rooms and rejects corrupt or unrecognizable files", async ()
   const empty = await workbookBytes(workbook => workbook.addWorksheet("Пусто").addRow(["нет шахматки"]));
   await assert.rejects(parseReservationWorkbook(empty, "empty.xlsx", []), { name: "PublicError" });
 });
+
+test("accepts hotel files with a separate sheet for every month", async () => {
+  const bytes = await workbookBytes(workbook => {
+    for (let index = 1; index <= 24; index++) workbook.addWorksheet(`Архив ${index}`).addRow(["Нет броней"]);
+    const sheet = workbook.addWorksheet("Сентябрь 2026");
+    sheet.addRow(["Номер", 1, 2]);
+    sheet.addRow(["101", "Айбек", "Айбек"]);
+  });
+  const preview = await parseReservationWorkbook(bytes, "calendar.xlsx", ["101"]);
+  assert.equal(preview.sheets.length, 25);
+  assert.equal(preview.rows[0].guestName, "Айбек");
+});

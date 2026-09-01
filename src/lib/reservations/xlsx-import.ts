@@ -177,7 +177,8 @@ export async function parseReservationWorkbook(
   validateZip(bytes);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(bytes as never);
-  if (!workbook.worksheets.length || workbook.worksheets.length > 20) throw new PublicError("В книге должно быть от 1 до 20 листов");
+  if (!workbook.worksheets.length) throw new PublicError("В Excel-файле не найдено листов");
+  if (workbook.worksheets.length > 100) throw new PublicError("В Excel-файле слишком много листов. Оставьте не более 100");
   const sheets = workbook.worksheets.map(sheet => sheet.name);
   const candidates = requestedSheet ? workbook.worksheets.filter(sheet => sheet.name === requestedSheet) : workbook.worksheets;
   if (!candidates.length) throw new PublicError("Выбранный лист не найден");
