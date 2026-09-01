@@ -1,4 +1,4 @@
-import ExcelJS, { type Cell, type Worksheet } from "exceljs";
+import { Workbook, type Cell, type Worksheet } from "exceljs";
 import { PublicError } from "@/server/errors";
 import type { ReservationImportPreview, ReservationImportRow } from "./import-types";
 
@@ -36,7 +36,26 @@ function addDay(value: string) {
 }
 
 function cellText(cell: Cell): string {
-  return cell.text.replace(/\s+/g, " ").trim();
+  try {
+    const text = cell.text;
+    if (typeof text === "string") return text.replace(/\s+/g, " ").trim();
+  } catch {
+    // Some third-party workbooks contain non-standard cell values. Fall back
+    // to the raw value without exposing workbook contents in server logs.
+  }
+
+  const value = cell.value;
+  if (value == null) return "";
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value).replace(/\s+/g, " ").trim();
+  }
+  if ("richText" in value && Array.isArray(value.richText)) {
+    return value.richText.map(part => part.text ?? "").join("").replace(/\s+/g, " ").trim();
+  }
+  if ("result" in value && value.result != null) return String(value.result).replace(/\s+/g, " ").trim();
+  if ("text" in value && typeof value.text === "string") return value.text.replace(/\s+/g, " ").trim();
+  return "";
 }
 
 function contextMonth(sheet: Worksheet): { year: number; month: number } | null {
@@ -72,7 +91,7 @@ function dateFromCell(cell: Cell, context: { year: number; month: number } | nul
 }
 
 function guestFromCell(cell: Cell) {
-  const raw = cell.text.trim();
+  const raw = cellText(cell);
   const phone = raw.match(/(?:\+?7|8)[\s()\d-]{8,}/)?.[0]?.trim();
   const guestName = raw.split(/[\r\n]/)[0].replace(phone ?? "", "").trim().slice(0, 160);
   return { guestName, ...(phone ? { guestPhone: phone.slice(0, 40) } : {}) };
@@ -175,8 +194,16 @@ export async function parseReservationWorkbook(
 ): Promise<ReservationImportPreview> {
   if (!bytes.length || bytes.length > MAX_XLSX_BYTES) throw new PublicError("Размер Excel-файла не должен превышать 5 МБ");
   validateZip(bytes);
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(bytes as never);
+  let workbook: Workbook;
+  try {
+    workbook = new Workbook();
+    await workbook.xlsx.load(bytes as never);
+  } catch (error) {
+    console.error("[reservation-import] Excel workbook could not be loaded", {
+      type: error instanceof Error ? error.name : "unknown",
+    });
+    throw new PublicError("Не удалось прочитать Excel-файл. Пересохраните его в формате .xlsx без пароля и повторите попытку");
+  }
   if (!workbook.worksheets.length) throw new PublicError("В Excel-файле не найдено листов");
   if (workbook.worksheets.length > 100) throw new PublicError("В Excel-файле слишком много листов. Оставьте не более 100");
   const sheets = workbook.worksheets.map(sheet => sheet.name);
