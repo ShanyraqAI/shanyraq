@@ -25,6 +25,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/page-header";
 import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
 import { ReservationFormDialog } from "@/components/reservations/reservation-form-dialog";
+import { ReservationImportDialog } from "@/components/calendar/reservation-import-dialog";
 import { moveReservationAction } from "@/server/actions/reservations";
 import type { CalendarBoardData, CalendarViewMode } from "./types";
 import type { ReservationVM } from "@/lib/types";
@@ -273,6 +274,7 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
           <Button size="sm" onClick={() => setCreateState({ open: true })}>
             <Plus className="mr-1.5 size-4" /> {t.calendar.newReservation}
           </Button>
+          <ReservationImportDialog />
         </div>
       </div>
 

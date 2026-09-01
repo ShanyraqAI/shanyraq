@@ -9,10 +9,14 @@ import {
   setReservationStatus,
   updateReservationDetails,
 } from "@/lib/reservations/service";
-import { parseISODate } from "@/lib/dates";
+import { diffDays, isISODate, parseISODate } from "@/lib/dates";
 import { ok, fail, type ActionResult } from "@/server/types";
-import { toErrorMessage } from "@/server/errors";
+import { PublicError, toErrorMessage } from "@/server/errors";
 import { t } from "@/lib/i18n";
+import { parseReservationWorkbook } from "@/lib/reservations/xlsx-import";
+import type { ReservationImportPreview, ReservationImportResult, ReservationImportRow } from "@/lib/reservations/import-types";
+import { importReservationRows } from "@/lib/reservations/import-service";
+import { allowedGoogleSheetRedirect, googleSheetExportUrl } from "@/lib/reservations/google-sheets";
 
 function revalidateAll() {
   revalidatePath("/dashboard");
@@ -197,4 +201,97 @@ export async function moveReservationAction(
 
 function toISOSafe(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+const MAX_REMOTE_BYTES = 5 * 1024 * 1024;
+
+async function fetchGoogleSheet(value: string): Promise<Buffer> {
+  let url = googleSheetExportUrl(value);
+  for (let redirect = 0; redirect <= 3; redirect++) {
+    const response = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(15_000), cache: "no-store" });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get("location");
+      if (!location) throw new PublicError("Google Sheets вернул некорректное перенаправление");
+      const next = new URL(location, url);
+      if (!allowedGoogleSheetRedirect(next)) throw new PublicError("Google Sheets перенаправил запрос на недоверенный адрес");
+      url = next;
+      continue;
+    }
+    if (!response.ok) throw new PublicError("Не удалось скачать таблицу. Откройте доступ «Все, у кого есть ссылка»");
+    const length = Number(response.headers.get("content-length") ?? 0);
+    if (length > MAX_REMOTE_BYTES) throw new PublicError("Google-таблица превышает лимит 5 МБ");
+    if (!response.body) throw new PublicError("Google Sheets вернул пустой файл");
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    while (true) {
+      const { done, value: chunk } = await reader.read();
+      if (done) break;
+      total += chunk.byteLength;
+      if (total > MAX_REMOTE_BYTES) {
+        await reader.cancel();
+        throw new PublicError("Google-таблица превышает лимит 5 МБ");
+      }
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  }
+  throw new PublicError("Google Sheets выполнил слишком много перенаправлений");
+}
+
+export async function previewReservationImportAction(formData: FormData): Promise<ActionResult<ReservationImportPreview>> {
+  try {
+    const hotelId = await requireSessionHotelId();
+    const rooms = await db.room.findMany({ where: { hotelId }, select: { number: true } });
+    const sheetName = String(formData.get("sheetName") ?? "").trim() || undefined;
+    const source = String(formData.get("source") ?? "file");
+    let bytes: Buffer;
+    let fileName: string;
+    if (source === "google") {
+      const link = String(formData.get("googleUrl") ?? "").trim();
+      bytes = await fetchGoogleSheet(link);
+      fileName = "Google Sheets";
+    } else {
+      const file = formData.get("file");
+      if (!(file instanceof File) || !file.name.toLowerCase().endsWith(".xlsx")) return fail("Выберите файл .xlsx");
+      if (!file.size || file.size > MAX_UPLOAD_BYTES) return fail("Размер загружаемого файла не должен превышать 3 МБ");
+      bytes = Buffer.from(await file.arrayBuffer());
+      fileName = file.name;
+    }
+    return ok(await parseReservationWorkbook(bytes, fileName, rooms.map(room => room.number), sheetName));
+  } catch (error) {
+    return fail(toErrorMessage(error));
+  }
+}
+
+function validateImportRows(input: unknown): ReservationImportRow[] {
+  if (!Array.isArray(input) || input.length < 1 || input.length > 100) throw new PublicError("За один раз можно импортировать от 1 до 100 броней");
+  return input.map((value, index) => {
+    if (!value || typeof value !== "object") throw new PublicError(`Строка ${index + 1}: некорректные данные`);
+    const row = value as Partial<ReservationImportRow>;
+    const guestName = String(row.guestName ?? "").trim();
+    const roomNumber = String(row.roomNumber ?? "").trim();
+    const checkIn = String(row.checkIn ?? "");
+    const checkOut = String(row.checkOut ?? "");
+    const sourceRow = Number(row.sourceRow);
+    if (!guestName || guestName.length > 160) throw new PublicError(`Строка ${sourceRow || index + 1}: проверьте имя гостя`);
+    if (!roomNumber || roomNumber.length > 40) throw new PublicError(`Строка ${sourceRow || index + 1}: проверьте номер комнаты`);
+    if (!isISODate(checkIn) || !isISODate(checkOut) || checkOut <= checkIn || diffDays(parseISODate(checkIn), parseISODate(checkOut)) > 366) {
+      throw new PublicError(`Строка ${sourceRow || index + 1}: проверьте даты проживания`);
+    }
+    return { sourceRow: Number.isInteger(sourceRow) && sourceRow > 0 ? sourceRow : index + 1, guestName, roomNumber, checkIn, checkOut, ...(row.guestPhone ? { guestPhone: String(row.guestPhone).trim().slice(0, 40) } : {}) };
+  });
+}
+
+export async function confirmReservationImportAction(input: unknown): Promise<ActionResult<ReservationImportResult>> {
+  try {
+    const hotelId = await requireSessionHotelId();
+    const rows = validateImportRows(input);
+    const { imported, errors } = await importReservationRows(hotelId, rows);
+    revalidateAll();
+    return ok({ imported, errors }, errors.length ? `Импортировано: ${imported}. Требуют проверки: ${errors.length}.` : `Импортировано бронирований: ${imported}.`);
+  } catch (error) {
+    return fail(toErrorMessage(error));
+  }
 }
