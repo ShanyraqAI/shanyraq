@@ -37,7 +37,6 @@ import type { ReservationVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
 import { t } from "@/lib/i18n";
-import { DataExportDialog } from "@/components/exports/data-export-dialog";
 
 export interface GuestRow {
   id: string;
@@ -97,7 +96,6 @@ export function GuestsTable({ guests, reservations }: Props) {
           />
         </div>
         <div className="flex items-center gap-2">
-          <DataExportDialog dataset="guests" />
           <Button size="sm" onClick={() => setCreateOpen(true)}><Plus className="size-4" /> Добавить гостя</Button>
         </div>
       </div>

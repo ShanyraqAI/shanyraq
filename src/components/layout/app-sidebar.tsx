@@ -24,8 +24,12 @@ function NavLinks({ onNavigate, accessLevel = "FULL", permissions = [] }: { onNa
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
-  const canOpen = (permission: HotelPermission | "FULL") =>
-    permission === "FULL" ? accessLevel === "FULL" : permissions.includes(permission);
+  const canOpen = (permission: HotelPermission | "FULL" | HotelPermission[]) =>
+    Array.isArray(permission)
+      ? permission.some((item) => permissions.includes(item))
+      : permission === "FULL"
+        ? accessLevel === "FULL"
+        : permissions.includes(permission);
   const mainItems = NAV_MAIN.filter((item) => canOpen(item.permission));
   const secondaryItems = NAV_SECONDARY.filter((item) => canOpen(item.permission));
 

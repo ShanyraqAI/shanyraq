@@ -7,6 +7,7 @@ import {
   BadgePercent,
   Cable,
   BarChart3,
+  FileDown,
   Settings,
   CreditCard,
   type LucideIcon,
@@ -20,7 +21,7 @@ export interface NavItem {
   href: string;
   icon: LucideIcon;
   tourId?: string;
-  permission: HotelPermission | "FULL";
+  permission: HotelPermission | "FULL" | HotelPermission[];
 }
 
 const ALL_NAV_MAIN: (NavItem & { visible: boolean })[] = [
@@ -38,6 +39,7 @@ export const NAV_MAIN: NavItem[] = ALL_NAV_MAIN.filter((item) => item.visible);
 const ALL_NAV_SECONDARY: (NavItem & { visible: boolean })[] = [
   { title: "Подписка и оплата", href: "/dashboard/billing", icon: CreditCard, permission: "FULL", visible: PRODUCT_AVAILABILITY.billing },
   { title: t.nav.reports, href: "/dashboard/reports", icon: BarChart3, permission: "REPORTS", visible: true },
+  { title: t.nav.exports, href: "/dashboard/exports", icon: FileDown, permission: ["REPORTS", "CALENDAR", "RESERVATIONS", "GUESTS"], visible: true },
   { title: t.nav.settings, href: "/dashboard/settings", icon: Settings, permission: "FULL", visible: true },
 ];
 

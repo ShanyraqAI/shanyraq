@@ -8,21 +8,22 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Dataset = "calendar" | "reservations" | "guests";
+type Dataset = "calendar" | "reservations" | "guests" | "reports";
 type Format = "xlsx" | "csv";
 
 const DATASET_TITLES: Record<Dataset, string> = {
   calendar: "Экспорт календаря",
   reservations: "Экспорт бронирований",
   guests: "Экспорт гостей",
+  reports: "Экспорт отчёта",
 };
 
-export function DataExportDialog({ dataset, defaultFrom = "", defaultTo = "" }: { dataset: Dataset; defaultFrom?: string; defaultTo?: string }) {
+export function DataExportDialog({ dataset, defaultFrom = "", defaultTo = "", defaultSource = "all" }: { dataset: Dataset; defaultFrom?: string; defaultTo?: string; defaultSource?: string }) {
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
   const [downloading, setDownloading] = useState<Format | null>(null);
-  const needsRange = dataset === "calendar";
+  const needsRange = dataset === "calendar" || dataset === "reports";
 
   async function download(format: Format) {
     if (needsRange && (!from || !to || to < from)) {
@@ -36,6 +37,7 @@ export function DataExportDialog({ dataset, defaultFrom = "", defaultTo = "" }: 
         params.set("from", from);
         params.set("to", to);
       }
+      if (dataset === "reports" && defaultSource !== "all") params.set("source", defaultSource);
       const response = await fetch(`/api/exports/${dataset}?${params.toString()}`, { cache: "no-store" });
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: string } | null;

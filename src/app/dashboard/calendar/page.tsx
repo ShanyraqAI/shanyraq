@@ -7,8 +7,6 @@ import { requireSectionAccess } from "@/server/guards";
 import { toISODate, todayInTimeZone } from "@/lib/dates";
 import { calendarTimelineRange, parseCalendarNavigation } from "@/lib/reservations/calendar-range";
 import { CalendarOpenTracker } from "@/components/analytics/calendar-open-tracker";
-import { DataExportDialog } from "@/components/exports/data-export-dialog";
-import { addDays } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -86,9 +84,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
       <PageHeader
         title={t.calendar.title}
         description={t.calendar.description(rooms.length)}
-      >
-        <DataExportDialog dataset="calendar" defaultFrom={anchorISO} defaultTo={toISODate(addDays(range.endExclusive, -1))} />
-      </PageHeader>
+      />
       <CalendarBoard
         rooms={rooms}
         reservations={reservationsRaw.map(toReservationVM)}

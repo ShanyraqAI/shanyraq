@@ -14,7 +14,7 @@ export async function getSuperAdminOverview() {
   const today = startOfUtcDay(now);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
 
-  const [totalUsers, totalHotels, newUsersToday, totalRooms, totalReservations, reservationsToday, feedbackCount, bugReportCount, users, hotels, supportRequests] = await Promise.all([
+  const [totalUsers, totalHotels, newUsersToday, totalRooms, totalReservations, reservationsToday, feedbackCount, bugReportCount, activeBetaHotels, users, hotels, supportRequests] = await Promise.all([
     db.user.count(),
     db.hotel.count(),
     db.user.count({ where: { createdAt: { gte: today } } }),
@@ -22,7 +22,8 @@ export async function getSuperAdminOverview() {
     db.reservation.count(),
     db.reservation.count({ where: { createdAt: { gte: today } } }),
     db.supportRequest.count(),
-    db.supportRequest.count({ where: { category: "PROBLEM" } }),
+    db.supportRequest.count({ where: { category: "PROBLEM", status: { not: "RESOLVED" } } }),
+    db.betaHotelProfile.count({ where: { status: "ACTIVE" } }),
     db.user.findMany({
       select: {
         createdAt: true,
@@ -47,6 +48,7 @@ export async function getSuperAdminOverview() {
         },
         _count: { select: { rooms: true, reservations: true } },
         analyticsEvents: { orderBy: { occurredAt: "desc" }, take: 1, select: { occurredAt: true } },
+        betaProfile: { select: { status: true, assignedAdmin: { select: { fullName: true } } } },
       },
     }),
     db.supportRequest.findMany({
@@ -60,9 +62,26 @@ export async function getSuperAdminOverview() {
         name: true,
         contact: true,
         status: true,
+        rating: true,
+        feedbackTrigger: true,
+        resolvedAt: true,
         createdAt: true,
         hotel: { select: { id: true, name: true } },
         user: { select: { fullName: true, email: true, phone: true } },
+        assignedTo: { select: { id: true, fullName: true } },
+        activities: {
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          select: {
+            id: true,
+            type: true,
+            fromStatus: true,
+            toStatus: true,
+            note: true,
+            createdAt: true,
+            actor: { select: { fullName: true } },
+          },
+        },
       },
     }),
   ]);
@@ -84,7 +103,7 @@ export async function getSuperAdminOverview() {
   })).flatMap((event) => event.hotelId ? [event.hotelId] : []));
 
   return {
-    metrics: { totalUsers, totalHotels, newUsersToday, activeToday, activeSevenDays, totalRooms, totalReservations, reservationsToday, feedbackCount, bugReportCount },
+    metrics: { totalUsers, totalHotels, newUsersToday, activeToday, activeSevenDays, totalRooms, totalReservations, reservationsToday, feedbackCount, bugReportCount, activeBetaHotels },
     funnel,
     hotels: hotels.map((hotel) => ({
       id: hotel.id,
@@ -95,6 +114,8 @@ export async function getSuperAdminOverview() {
       createdAt: hotel.createdAt,
       lastActivityAt: hotel.analyticsEvents[0]?.occurredAt ?? hotel.createdAt,
       activationStatus: hotelActivationStatus({ roomCount: hotel._count.rooms, reservationCount: hotel._count.reservations, openedCalendar: calendarHotelIds.has(hotel.id) }),
+      betaStatus: hotel.betaProfile?.status ?? "NOT_ENROLLED",
+      betaAdminName: hotel.betaProfile?.assignedAdmin?.fullName ?? null,
     })),
     supportRequests,
   };
@@ -123,6 +144,16 @@ export async function getSuperAdminHotel(hotelId: string) {
         orderBy: { occurredAt: "desc" },
         take: 50,
         select: { id: true, eventType: true, entityType: true, entityId: true, occurredAt: true, user: { select: { fullName: true } } },
+      },
+      betaProfile: {
+        select: {
+          status: true,
+          startedAt: true,
+          lastContactAt: true,
+          internalNote: true,
+          statusReason: true,
+          assignedAdmin: { select: { id: true, fullName: true } },
+        },
       },
     },
   });

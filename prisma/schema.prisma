@@ -59,16 +59,19 @@ model User {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  memberships        Membership[]
-  organizations      Organization[] // implicit m-n via Organization.users
-  sessions           Session[]
-  oauthAccounts      OAuthAccount[]
-  passwordReset      PasswordReset?
-  invitationsSent    HotelInvitation[]   @relation("InvitationSender")
-  auditLogs          AuditLog[]          @relation("AuditActor")
-  analyticsEvents    AnalyticsEvent[]
-  productExperiences ProductExperience[]
-  supportRequests    SupportRequest[]
+  memberships              Membership[]
+  organizations            Organization[] // implicit m-n via Organization.users
+  sessions                 Session[]
+  oauthAccounts            OAuthAccount[]
+  passwordReset            PasswordReset?
+  invitationsSent          HotelInvitation[]        @relation("InvitationSender")
+  auditLogs                AuditLog[]               @relation("AuditActor")
+  analyticsEvents          AnalyticsEvent[]
+  productExperiences       ProductExperience[]
+  supportRequests          SupportRequest[]         @relation("SupportRequester")
+  assignedSupportRequests  SupportRequest[]         @relation("SupportAssignee")
+  supportRequestActivities SupportRequestActivity[] @relation("SupportActivityActor")
+  assignedBetaHotels       BetaHotelProfile[]       @relation("BetaAssignedAdmin")
 }
 
 model OAuthAccount {
@@ -190,8 +193,30 @@ model Hotel {
   analyticsEvents    AnalyticsEvent[]
   productExperiences ProductExperience[]
   supportRequests    SupportRequest[]
+  betaProfile        BetaHotelProfile?
 
   @@unique([id, orgId])
+}
+
+// Internal operating record for each hotel participating in the closed beta.
+// It is intentionally separate from product activation, which is calculated
+// from real usage rather than managed by an administrator.
+model BetaHotelProfile {
+  hotelId         String    @id
+  status          String    @default("NOT_ENROLLED")
+  assignedAdminId String?
+  startedAt       DateTime?
+  lastContactAt   DateTime?
+  internalNote    String?
+  statusReason    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  hotel         Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  assignedAdmin User? @relation("BetaAssignedAdmin", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+
+  @@index([status, updatedAt])
+  @@index([assignedAdminId])
 }
 
 // Privacy-minimal beta product telemetry. Event names are validated in both
@@ -220,15 +245,17 @@ model AnalyticsEvent {
 
 // Per-user, per-hotel progress for the initial setup and lightweight tour.
 model ProductExperience {
-  id               String    @id @default(cuid())
-  userId           String
-  hotelId          String
-  setupStep        Int       @default(1)
-  setupCompletedAt DateTime?
-  tourCompletedAt  DateTime?
-  tourSkippedAt    DateTime?
-  firstSeenAt      DateTime  @default(now())
-  lastSeenAt       DateTime  @default(now())
+  id                  String    @id @default(cuid())
+  userId              String
+  hotelId             String
+  setupStep           Int       @default(1)
+  setupCompletedAt    DateTime?
+  tourCompletedAt     DateTime?
+  tourSkippedAt       DateTime?
+  feedbackSubmittedAt DateTime?
+  feedbackDismissedAt DateTime?
+  firstSeenAt         DateTime  @default(now())
+  lastSeenAt          DateTime  @default(now())
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   hotel Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
@@ -240,26 +267,51 @@ model ProductExperience {
 // A small in-product support inbox for the closed beta. Identity and hotel
 // scope are always derived from the authenticated session on the server.
 model SupportRequest {
-  id             String   @id @default(cuid())
-  userId         String?
-  organizationId String?
-  hotelId        String?
-  category       String
-  message        String
-  sourcePath     String
-  name           String?
-  contact        String?
-  transcriptJson String?
-  status         String   @default("OPEN")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                   String    @id @default(cuid())
+  userId               String?
+  organizationId       String?
+  hotelId              String?
+  category             String
+  message              String
+  sourcePath           String
+  name                 String?
+  contact              String?
+  transcriptJson       String?
+  status               String    @default("OPEN")
+  rating               Int?
+  feedbackTrigger      String?
+  technicalContextJson String?
+  assignedToId         String?
+  resolvedAt           DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  hotel        Hotel?        @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  user         User?                    @relation("SupportRequester", fields: [userId], references: [id], onDelete: SetNull)
+  assignedTo   User?                    @relation("SupportAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  organization Organization?            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  hotel        Hotel?                   @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  activities   SupportRequestActivity[]
 
   @@index([status, createdAt])
   @@index([hotelId, createdAt])
+  @@index([assignedToId, status])
+}
+
+model SupportRequestActivity {
+  id          String   @id @default(cuid())
+  requestId   String
+  actorUserId String?
+  type        String
+  fromStatus  String?
+  toStatus    String?
+  note        String?
+  createdAt   DateTime @default(now())
+
+  request SupportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actor   User?          @relation("SupportActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([requestId, createdAt])
+  @@index([actorUserId, createdAt])
 }
 
 model HotelInvitation {

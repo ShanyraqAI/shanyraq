@@ -3,6 +3,10 @@ import { ArrowRight, Bug, Building2, CalendarCheck2, MessageSquareText, Users } 
 import { getSuperAdminOverview } from "@/lib/superadmin/queries";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SupportRequestWorkflow } from "@/components/superadmin/support-request-workflow";
+import { requirePlatformAdmin } from "@/lib/superadmin/auth";
+import { BETA_HOTEL_STATUSES, type BetaHotelStatus } from "@/lib/superadmin/beta";
+import { BetaStatusBadge } from "@/components/superadmin/beta-hotel-management";
 
 export const dynamic = "force-dynamic";
 
@@ -10,13 +14,14 @@ const dateFormatter = new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium" });
 const dateTimeFormatter = new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" });
 
 export default async function SuperAdminPage() {
-  const { metrics, funnel, hotels, supportRequests } = await getSuperAdminOverview();
+  const [admin, overview] = await Promise.all([requirePlatformAdmin(), getSuperAdminOverview()]);
+  const { metrics, funnel, hotels, supportRequests } = overview;
   const metricCards = [
     ["Пользователи", metrics.totalUsers, "Всего зарегистрировано"],
     ["Новые сегодня", metrics.newUsersToday, "По UTC"],
     ["Активны сегодня", metrics.activeToday, "Есть beta-событие"],
     ["Активны за 7 дней", metrics.activeSevenDays, "Уникальные пользователи"],
-    ["Отели", metrics.totalHotels, `${metrics.totalRooms} номеров`],
+    ["Активная бета", metrics.activeBetaHotels, `${metrics.totalHotels} отелей всего`],
     ["Бронирования", metrics.totalReservations, `${metrics.reservationsToday} сегодня`],
     ["Обращения", metrics.feedbackCount, "Из формы помощи"],
     ["Проблемы", metrics.bugReportCount, "Нужны внимание и ответ"],
@@ -71,7 +76,7 @@ export default async function SuperAdminPage() {
             <span className="text-xs text-slate-500">Последние 100</span>
           </div>
           <Table>
-            <TableHeader><TableRow className="border-white/10 hover:bg-transparent"><TableHead className="text-slate-400">Отель / владелец</TableHead><TableHead className="text-slate-400">Номера</TableHead><TableHead className="text-slate-400">Брони</TableHead><TableHead className="text-slate-400">Регистрация</TableHead><TableHead className="text-slate-400">Активность</TableHead><TableHead className="text-slate-400">Статус</TableHead><TableHead><span className="sr-only">Открыть</span></TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow className="border-white/10 hover:bg-transparent"><TableHead className="text-slate-400">Отель / владелец</TableHead><TableHead className="text-slate-400">Номера</TableHead><TableHead className="text-slate-400">Брони</TableHead><TableHead className="text-slate-400">Регистрация</TableHead><TableHead className="text-slate-400">Активность</TableHead><TableHead className="text-slate-400">Активация</TableHead><TableHead className="text-slate-400">Бета / ответственный</TableHead><TableHead><span className="sr-only">Открыть</span></TableHead></TableRow></TableHeader>
             <TableBody>
               {hotels.map((hotel) => (
                 <TableRow key={hotel.id} className="border-white/10 hover:bg-white/[0.04]">
@@ -81,6 +86,7 @@ export default async function SuperAdminPage() {
                   <TableCell className="text-slate-400">{dateFormatter.format(hotel.createdAt)}</TableCell>
                   <TableCell className="text-slate-400">{dateTimeFormatter.format(hotel.lastActivityAt)}</TableCell>
                   <TableCell><Badge variant="secondary" className="bg-white/10 text-slate-200">{hotel.activationStatus}</Badge></TableCell>
+                  <TableCell><BetaStatusBadge status={BETA_HOTEL_STATUSES.includes(hotel.betaStatus as BetaHotelStatus) ? hotel.betaStatus as BetaHotelStatus : "NOT_ENROLLED"} /><div className="mt-1 text-xs text-slate-500">{hotel.betaAdminName ?? "Не назначен"}</div></TableCell>
                   <TableCell><Link href={`/superadmin/hotels/${hotel.id}`} className="inline-flex size-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white" aria-label={`Открыть ${hotel.name}`}><ArrowRight className="size-4" /></Link></TableCell>
                 </TableRow>
               ))}
@@ -97,7 +103,7 @@ export default async function SuperAdminPage() {
         </div>
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader><TableRow className="border-white/10 hover:bg-transparent"><TableHead className="text-slate-400">Отель / пользователь</TableHead><TableHead className="text-slate-400">Тема</TableHead><TableHead className="text-slate-400">Сообщение</TableHead><TableHead className="text-slate-400">Страница</TableHead><TableHead className="text-slate-400">Дата</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow className="border-white/10 hover:bg-transparent"><TableHead className="text-slate-400">Отель / пользователь</TableHead><TableHead className="text-slate-400">Тема</TableHead><TableHead className="text-slate-400">Сообщение</TableHead><TableHead className="text-slate-400">Страница</TableHead><TableHead className="text-slate-400">Дата</TableHead><TableHead className="text-slate-400">Обработка</TableHead></TableRow></TableHeader>
             <TableBody>
               {supportRequests.map((request) => (
                 <TableRow key={request.id} className="border-white/10 align-top hover:bg-white/[0.04]">
@@ -112,10 +118,30 @@ export default async function SuperAdminPage() {
                     <div className="mt-1 text-xs text-slate-500">{request.user?.fullName ?? request.name ?? "Посетитель"}</div>
                     <div className="text-xs text-slate-500">{request.user?.email ?? request.user?.phone ?? request.contact ?? "Контакт не указан"}</div>
                   </TableCell>
-                  <TableCell><Badge variant="secondary" className="bg-white/10 text-slate-200">{{ QUESTION: "Вопрос", PROBLEM: "Проблема", SUGGESTION: "Идея" }[request.category] ?? request.category}</Badge></TableCell>
-                  <TableCell className="max-w-xl whitespace-normal text-slate-300">{request.message}</TableCell>
+                  <TableCell><Badge variant="secondary" className="bg-white/10 text-slate-200">{{ QUESTION: "Вопрос", PROBLEM: "Проблема", CONFUSING: "Непонятно", SUGGESTION: "Идея" }[request.category] ?? request.category}</Badge></TableCell>
+                  <TableCell className="max-w-xl whitespace-normal text-slate-300">
+                    {request.rating ? <div className="mb-1 text-xs font-semibold text-amber-300">Оценка: {request.rating}/5{request.feedbackTrigger === "FIRST_RESERVATION" ? " · первая бронь" : ""}</div> : null}
+                    {request.message}
+                  </TableCell>
                   <TableCell className="text-xs text-slate-500">{request.sourcePath}</TableCell>
                   <TableCell className="whitespace-nowrap text-xs text-slate-500">{dateTimeFormatter.format(request.createdAt)}</TableCell>
+                  <TableCell>
+                    <SupportRequestWorkflow
+                      requestId={request.id}
+                      status={request.status}
+                      assignedTo={request.assignedTo}
+                      currentAdminId={admin.id}
+                      activities={request.activities.map((activity) => ({
+                        id: activity.id,
+                        type: activity.type,
+                        fromStatus: activity.fromStatus,
+                        toStatus: activity.toStatus,
+                        note: activity.note,
+                        createdAt: activity.createdAt.toISOString(),
+                        actorName: activity.actor?.fullName ?? null,
+                      }))}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

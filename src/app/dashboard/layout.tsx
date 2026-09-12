@@ -14,6 +14,8 @@ import { ProductTour } from "@/components/onboarding/product-tour";
 import { PRODUCT_AVAILABILITY } from "@/lib/product-availability";
 import { resolveHotelPermissions } from "@/lib/access";
 import { SupportChatWidget } from "@/components/support/support-chat-widget";
+import { ContextualFeedbackPrompt } from "@/components/feedback/contextual-feedback-prompt";
+import { shouldShowFirstReservationFeedback } from "@/lib/support/feedback";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireOnboardingComplete();
@@ -26,7 +28,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const hotelName = hotel.name;
   const userName = user.fullName;
   const permissions = resolveHotelPermissions(user);
-  const [subscription, hotels, productExperience] = await Promise.all([
+  const [subscription, hotels, productExperience, reservationCount] = await Promise.all([
     PRODUCT_AVAILABILITY.billing && user.organizationId ? getSubscription(user.organizationId) : Promise.resolve(null),
     db.membership.findMany({
       where: { userId: user.id },
@@ -35,8 +37,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }),
     db.productExperience.findUnique({
       where: { userId_hotelId: { userId: user.id, hotelId: hotel.id } },
-      select: { tourCompletedAt: true, tourSkippedAt: true },
+      select: { tourCompletedAt: true, tourSkippedAt: true, feedbackSubmittedAt: true, feedbackDismissedAt: true },
     }),
+    db.reservation.count({ where: { hotelId: hotel.id } }),
   ]);
   const hotelOptions = hotels.map((item) => item.hotel);
 
@@ -81,6 +84,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
       {!productExperience?.tourCompletedAt && !productExperience?.tourSkippedAt ? (
         <ProductTour permissions={permissions} />
       ) : null}
+      {shouldShowFirstReservationFeedback({
+        reservationCount,
+        tourCompleted: Boolean(productExperience?.tourCompletedAt || productExperience?.tourSkippedAt),
+        submitted: Boolean(productExperience?.feedbackSubmittedAt),
+        dismissed: Boolean(productExperience?.feedbackDismissedAt),
+      }) ? <ContextualFeedbackPrompt /> : null}
       <SupportChatWidget
         source="DASHBOARD"
         defaultName={user.fullName}

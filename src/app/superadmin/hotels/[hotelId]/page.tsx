@@ -4,13 +4,15 @@ import { notFound } from "next/navigation";
 import { getSuperAdminHotel } from "@/lib/superadmin/queries";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { BetaHotelManagement } from "@/components/superadmin/beta-hotel-management";
+import { requirePlatformAdmin } from "@/lib/superadmin/auth";
 
 export const dynamic = "force-dynamic";
 const dateTimeFormatter = new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short" });
 
 export default async function SuperAdminHotelPage({ params }: { params: Promise<{ hotelId: string }> }) {
   const { hotelId } = await params;
-  const hotel = await getSuperAdminHotel(hotelId);
+  const [admin, hotel] = await Promise.all([requirePlatformAdmin(), getSuperAdminHotel(hotelId)]);
   if (!hotel) notFound();
   const counts = [
     ["Номера", hotel._count.rooms], ["Типы номеров", hotel._count.roomTypes], ["Бронирования", hotel._count.reservations], ["Гости", hotel._count.guests], ["Каналы", hotel._count.connections],
@@ -24,6 +26,18 @@ export default async function SuperAdminHotelPage({ params }: { params: Promise<
         <Badge className="w-fit bg-emerald-400 text-slate-950">{hotel.currency} · {hotel.timezone}</Badge>
       </div>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{counts.map(([label, value]) => <article key={label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><p className="text-sm text-slate-400">{label}</p><p className="mt-3 text-3xl font-semibold tabular-nums">{value}</p></article>)}</section>
+      <BetaHotelManagement
+        hotelId={hotel.id}
+        currentAdminId={admin.id}
+        profile={hotel.betaProfile ? {
+          status: hotel.betaProfile.status,
+          assignedAdmin: hotel.betaProfile.assignedAdmin,
+          startedAt: hotel.betaProfile.startedAt?.toISOString() ?? null,
+          lastContactAt: hotel.betaProfile.lastContactAt?.toISOString() ?? null,
+          internalNote: hotel.betaProfile.internalNote,
+          statusReason: hotel.betaProfile.statusReason,
+        } : null}
+      />
       <section className="grid gap-6 xl:grid-cols-2">
         <article className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
           <div className="mb-4 flex items-center gap-3"><Building2 className="size-5 text-emerald-400" /><div><h2 className="font-semibold">Команда</h2><p className="text-xs text-slate-500">{hotel.organization.name}</p></div></div>

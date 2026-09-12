@@ -23,6 +23,7 @@ export const t = {
     rates: "Тарифы",
     channels: "Каналы",
     reports: "Отчёты",
+    exports: "Экспорт",
     settings: "Настройки",
   },
 

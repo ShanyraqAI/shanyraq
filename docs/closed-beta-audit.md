@@ -2,6 +2,23 @@
 
 Audited: 2026-09-11
 
+## Beta readiness — support workflow (implemented and deployed 2026-09-12)
+
+- Super Admin can move an incoming request through `OPEN`, `REVIEWING`, and `RESOLVED`, assign or unassign it, and add private notes.
+- Every status, assignment, and note change is stored as an immutable activity row with the acting platform administrator and timestamp. These internal details are never returned by the customer support action.
+- The unresolved-problem metric now excludes resolved requests.
+- Migration `20260912010000_support_workflow` is additive: it adds assignment and resolution fields plus `SupportRequestActivity`; it does not rewrite or remove existing requests.
+- Prisma validation, TypeScript, the production build, and 53 automated tests pass. Three PostgreSQL integration tests remain intentionally skipped without the disposable test database. Migration `20260912010000_support_workflow` is applied to shared `neondb`.
+
+## Beta readiness — A2 reports and A3 contextual feedback (implemented and deployed 2026-09-12)
+
+- Reports now accept an inclusive period of up to 367 days and an optional reservation-source filter. Revenue is allocated proportionally across stay nights inside the selected period; cancellations and no-shows do not contribute.
+- The report shows occupancy, revenue, ADR, RevPAR, daily performance, and revenue by source. The sellable-room denominator uses the current room status because historical out-of-order inventory is not yet stored.
+- The selected report can be exported to XLSX or CSV from Reports or the centralized Export page, with the existing section authorization and tenant boundary.
+- After the first reservation and after the product tour is handled, a one-time contextual feedback prompt collects a 1–5 rating, category, and optional comment. Submit and dismiss states are persistent per user and hotel.
+- Feedback technical context is restricted to the trigger, current application path, and build version. Guest and reservation contents are never attached. Super Admin sees the rating and trigger in the existing support workflow.
+- Migration `20260912020000_contextual_feedback` adds only feedback fields and constraints and is applied to shared `neondb`.
+
 ## Executive summary
 
 Shanyraq is already a working multi-tenant hotel operations application, not a blank starter. The core data model, authentication, hotel-scoped authorization, rooms, guests, reservations, rates, availability, dashboard, calendar, onboarding, billing, audit logging, and channel adapter boundaries exist. Reservation writes already use transactions, PostgreSQL advisory locks, application overlap checks, and a database exclusion constraint.
@@ -272,6 +289,15 @@ Do not combine these into one migration.
 7. Phase 7: support grant/session services, scoped authorization context, and audit UI/documentation.
 
 Every phase should ship with a separate migration where needed, tenant-isolation tests, focused behavior tests, lint, TypeScript, and a production build.
+
+## A4 — управление закрытой бетой (implemented 2026-09-12)
+
+- Для каждого отеля добавлена отдельная внутренняя карточка пилота: статус участия, ответственный администратор платформы, дата начала, дата последнего контакта, заметка и причина паузы или выхода.
+- Статус участия не подменяет автоматически рассчитанную активацию продукта. В общем списке суперадмин видит оба показателя отдельно.
+- Карточка доступна только через защищённую суперадминку. Серверное действие повторно проверяет роль администратора, валидирует даты и длину текста; для статусов «На паузе» и «Вышел из беты» причина обязательна.
+- При первом переводе в активную бету дата начала проставляется автоматически, если администратор не указал её вручную. Ответственного можно назначить на себя или снять.
+- Миграция `20260912030000_beta_management` только добавляет таблицу `BetaHotelProfile`, индексы, внешние ключи и ограничение допустимых статусов. Данные отелей, броней, гостей и интеграций не изменяются.
+- Миграция применена к общей базе `neondb`; Prisma сообщает, что схема актуальна. До и после релиза сохранены 6 отелей, 42 бронирования, 22 гостя и 3 подключения каналов; новая таблица стартовала с 0 карточек.
 
 ## Phase 1 verification status
 

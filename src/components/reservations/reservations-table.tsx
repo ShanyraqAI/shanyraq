@@ -32,8 +32,6 @@ import { ReservationStatusBadge, ChannelLabel } from "@/components/shared/status
 import { EmptyState } from "@/components/shared/page-header";
 import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
 import { ReservationFormDialog } from "@/components/reservations/reservation-form-dialog";
-import { ReservationImportDialog } from "@/components/calendar/reservation-import-dialog";
-import { DataExportDialog } from "@/components/exports/data-export-dialog";
 import { setReservationStatusAction } from "@/server/actions/reservations";
 import { findSelectedReservation } from "@/lib/reservations/calendar-selection";
 import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
@@ -134,8 +132,6 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <ReservationImportDialog />
-            <DataExportDialog dataset="reservations" />
             <Button size="sm" onClick={() => setCreateOpen(true)}>
               <Plus className="mr-1.5 size-4" /> {t.reservations.newButton}
             </Button>
