@@ -6,6 +6,20 @@ export class PublicError extends Error {
   }
 }
 
+export class AuthenticationError extends PublicError {
+  constructor() {
+    super("Требуется вход в аккаунт");
+    this.name = "AuthenticationError";
+  }
+}
+
+export class AuthorizationError extends PublicError {
+  constructor() {
+    super("Недостаточно прав для выполнения действия");
+    this.name = "AuthorizationError";
+  }
+}
+
 export class RateLimitError extends PublicError {
   constructor() {
     super("Слишком много попыток. Подождите несколько минут и попробуйте снова.");

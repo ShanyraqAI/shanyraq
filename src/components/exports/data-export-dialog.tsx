@@ -1,0 +1,94 @@
+"use client";
+
+import { useState } from "react";
+import { Download, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+type Dataset = "calendar" | "reservations" | "guests";
+type Format = "xlsx" | "csv";
+
+const DATASET_TITLES: Record<Dataset, string> = {
+  calendar: "Экспорт календаря",
+  reservations: "Экспорт бронирований",
+  guests: "Экспорт гостей",
+};
+
+export function DataExportDialog({ dataset, defaultFrom = "", defaultTo = "" }: { dataset: Dataset; defaultFrom?: string; defaultTo?: string }) {
+  const [open, setOpen] = useState(false);
+  const [from, setFrom] = useState(defaultFrom);
+  const [to, setTo] = useState(defaultTo);
+  const [downloading, setDownloading] = useState<Format | null>(null);
+  const needsRange = dataset === "calendar";
+
+  async function download(format: Format) {
+    if (needsRange && (!from || !to || to < from)) {
+      toast.error("Укажите корректный период экспорта.");
+      return;
+    }
+    setDownloading(format);
+    try {
+      const params = new URLSearchParams({ format });
+      if (needsRange) {
+        params.set("from", from);
+        params.set("to", to);
+      }
+      const response = await fetch(`/api/exports/${dataset}?${params.toString()}`, { cache: "no-store" });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Не удалось сформировать файл.");
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const fileName = disposition.match(/filename="([^"]+)"/)?.[1] ?? `shanyraq-export.${format}`;
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(href);
+      toast.success("Файл подготовлен и скачан.");
+      setOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось сформировать файл.");
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm"><Download className="size-4" /> Экспорт</Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{DATASET_TITLES[dataset]}</DialogTitle>
+          <DialogDescription>Выберите формат файла. Excel содержит оформленную таблицу с фильтрами и закреплённой строкой заголовков.</DialogDescription>
+        </DialogHeader>
+        {needsRange ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5"><Label htmlFor="export-from">Дата с</Label><Input id="export-from" type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></div>
+            <div className="space-y-1.5"><Label htmlFor="export-to">Дата по</Label><Input id="export-to" type="date" min={from} value={to} onChange={(event) => setTo(event.target.value)} /></div>
+          </div>
+        ) : null}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <button type="button" disabled={Boolean(downloading)} onClick={() => download("xlsx")} className="flex items-start gap-3 rounded-xl border p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60">
+            {downloading === "xlsx" ? <Loader2 className="mt-0.5 size-5 animate-spin text-primary" /> : <FileSpreadsheet className="mt-0.5 size-5 text-primary" />}
+            <span><span className="block font-medium">Excel (.xlsx)</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">Красиво оформленная таблица для работы и печати.</span></span>
+          </button>
+          <button type="button" disabled={Boolean(downloading)} onClick={() => download("csv")} className="flex items-start gap-3 rounded-xl border p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60">
+            {downloading === "csv" ? <Loader2 className="mt-0.5 size-5 animate-spin text-primary" /> : <FileText className="mt-0.5 size-5 text-primary" />}
+            <span><span className="block font-medium">CSV (.csv)</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">Универсальный файл для Excel и других систем.</span></span>
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground">В файл попадут только данные текущего отеля, к которым у вас есть доступ.</p>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { BrandLogo } from "@/components/shared/brand-logo";
 import { ChangeEvent, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Check, ChevronDown, ImagePlus, LifeBuoy, Hotel, LogOut, Plus, Settings2, UserRound } from "lucide-react";
+import { Check, ChevronDown, ImagePlus, Hotel, LogOut, Plus, Settings2, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { signOutAction, uploadAvatarAction } from "@/server/actions/auth";
@@ -17,15 +17,41 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NAV_MAIN, NAV_SECONDARY } from "./nav-config";
+import { SupportDialog } from "@/components/support/support-dialog";
+import type { HotelPermission } from "@/lib/access";
 
-function NavLinks({ onNavigate, accessLevel = "FULL" }: { onNavigate?: () => void; accessLevel?: string }) {
+function NavLinks({ onNavigate, accessLevel = "FULL", permissions = [] }: { onNavigate?: () => void; accessLevel?: string; permissions?: HotelPermission[] }) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
+  const canOpen = (permission: HotelPermission | "FULL") =>
+    permission === "FULL" ? accessLevel === "FULL" : permissions.includes(permission);
+  const mainItems = NAV_MAIN.filter((item) => canOpen(item.permission));
+  const secondaryItems = NAV_SECONDARY.filter((item) => canOpen(item.permission));
 
   return (
     <nav className="flex flex-col gap-1 px-3">
-      {NAV_MAIN.filter((item) => accessLevel === "FULL" || item.href === "/dashboard" || (accessLevel === "CALENDAR" && item.href === "/dashboard/calendar")).map((item) => (
+      {mainItems.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          data-tour-id={item.tourId}
+          onClick={onNavigate}
+          className={cn(
+            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            isActive(item.href)
+              ? "bg-accent text-accent-foreground"
+              : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+          )}
+        >
+          <item.icon className={cn("size-4 shrink-0", isActive(item.href) && "text-primary")} />
+          {item.title}
+        </Link>
+      ))}
+      {secondaryItems.length ? <div className="mt-4 px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+        {t.sidebar.manage}
+      </div> : null}
+      {secondaryItems.map((item) => (
         <Link
           key={item.href}
           href={item.href}
@@ -41,25 +67,6 @@ function NavLinks({ onNavigate, accessLevel = "FULL" }: { onNavigate?: () => voi
           {item.title}
         </Link>
       ))}
-      {accessLevel === "FULL" ? <div className="mt-4 px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-        {t.sidebar.manage}
-      </div> : null}
-      {accessLevel === "FULL" ? NAV_SECONDARY.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          onClick={onNavigate}
-          className={cn(
-            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-            isActive(item.href)
-              ? "bg-accent text-accent-foreground"
-              : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-          )}
-        >
-          <item.icon className={cn("size-4 shrink-0", isActive(item.href) && "text-primary")} />
-          {item.title}
-        </Link>
-      )) : null}
     </nav>
   );
 }
@@ -71,6 +78,7 @@ export function SidebarContent({
   hotels,
   activeHotelId,
   accessLevel,
+  permissions,
   canManageHotels,
 }: {
   hotelName: string;
@@ -79,6 +87,7 @@ export function SidebarContent({
   hotels: { id: string; name: string }[];
   activeHotelId: string;
   accessLevel?: string;
+  permissions?: HotelPermission[];
   canManageHotels: boolean;
 }) {
   const router = useRouter();
@@ -182,19 +191,12 @@ export function SidebarContent({
       </DropdownMenu>
 
       <div className="mt-4 flex-1 overflow-y-auto">
-        <NavLinks accessLevel={accessLevel} />
+        <NavLinks accessLevel={accessLevel} permissions={permissions} />
       </div>
 
       {/* Footer */}
       <div className="border-t p-3">
-        <button
-          type="button"
-          className="mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          onClick={() => window.open("mailto:support@shanyraq.kz")}
-        >
-          <LifeBuoy className="size-4" />
-          {t.sidebar.help}
-        </button>
+        <SupportDialog />
         <button type="button" onClick={() => setProfileOpen(true)} className="flex w-full items-center gap-3 rounded-lg border bg-card px-3 py-2.5 text-left shadow-sm transition-colors hover:bg-secondary/60">
           <Avatar className="size-8 shrink-0">
             {avatarSrc ? <AvatarImage src={avatarSrc} alt={userName} /> : null}
@@ -269,6 +271,7 @@ export function DesktopSidebar({
   hotels,
   activeHotelId,
   accessLevel,
+  permissions,
   canManageHotels,
 }: {
   hotelName: string;
@@ -277,11 +280,12 @@ export function DesktopSidebar({
   hotels: { id: string; name: string }[];
   activeHotelId: string;
   accessLevel?: string;
+  permissions?: HotelPermission[];
   canManageHotels: boolean;
 }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r bg-sidebar lg:block">
-      <SidebarContent hotelName={hotelName} userName={userName} userAvatarUrl={userAvatarUrl} hotels={hotels} activeHotelId={activeHotelId} accessLevel={accessLevel} canManageHotels={canManageHotels} />
+      <SidebarContent hotelName={hotelName} userName={userName} userAvatarUrl={userAvatarUrl} hotels={hotels} activeHotelId={activeHotelId} accessLevel={accessLevel} permissions={permissions} canManageHotels={canManageHotels} />
     </aside>
   );
 }

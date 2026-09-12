@@ -28,7 +28,7 @@ async function bootstrap(): Promise<void> {
   } catch (error) {
     if (error instanceof Error && /does not exist|relation.*does not exist/i.test(error.message)) {
       throw new Error(
-        "PostgreSQL tables not found. Run `npx prisma db push` against your Neon database. Original: " + error.message,
+        "PostgreSQL tables not found. Apply the reviewed Prisma migrations before starting the application.",
       );
     }
     throw error;

@@ -9,6 +9,7 @@ import { CalendarSection, ExcelSection, FaqSection, FeaturesSection, FinalCta, P
 import { PricingSection } from "@/components/landing/pricing-section";
 import { LandingFooter } from "@/components/landing/landing-footer";
 import { LandingMotion } from "@/components/landing/landing-motion";
+import { SupportChatWidget } from "@/components/support/support-chat-widget";
 import s from "@/components/landing/landing.module.css";
 
 const manrope = localFont({ src: "../assets/fonts/manrope-variable.ttf", display: "swap", weight: "200 800" });
@@ -52,6 +53,7 @@ export default function Home() {
         <FinalCta />
       </main>
       <LandingFooter />
+      <SupportChatWidget source="LANDING" />
     </LandingMotion>
   );
 }

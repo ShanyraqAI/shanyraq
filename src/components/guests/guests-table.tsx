@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Mail, Phone, Search, UserRound } from "lucide-react";
+import { Mail, Phone, Plus, Search, UserRound } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -37,6 +37,7 @@ import type { ReservationVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
 import { t } from "@/lib/i18n";
+import { DataExportDialog } from "@/components/exports/data-export-dialog";
 
 export interface GuestRow {
   id: string;
@@ -59,6 +60,7 @@ export function GuestsTable({ guests, reservations }: Props) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -84,18 +86,29 @@ export function GuestsTable({ guests, reservations }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="relative max-w-sm">
-        <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t.guests.searchPlaceholder}
-          className="pl-8"
-        />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t.guests.searchPlaceholder}
+            className="pl-8"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <DataExportDialog dataset="guests" />
+          <Button size="sm" onClick={() => setCreateOpen(true)}><Plus className="size-4" /> Добавить гостя</Button>
+        </div>
       </div>
 
       {guests.length === 0 ? (
-        <EmptyState icon={UserRound} title={t.guests.emptyTitle} description={t.guests.emptyDescription} />
+        <EmptyState
+          icon={UserRound}
+          title={t.guests.emptyTitle}
+          description="Добавьте гостя вручную или создайте бронирование — карточка останется в базе вашего отеля."
+          action={<Button size="sm" onClick={() => setCreateOpen(true)}><Plus className="size-4" /> Добавить гостя</Button>}
+        />
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
           <Table>
@@ -216,7 +229,7 @@ export function GuestsTable({ guests, reservations }: Props) {
                 <Button onClick={() => setSelectedId(null)}>{t.common.close}</Button>
               </DialogFooter>
 
-              <GuestEditDialog
+              <GuestFormSheet
                 guest={selected}
                 open={editOpen}
                 onOpenChange={(o) => setEditOpen(o)}
@@ -226,34 +239,35 @@ export function GuestsTable({ guests, reservations }: Props) {
           )}
         </DialogContent>
       </Dialog>
+      <GuestFormSheet guest={null} open={createOpen} onOpenChange={setCreateOpen} onSaved={() => undefined} />
     </div>
   );
 }
 
-function GuestEditDialog({
+function GuestFormSheet({
   guest,
   open,
   onOpenChange,
   onSaved,
 }: {
-  guest: GuestRow;
+  guest: GuestRow | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSaved: () => void;
 }) {
   const router = useRouter();
-  const [fullName, setFullName] = useState(guest.fullName);
-  const [email, setEmail] = useState(guest.email ?? "");
-  const [phone, setPhone] = useState(guest.phone ?? "");
-  const [country, setCountry] = useState(guest.country ?? "");
-  const [notes, setNotes] = useState(guest.notes ?? "");
+  const [fullName, setFullName] = useState(guest?.fullName ?? "");
+  const [email, setEmail] = useState(guest?.email ?? "");
+  const [phone, setPhone] = useState(guest?.phone ?? "");
+  const [country, setCountry] = useState(guest?.country ?? "");
+  const [notes, setNotes] = useState(guest?.notes ?? "");
   const [saving, setSaving] = useState(false);
 
   async function save() {
     setSaving(true);
     try {
       const result = await upsertGuestAction({
-        id: guest.id,
+        id: guest?.id,
         fullName,
         email,
         phone,
@@ -267,6 +281,13 @@ function GuestEditDialog({
       toast.success(result.message);
       onOpenChange(false);
       onSaved();
+      if (!guest) {
+        setFullName("");
+        setEmail("");
+        setPhone("");
+        setCountry("");
+        setNotes("");
+      }
       router.refresh();
     } finally {
       setSaving(false);
@@ -277,7 +298,7 @@ function GuestEditDialog({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>{t.guests.editForm.title}</SheetTitle>
+          <SheetTitle>{guest ? t.guests.editForm.title : "Новый гость"}</SheetTitle>
         </SheetHeader>
         <div className="space-y-4 overflow-y-auto px-4 pb-6">
           <div className="space-y-1.5">
@@ -305,7 +326,7 @@ function GuestEditDialog({
               {t.common.cancel}
             </Button>
             <Button onClick={save} disabled={saving || !fullName.trim()}>
-              {t.guests.editForm.saveGuest}
+              {guest ? t.guests.editForm.saveGuest : "Добавить гостя"}
             </Button>
           </div>
         </div>

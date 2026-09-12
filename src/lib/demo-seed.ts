@@ -10,6 +10,8 @@
  * Deterministic and anchored on TODAY's date so the demo always looks current.
  */
 import type { PrismaClient } from "@prisma/client";
+import { assertDisposableDatabase } from "@/lib/security/database-safety";
+import { encryptChannelCredentials } from "@/lib/security/credentials";
 
 // ---------------------------------------------------------------------------
 // Date helpers (UTC-midnight convention, mirrors src/lib/dates.ts)
@@ -24,11 +26,15 @@ function addDays(date: Date, days: number): Date {
 }
 
 export async function seedDemoData(db: PrismaClient): Promise<void> {
+  assertDisposableDatabase();
   // ------------------------------------------------------------------ reset
   // Sequential deletes (not a batched $transaction): this function is also
   // invoked with a transaction client from the runtime bootstrap, and nested
   // transactions are not supported there.
   await db.auditLog.deleteMany();
+  await db.hotelInvitation.deleteMany();
+  await db.emailRegistration.deleteMany();
+  await db.rateLimitBucket.deleteMany();
   await db.notification.deleteMany();
   await db.syncLog.deleteMany();
   await db.channelRateMapping.deleteMany();
@@ -57,8 +63,8 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
   const demoUser = await db.user.create({
     data: {
       email: "manager@shanyraq.kz",
+      emailVerifiedAt: new Date(),
       fullName: "Aisultan Nazar",
-      memberships: { create: { organizationId: org.id, role: "OWNER" } },
     },
   });
 
@@ -75,11 +81,9 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
       currency: "KZT",
     },
   });
-  await db.membership.updateMany({
-    where: { userId: demoUser.id, organizationId: org.id },
-    data: { hotelId: hotel.id },
+  await db.membership.create({
+    data: { organizationId: org.id, userId: demoUser.id, hotelId: hotel.id, role: "OWNER", accessLevel: "FULL" },
   });
-
   // -------------------------------------------------------------- room types
   const standard = await db.roomType.create({
     data: {
@@ -351,7 +355,7 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
       channelId: "booking",
       status: "CONNECTED",
       externalPropertyId: "100200330",
-      credentialsJson: JSON.stringify({
+      credentialsEncrypted: encryptChannelCredentials({
         propertyId: "100200330",
         username: "shanyraq-booking",
         apiKey: "dev-placeholder-key",
@@ -383,7 +387,7 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
       channelId: "ostrovok",
       status: "CONNECTED",
       externalPropertyId: "OST-88410",
-      credentialsJson: JSON.stringify({
+      credentialsEncrypted: encryptChannelCredentials({
         propertyId: "OST-88410",
         username: "shanyraq-ostrovok",
         apiKey: "dev-placeholder-key",

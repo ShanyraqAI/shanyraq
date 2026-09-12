@@ -12,7 +12,7 @@ export async function upsertGuestAction(input: unknown): Promise<ActionResult<{ 
   try {
     const parsed = upsertGuestSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await requireSessionHotelId();
+    const hotelId = await requireSessionHotelId({ permission: "GUESTS" });
     const data = parsed.data;
 
     if (data.id) {

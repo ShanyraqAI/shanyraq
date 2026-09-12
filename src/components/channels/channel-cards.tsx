@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -21,6 +21,8 @@ import { syncChannelAction } from "@/server/actions/channels";
 import type { RatePlanVM } from "@/lib/types";
 import { t } from "@/lib/i18n";
 import { formatTimeAgo } from "@/lib/utils";
+import { DeleteConnectionButton } from "./delete-connection-button";
+import { channelRequestFailed, syncFailureMessage } from "@/lib/channels/sync-errors";
 
 export interface ChannelCardVM {
   id: string;
@@ -32,7 +34,8 @@ export interface ChannelCardVM {
   externalPropertyId: string | null;
   lastSyncAt: string | null;
   lastSyncStatus: string | null;
-  lastError: string | null;
+  syncFailed: boolean;
+  incidentId: string | null;
   roomMappings: { roomTypeId: string; externalRoomTypeId: string; externalRoomName: string }[];
   rateMappings: { ratePlanId: string; externalRateId: string; externalRateName: string }[];
 }
@@ -47,18 +50,22 @@ export function ChannelCards({ channels, internalRoomTypes, internalRatePlans }:
   const router = useRouter();
   const [dialogChannel, setDialogChannel] = useState<ChannelCardVM | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
   async function handleSync(channel: ChannelCardVM) {
-    if (!channel.connectionId) return;
+    if (!channel.connectionId || inFlight.current || ["QUEUED", "RUNNING"].includes(channel.lastSyncStatus ?? "")) return;
+    inFlight.current = true;
     setSyncingId(channel.id);
     try {
       const result = await syncChannelAction(channel.connectionId);
       if (!result.ok) toast.error(result.error ?? t.channelsPage.cards.syncFailedToast(channel.name));
-      else if (result.data?.status === "PARTIAL") toast.warning(result.message);
       else toast.success(result.message);
-      router.refresh();
+    } catch {
+      toast.error(channelRequestFailed);
     } finally {
+      inFlight.current = false;
       setSyncingId(null);
+      router.refresh();
     }
   }
 
@@ -107,10 +114,10 @@ export function ChannelCards({ channels, internalRoomTypes, internalRatePlans }:
                   </dd>
                 </div>
               )}
-              {ch.lastError ? (
+              {ch.syncFailed ? (
                 <div className="flex items-start gap-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
                   <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                  <span className="line-clamp-2">{ch.lastError}</span>
+                  <span className="min-w-0 break-words" role="status">{syncFailureMessage(ch.incidentId)}</span>
                 </div>
               ) : null}
             </dl>
@@ -119,25 +126,27 @@ export function ChannelCards({ channels, internalRoomTypes, internalRatePlans }:
             <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
               {ch.isInternal ? (
                 <span className="text-xs text-muted-foreground">{t.channelsPage.cards.internalNote}</span>
-              ) : ch.status === "DISCONNECTED" ? (
+              ) : !ch.connectionId ? (
                 <Button size="sm" onClick={() => setDialogChannel(ch)}>
                   <Cable className="mr-1.5 size-3.5" /> {t.common.connect}
                 </Button>
               ) : (
                 <>
-                  <Button size="sm" variant="outline" disabled={syncingId !== null} onClick={() => handleSync(ch)}>
+                  <Button size="sm" variant="outline" disabled={syncingId !== null || ["QUEUED", "RUNNING"].includes(ch.lastSyncStatus ?? "") || ch.status === "DISCONNECTED"} onClick={() => handleSync(ch)}>
                     {syncingId === ch.id ? (
                       <Loader2 className="mr-1.5 size-3.5 animate-spin" />
                     ) : (
                       <RefreshCw className="mr-1.5 size-3.5" />
                     )}
-                    {t.channelsPage.cards.sync}
+                    {syncingId === ch.id || ["QUEUED", "RUNNING"].includes(ch.lastSyncStatus ?? "") ? t.channelsPage.syncButtons.syncing : ch.syncFailed ? "Повторить попытку" : t.channelsPage.cards.sync}
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setDialogChannel(ch)}>
+                  <Button size="sm" variant="outline" disabled={syncingId !== null || ["QUEUED", "RUNNING"].includes(ch.lastSyncStatus ?? "")} onClick={() => setDialogChannel(ch)}>
                     <Settings2 className="mr-1.5 size-3.5" /> {t.channelsPage.cards.mapping}
                   </Button>
+                  <DeleteConnectionButton connectionId={ch.connectionId} channelName={ch.name}
+                    disabled={syncingId !== null || ["QUEUED", "RUNNING"].includes(ch.lastSyncStatus ?? "")} />
                   <Link
-                    href={`/dashboard/channels/${ch.id}`}
+                    href={`/dashboard/channels/${ch.id}/logs`}
                     className="ml-auto inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                   >
                     {t.channelsPage.cards.logs}

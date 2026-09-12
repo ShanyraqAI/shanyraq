@@ -12,7 +12,7 @@
 // timezone shifting. Wall-clock timestamps (createdAt etc.) are regular datetimes.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // "native" = local development (Windows/macOS/Linux)
   // "rhel-openssl-3.0.x" = Amazon Linux runtime used by Vercel serverless
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
@@ -29,16 +29,19 @@ datasource db {
 
 model Organization {
   billingSubscription BillingSubscription?
-  billingPayments BillingPayment[]
-  billingNotices BillingNotice[]
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  billingPayments     BillingPayment[]
+  billingNotices      BillingNotice[]
+  id                  String               @id @default(cuid())
+  name                String
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
-  users       User[]
-  memberships Membership[]
-  hotels      Hotel[]
+  users           User[]
+  memberships     Membership[]
+  hotels          Hotel[]
+  invitations     HotelInvitation[]
+  analyticsEvents AnalyticsEvent[]
+  supportRequests SupportRequest[]
 }
 
 model User {
@@ -52,12 +55,77 @@ model User {
   emailVerifiedAt     DateTime?
   avatarUrl           String?
   onboardingCompleted Boolean   @default(false)
+  platformRole        String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  memberships   Membership[]
-  organizations Organization[] // implicit m-n via Organization.users
-  sessions      Session[]
+  memberships        Membership[]
+  organizations      Organization[] // implicit m-n via Organization.users
+  sessions           Session[]
+  oauthAccounts      OAuthAccount[]
+  passwordReset      PasswordReset?
+  invitationsSent    HotelInvitation[]   @relation("InvitationSender")
+  auditLogs          AuditLog[]          @relation("AuditActor")
+  analyticsEvents    AnalyticsEvent[]
+  productExperiences ProductExperience[]
+  supportRequests    SupportRequest[]
+}
+
+model OAuthAccount {
+  id                String   @id @default(cuid())
+  userId            String
+  provider          String
+  providerAccountId String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+// Pending email registration. Passwords and verification codes are stored only
+// as hashes; expired rows can be removed without touching real user accounts.
+model EmailRegistration {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  fullName     String
+  firstName    String?
+  lastName     String?
+  passwordHash String
+  codeHash     String
+  attempts     Int      @default(0)
+  expiresAt    DateTime
+  lastSentAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([expiresAt])
+}
+
+model PasswordReset {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  codeHash   String
+  attempts   Int      @default(0)
+  expiresAt  DateTime
+  lastSentAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model RateLimitBucket {
+  key       String   @id
+  count     Int      @default(0)
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
 }
 
 // Server-side sessions: the browser holds a random opaque token in an
@@ -78,44 +146,142 @@ model Membership {
   id             String   @id @default(cuid())
   organizationId String
   userId         String
-  hotelId        String?
+  hotelId        String
   role           String // OWNER | MANAGER | STAFF (validated in app layer)
   accessLevel    String   @default("FULL") // OVERVIEW | CALENDAR | FULL
+  permissions    String[] @default([]) // granular hotel sections; empty keeps legacy accessLevel behavior
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  hotel        Hotel?       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  hotel        Hotel        @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
 
   @@unique([userId, hotelId])
   @@index([organizationId, userId])
 }
 
 model Hotel {
-  id           String   @id @default(cuid())
-  orgId        String?
-  slug         String   @unique
+  id           String       @id @default(cuid())
+  orgId        String
+  slug         String       @unique
   name         String
   propertyType String?
-  language     String   @default("ru")
+  language     String       @default("ru")
   address      String?
   city         String?
   country      String?
-  timezone     String   @default("Asia/Almaty")
-  currency     String   @default("KZT")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  timezone     String       @default("Asia/Almaty")
+  currency     String       @default("KZT")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
   memberships  Membership[]
 
-  roomTypes     RoomType[]
-  rooms         Room[]
-  guests        Guest[]
-  reservations  Reservation[]
-  ratePlans     RatePlan[]
-  availability  Availability[]
-  connections   ChannelConnection[]
-  notifications Notification[]
-  organization  Organization?       @relation(fields: [orgId], references: [id])
+  roomTypes          RoomType[]
+  rooms              Room[]
+  guests             Guest[]
+  reservations       Reservation[]
+  ratePlans          RatePlan[]
+  availability       Availability[]
+  connections        ChannelConnection[]
+  channelSyncJobs    ChannelSyncJob[]
+  notifications      Notification[]
+  invitations        HotelInvitation[]
+  organization       Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  analyticsEvents    AnalyticsEvent[]
+  productExperiences ProductExperience[]
+  supportRequests    SupportRequest[]
+
+  @@unique([id, orgId])
+}
+
+// Privacy-minimal beta product telemetry. Event names are validated in both
+// the application and the database; metadata never contains guest details.
+model AnalyticsEvent {
+  id             String   @id @default(cuid())
+  eventType      String
+  userId         String?
+  organizationId String?
+  hotelId        String?
+  sessionId      String?
+  entityType     String?
+  entityId       String?
+  metadataJson   String?
+  occurredAt     DateTime @default(now())
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  hotel        Hotel?        @relation(fields: [hotelId], references: [id], onDelete: SetNull)
+
+  @@index([eventType, occurredAt])
+  @@index([userId, occurredAt])
+  @@index([organizationId, occurredAt])
+  @@index([hotelId, occurredAt])
+}
+
+// Per-user, per-hotel progress for the initial setup and lightweight tour.
+model ProductExperience {
+  id               String    @id @default(cuid())
+  userId           String
+  hotelId          String
+  setupStep        Int       @default(1)
+  setupCompletedAt DateTime?
+  tourCompletedAt  DateTime?
+  tourSkippedAt    DateTime?
+  firstSeenAt      DateTime  @default(now())
+  lastSeenAt       DateTime  @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hotel Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, hotelId])
+  @@index([hotelId])
+}
+
+// A small in-product support inbox for the closed beta. Identity and hotel
+// scope are always derived from the authenticated session on the server.
+model SupportRequest {
+  id             String   @id @default(cuid())
+  userId         String?
+  organizationId String?
+  hotelId        String?
+  category       String
+  message        String
+  sourcePath     String
+  name           String?
+  contact        String?
+  transcriptJson String?
+  status         String   @default("OPEN")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  hotel        Hotel?        @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([hotelId, createdAt])
+}
+
+model HotelInvitation {
+  id             String    @id @default(cuid())
+  organizationId String
+  hotelId        String
+  invitedById    String
+  email          String
+  accessLevel    String
+  permissions    String[]  @default([])
+  status         String    @default("PENDING")
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  hotel        Hotel        @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  invitedBy    User         @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@unique([hotelId, email])
+  @@index([email, status])
 }
 
 // ---------------------------------------------------------------------------
@@ -128,17 +294,18 @@ model RoomType {
   name        String
   description String?
   capacity    Int // max adults
-  basePrice   Float
+  basePrice   Decimal @db.Decimal(14, 2)
   sortOrder   Int     @default(0)
 
-  hotel        Hotel          @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  rooms        Room[]
-  reservations Reservation[]
-  ratePlans    RatePlan[]
-  availability Availability[]
+  hotel               Hotel                @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  rooms               Room[]
+  reservations        Reservation[]
+  ratePlans           RatePlan[]
+  availability        Availability[]
   channelRoomMappings ChannelRoomMapping[]
 
   @@unique([hotelId, name])
+  @@unique([id, hotelId])
 }
 
 model Room {
@@ -150,10 +317,11 @@ model Room {
   status     String @default("AVAILABLE") // AVAILABLE | OCCUPIED | CLEANING | MAINTENANCE | OUT_OF_ORDER
 
   hotel        Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  roomType     RoomType      @relation(fields: [roomTypeId], references: [id])
+  roomType     RoomType      @relation(fields: [roomTypeId, hotelId], references: [id, hotelId], onDelete: Restrict)
   reservations Reservation[]
 
   @@unique([hotelId, number])
+  @@unique([id, hotelId])
 }
 
 // ---------------------------------------------------------------------------
@@ -161,44 +329,48 @@ model Room {
 // ---------------------------------------------------------------------------
 
 model Guest {
-  id      String  @id @default(cuid())
-  hotelId String
+  id       String  @id @default(cuid())
+  hotelId  String
   fullName String
-  email   String?
-  phone   String?
-  country String?
-  notes   String?
+  email    String?
+  phone    String?
+  country  String?
+  notes    String?
 
   hotel        Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
   reservations Reservation[]
 
+  @@unique([id, hotelId])
   @@index([hotelId, fullName])
 }
 
 model Reservation {
-  id                   String   @id @default(cuid())
-  hotelId              String
-  guestId              String
-  roomId               String
-  roomTypeId           String
-  sourceChannel        String // booking | ostrovok | krisha | direct
+  id                    String   @id @default(cuid())
+  hotelId               String
+  guestId               String
+  roomId                String
+  roomTypeId            String
+  ratePlanId            String?
+  sourceChannel         String // booking | ostrovok | krisha | direct
   externalReservationId String? // channel-side id, when imported via a channel
-  checkIn              DateTime // UTC midnight (hotel date-only semantics)
-  checkOut             DateTime
-  adults               Int      @default(1)
-  children             Int      @default(0)
-  status               String   @default("CONFIRMED") // PENDING | CONFIRMED | CANCELLED | CHECKED_IN | CHECKED_OUT | NO_SHOW
-  currency             String   @default("KZT")
-  totalAmount          Float
-  notes                String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  checkIn               DateTime // UTC midnight (hotel date-only semantics)
+  checkOut              DateTime
+  adults                Int      @default(1)
+  children              Int      @default(0)
+  status                String   @default("CONFIRMED") // PENDING | CONFIRMED | CANCELLED | CHECKED_IN | CHECKED_OUT | NO_SHOW
+  currency              String   @default("KZT")
+  totalAmount           Decimal  @db.Decimal(14, 2)
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  hotel     Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  guest     Guest    @relation(fields: [guestId], references: [id])
-  room      Room     @relation(fields: [roomId], references: [id])
-  roomType  RoomType @relation(fields: [roomTypeId], references: [id])
+  hotel    Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  guest    Guest     @relation(fields: [guestId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  room     Room      @relation(fields: [roomId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  roomType RoomType  @relation(fields: [roomTypeId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  ratePlan RatePlan? @relation(fields: [ratePlanId, hotelId], references: [id, hotelId], onDelete: Restrict)
 
+  @@unique([hotelId, sourceChannel, externalReservationId])
   @@index([hotelId, checkIn])
   @@index([hotelId, status])
   @@index([roomId, checkIn, checkOut])
@@ -209,28 +381,30 @@ model Reservation {
 // ---------------------------------------------------------------------------
 
 model RatePlan {
-  id                 String  @id @default(cuid())
-  hotelId            String
-  roomTypeId         String
-  name               String
-  refundable         Boolean @default(true)
-  breakfastIncluded  Boolean @default(false)
-  basePrice          Float
-  currency           String  @default("KZT")
+  id                String  @id @default(cuid())
+  hotelId           String
+  roomTypeId        String
+  name              String
+  refundable        Boolean @default(true)
+  breakfastIncluded Boolean @default(false)
+  basePrice         Decimal @db.Decimal(14, 2)
+  currency          String  @default("KZT")
 
-  hotel    Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  roomType RoomType  @relation(fields: [roomTypeId], references: [id])
-  rates    Rate[]
+  hotel        Hotel                @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  roomType     RoomType             @relation(fields: [roomTypeId], references: [id])
+  rates        Rate[]
   rateMappings ChannelRateMapping[]
+  reservations Reservation[]
 
   @@unique([hotelId, name])
+  @@unique([id, hotelId])
 }
 
 model Rate {
   id         String   @id @default(cuid())
   ratePlanId String
   date       DateTime // UTC midnight
-  price      Float
+  price      Decimal  @db.Decimal(14, 2)
 
   ratePlan RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
 
@@ -249,7 +423,7 @@ model Availability {
   maxStay        Int?
 
   hotel    Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  roomType RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  roomType RoomType @relation(fields: [roomTypeId, hotelId], references: [id, hotelId], onDelete: Cascade)
 
   @@unique([hotelId, roomTypeId, date])
   @@index([hotelId, date])
@@ -269,28 +443,31 @@ model Channel {
 }
 
 model ChannelConnection {
-  id                 String    @id @default(cuid())
-  hotelId            String
-  channelId          String
-  status             String    @default("DISCONNECTED") // DISCONNECTED | CONNECTED | ERROR
-  externalPropertyId String?
+  id                   String    @id @default(cuid())
+  hotelId              String
+  channelId            String
+  status               String    @default("DISCONNECTED") // DISCONNECTED | CONNECTED | ERROR
+  externalPropertyId   String?
   // Development placeholder storage. Real deployments must move this behind an
   // encrypted secret store. Never sent to the browser, never logged.
-  credentialsJson    String?
-  lastSyncAt         DateTime?
-  lastSyncStatus     String? // SUCCESS | PARTIAL | FAILED
-  lastError          String?
-  importCursor       Int       @default(0) // deterministic mock import position
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  credentialsJson      String?
+  credentialsEncrypted String?
+  lastSyncAt           DateTime?
+  lastSyncStatus       String? // QUEUED | RUNNING | SUCCESS | PARTIAL | FAILED
+  lastError            String?
+  importCursor         Int       @default(0) // deterministic mock import position
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  hotel       Hotel                @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  channel     Channel              @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  hotel        Hotel                @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  channel      Channel              @relation(fields: [channelId], references: [id], onDelete: Cascade)
   roomMappings ChannelRoomMapping[]
   rateMappings ChannelRateMapping[]
-  syncLogs    SyncLog[]
+  syncLogs     SyncLog[]
+  syncJobs     ChannelSyncJob[]
 
   @@unique([hotelId, channelId])
+  @@unique([id, hotelId])
 }
 
 model ChannelRoomMapping {
@@ -322,31 +499,59 @@ model ChannelRateMapping {
 }
 
 model SyncLog {
-  id                    String    @id @default(cuid())
-  connectionId          String
-  channelId             String
-  startedAt             DateTime  @default(now())
-  finishedAt            DateTime?
-  status                String // RUNNING | SUCCESS | PARTIAL | FAILED
-  reservationsImported  Int       @default(0)
-  ratesUpdated          Int       @default(0)
-  availabilityUpdated   Int       @default(0)
-  message               String? // human-readable summary
-  error                 String?
+  id                   String    @id @default(cuid())
+  connectionId         String
+  channelId            String
+  startedAt            DateTime  @default(now())
+  finishedAt           DateTime?
+  status               String // RUNNING | SUCCESS | PARTIAL | FAILED
+  reservationsImported Int       @default(0)
+  ratesUpdated         Int       @default(0)
+  availabilityUpdated  Int       @default(0)
+  message              String? // human-readable summary
+  error                String?
 
   connection ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@index([connectionId, startedAt])
 }
 
+// Durable work queue for OTA synchronization. The nullable deduplication key
+// permits completed history while guaranteeing at most one active job for a
+// connection. A worker clears the key only after a terminal outcome.
+model ChannelSyncJob {
+  id               String    @id @default(cuid())
+  hotelId          String
+  connectionId     String
+  deduplicationKey String?   @unique
+  status           String    @default("PENDING") // PENDING | RUNNING | SUCCEEDED | FAILED
+  attempts         Int       @default(0)
+  maxAttempts      Int       @default(6)
+  rerunRequested   Boolean   @default(false)
+  availableAt      DateTime  @default(now())
+  lockedAt         DateTime?
+  lockedBy         String?
+  finishedAt       DateTime?
+  lastError        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  hotel      Hotel             @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  connection ChannelConnection @relation(fields: [connectionId, hotelId], references: [id, hotelId], onDelete: Cascade)
+
+  @@index([status, availableAt])
+  @@index([hotelId, createdAt])
+  @@index([connectionId, createdAt])
+}
+
 model Notification {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   hotelId   String
   type      String
   title     String
   body      String?
   readAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   hotel Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
@@ -354,57 +559,62 @@ model Notification {
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  hotelId   String
-  actor     String   @default("system") // future: user id from session
-  action    String
-  entity    String
-  entityId  String?
-  metaJson  String?
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  hotelId     String
+  actor       String   @default("system") // future: user id from session
+  actorUserId String?
+  action      String
+  entity      String
+  entityId    String?
+  metaJson    String?
+  createdAt   DateTime @default(now())
+
+  actorUser User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([hotelId, createdAt])
 }
 
 model BillingSubscription {
-  organizationId String @id
-  trialStartsAt DateTime
-  trialEndsAt DateTime
-  paidUntil DateTime?
-  planId String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String       @id
+  trialStartsAt  DateTime
+  trialEndsAt    DateTime
+  paidUntil      DateTime?
+  planId         String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model BillingPayment {
-  id String @id @default(cuid())
-  organizationId String
-  planId String
-  months Int
-  amountMinor Int
-  currency String @default("KZT")
-  testMode Boolean
-  status String @default("CREATED")
-  providerPaymentId String? @unique
-  checkoutUrl String?
-  expiresAt DateTime
-  paidAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                String       @id @default(cuid())
+  organizationId    String
+  planId            String
+  months            Int
+  amountMinor       Int
+  currency          String       @default("KZT")
+  testMode          Boolean
+  status            String       @default("CREATED")
+  providerPaymentId String?      @unique
+  checkoutUrl       String?
+  expiresAt         DateTime
+  paidAt            DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
   @@index([organizationId, createdAt])
 }
 
 model BillingNotice {
-  id String @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
-  userId String
-  kind String
-  periodEnd DateTime
-  sentAt DateTime?
-  leaseUntil DateTime?
-  createdAt DateTime @default(now())
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  kind           String
+  periodEnd      DateTime
+  sentAt         DateTime?
+  leaseUntil     DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
   @@unique([organizationId, userId, kind, periodEnd], map: "BillingNotice_period_recipient_key")
 }

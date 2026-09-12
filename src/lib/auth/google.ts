@@ -10,6 +10,14 @@ const GOOGLE_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userin
 
 export const OAUTH_STATE_COOKIE = "shanyraq_oauth_state";
 
+export function appOrigin(): string {
+  const configured = process.env.APP_URL ?? (process.env.NODE_ENV === "development" ? "http://localhost:3000" : "");
+  if (!configured) throw new Error("APP_URL is required for OAuth");
+  const url = new URL(configured);
+  if (process.env.NODE_ENV === "production" && url.protocol !== "https:") throw new Error("APP_URL must use HTTPS in production");
+  return url.origin;
+}
+
 export function googleOAuthConfigured(): boolean {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
@@ -24,10 +32,10 @@ export interface GoogleProfile {
   picture?: string;
 }
 
-export function buildGoogleAuthUrl(origin: string, state: string): string {
+export function buildGoogleAuthUrl(state: string): string {
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID ?? "",
-    redirect_uri: `${origin}/api/auth/google/callback`,
+    redirect_uri: `${appOrigin()}/api/auth/google/callback`,
     response_type: "code",
     scope: "openid email profile",
     state,
@@ -39,7 +47,6 @@ export function buildGoogleAuthUrl(origin: string, state: string): string {
 
 export async function exchangeGoogleCode(
   code: string,
-  origin: string,
 ): Promise<GoogleProfile | null> {
   const tokenRes = await fetch(GOOGLE_TOKEN_ENDPOINT, {
     method: "POST",
@@ -48,7 +55,7 @@ export async function exchangeGoogleCode(
       code,
       client_id: process.env.GOOGLE_CLIENT_ID ?? "",
       client_secret: process.env.GOOGLE_CLIENT_SECRET ?? "",
-      redirect_uri: `${origin}/api/auth/google/callback`,
+      redirect_uri: `${appOrigin()}/api/auth/google/callback`,
       grant_type: "authorization_code",
     }),
     cache: "no-store",

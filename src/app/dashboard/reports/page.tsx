@@ -16,7 +16,7 @@ import { requireSectionAccess } from "@/server/guards";
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage() {
-  await requireSectionAccess("FULL");
+  await requireSectionAccess("REPORTS");
   const hotelId = await getCurrentHotelId();
   const day = today();
 
@@ -39,8 +39,9 @@ export default async function ReportsPage() {
   let totalRevenue = 0;
   for (const r of reservations) {
     if (["CANCELLED", "NO_SHOW"].includes(r.status)) continue;
-    revenueByChannel[r.sourceChannel] = (revenueByChannel[r.sourceChannel] ?? 0) + r.totalAmount;
-    totalRevenue += r.totalAmount;
+    const amount = Number(r.totalAmount);
+    revenueByChannel[r.sourceChannel] = (revenueByChannel[r.sourceChannel] ?? 0) + amount;
+    totalRevenue += amount;
   }
   const channelRows = Object.entries(revenueByChannel).sort((a, b) => b[1] - a[1]);
 

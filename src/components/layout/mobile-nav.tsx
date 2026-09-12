@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { t } from "@/lib/i18n";
 import { SidebarContent } from "./app-sidebar";
+import type { HotelPermission } from "@/lib/access";
 
 export function MobileNav({
   hotelName,
@@ -14,6 +15,7 @@ export function MobileNav({
   hotels,
   activeHotelId,
   accessLevel,
+  permissions,
   canManageHotels,
 }: {
   hotelName: string;
@@ -22,6 +24,7 @@ export function MobileNav({
   hotels: { id: string; name: string }[];
   activeHotelId: string;
   accessLevel?: string;
+  permissions?: HotelPermission[];
   canManageHotels: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -37,7 +40,7 @@ export function MobileNav({
         <SheetHeader className="sr-only">
           <SheetTitle>{t.a11y.navigation}</SheetTitle>
         </SheetHeader>
-        <SidebarContent hotelName={hotelName} userName={userName} userAvatarUrl={userAvatarUrl} hotels={hotels} activeHotelId={activeHotelId} accessLevel={accessLevel} canManageHotels={canManageHotels} />
+        <SidebarContent hotelName={hotelName} userName={userName} userAvatarUrl={userAvatarUrl} hotels={hotels} activeHotelId={activeHotelId} accessLevel={accessLevel} permissions={permissions} canManageHotels={canManageHotels} />
       </SheetContent>
     </Sheet>
   );

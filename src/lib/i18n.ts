@@ -133,6 +133,7 @@ export const t = {
       ERROR: "Ошибка",
     } as Record<ConnectionStatus, string>,
     sync: {
+      QUEUED: "В очереди",
       RUNNING: "Выполняется",
       SUCCESS: "Успешно",
       PARTIAL: "Частично",
@@ -195,7 +196,7 @@ export const t = {
   calendar: {
     title: "Календарь",
     description: (rooms: number) =>
-      `Перетаскивайте брони прямо на таймлайне · ${pluralize(rooms, "номер", "номера", "номеров")} · недельный вид — основной режим работы`,
+      `Перетаскивайте брони прямо на таймлайне · ${rooms} ${pluralize(rooms, "номер", "номера", "номеров")} · недельный вид — основной режим работы`,
     day: "День",
     week: "Неделя",
     month: "Месяц",
@@ -552,6 +553,9 @@ export const t = {
       failed: "Синхронизация требует внимания",
       complete: "Синхронизация завершена",
       nothingToSync: "Нет подключённых каналов для синхронизации",
+      queued: "Синхронизация поставлена в очередь",
+      queuedSome: (total: number) =>
+        `Поставлено в очередь: ${total} ${pluralize(total, "канал", "канала", "каналов")}`,
       syncedSome: (ok: number, total: number) =>
         `Синхронизировано ${ok}/${total} ${pluralize(total, "канала", "каналов", "каналов")}`,
     },

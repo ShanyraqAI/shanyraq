@@ -30,6 +30,7 @@ import { ROOM_STATUSES, type RoomStatus } from "@/lib/constants";
 import type { RoomVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { t } from "@/lib/i18n";
+import { MAX_NIGHTLY_PRICE, MIN_NIGHTLY_PRICE } from "@/lib/pricing";
 
 type RoomDraft = {
   id?: string;
@@ -46,7 +47,7 @@ const EMPTY_ROOM: RoomDraft = {
   floor: "1",
   roomTypeName: "Стандарт",
   capacity: "2",
-  basePrice: "0",
+  basePrice: "25000",
   status: "AVAILABLE",
 };
 
@@ -182,7 +183,10 @@ export function RoomsGrid({
                 <datalist id="room-type-options">{roomTypes.map((name) => <option key={name} value={name} />)}</datalist>
               </Field>
               <Field label="Вместимость"><Input type="number" min="1" value={draft.capacity} onChange={(e) => setDraft({ ...draft, capacity: e.target.value })} /></Field>
-              <Field label="Цена, KZT"><Input type="number" min="0" value={draft.basePrice} onChange={(e) => setDraft({ ...draft, basePrice: e.target.value })} /></Field>
+              <Field label="Цена за ночь, KZT">
+                <Input type="number" min={MIN_NIGHTLY_PRICE} max={MAX_NIGHTLY_PRICE} step="500" value={draft.basePrice} onChange={(e) => setDraft({ ...draft, basePrice: e.target.value })} />
+                <p className="text-xs text-muted-foreground">От 1 000 до 999 000 ₸</p>
+              </Field>
               <Field label="Статус">
                 <Select value={draft.status} onValueChange={(status: RoomStatus) => setDraft({ ...draft, status })}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>

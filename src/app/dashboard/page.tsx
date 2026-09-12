@@ -18,6 +18,8 @@ import { RecentReservationsTable } from "@/components/dashboard/recent-reservati
 import { ChannelHealthCard } from "@/components/channels/channel-health-card";
 import { SyncAllButton } from "@/components/channels/sync-all-button";
 import { ReservationStatusBadge, ChannelLabel } from "@/components/shared/status-badge";
+import { PRODUCT_AVAILABILITY } from "@/lib/product-availability";
+import { requireSectionAccess } from "@/server/guards";
 import {
   Table,
   TableBody,
@@ -30,6 +32,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  await requireSectionAccess("OVERVIEW");
   const hotelId = await getCurrentHotelId();
   const hotel = await db.hotel.findUniqueOrThrow({ where: { id: hotelId } });
   const day = today();
@@ -38,7 +41,7 @@ export default async function DashboardPage() {
     getCurrentUser(),
     getDashboardStats(hotelId, day),
     getRecentReservations(hotelId, 20),
-    getChannelHealth(hotelId),
+    PRODUCT_AVAILABILITY.channels ? getChannelHealth(hotelId) : Promise.resolve([]),
     db.roomType.findMany({ where: { hotelId }, orderBy: { sortOrder: "asc" } }),
     db.room.findMany({
       where: { hotelId },
@@ -63,7 +66,7 @@ export default async function DashboardPage() {
     name: p.name,
     roomTypeId: p.roomTypeId,
     roomTypeName: roomTypes.find((t) => t.id === p.roomTypeId)?.name ?? "",
-    basePrice: p.basePrice,
+    basePrice: Number(p.basePrice),
     currency: p.currency,
     refundable: p.refundable,
     breakfastIncluded: p.breakfastIncluded,
@@ -83,7 +86,7 @@ export default async function DashboardPage() {
         title={user?.firstName ? `${greeting()}, ${user.firstName}` : greeting()}
         description={`${hotel.name} · ${formatMediumDate(day)}`}
       >
-        <SyncAllButton />
+        {PRODUCT_AVAILABILITY.channels ? <SyncAllButton /> : null}
       </PageHeader>
 
       {/* KPI cards */}
@@ -220,7 +223,7 @@ export default async function DashboardPage() {
       </section>
 
       {/* Channel health */}
-      <ChannelHealthCard rows={channelHealth} />
+      {PRODUCT_AVAILABILITY.channels ? <ChannelHealthCard rows={channelHealth} /> : null}
     </div>
   );
 }

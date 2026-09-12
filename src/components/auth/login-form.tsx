@@ -71,7 +71,10 @@ export function LoginForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="login-password">{t.auth.password}</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="login-password">{t.auth.password}</Label>
+          {method === "email" ? <Link href="/forgot-password" className="text-xs font-medium text-primary hover:underline">Забыли пароль?</Link> : null}
+        </div>
         <Input
           id="login-password"
           type="password"

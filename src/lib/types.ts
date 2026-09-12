@@ -88,7 +88,7 @@ export function toReservationVM(r: ReservationWithRelations): ReservationVM {
     children: r.children,
     status: r.status as ReservationStatus,
     currency: r.currency,
-    totalAmount: r.totalAmount,
+    totalAmount: Number(r.totalAmount),
     channel: r.sourceChannel as ChannelCode,
     externalReservationId: r.externalReservationId,
     notes: r.notes,

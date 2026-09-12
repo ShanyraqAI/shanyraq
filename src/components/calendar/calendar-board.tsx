@@ -1,54 +1,44 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ACTIVE_RESERVATION_STATUSES } from "@/lib/constants";
-import { clipStay, staysOverlap } from "@/lib/reservations/calendar-range";
+import {
+  calendarTimelineRange,
+  clipStay,
+  shiftCalendarAnchor,
+  staysOverlap,
+  type CalendarRangeDays,
+} from "@/lib/reservations/calendar-range";
+import { findSelectedReservation } from "@/lib/reservations/calendar-selection";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
   CalendarPlus,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
-  Plus,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/page-header";
 import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
 import { ReservationFormDialog } from "@/components/reservations/reservation-form-dialog";
-import { ReservationImportDialog } from "@/components/calendar/reservation-import-dialog";
+import { CalendarToolbar } from "@/components/calendar/calendar-toolbar";
 import { moveReservationAction } from "@/server/actions/reservations";
-import type { CalendarBoardData, CalendarViewMode } from "./types";
+import type { CalendarBoardData, CalendarFilters } from "./types";
 import type { ReservationVM } from "@/lib/types";
 import { t, channelLabel } from "@/lib/i18n";
 import {
   addDays,
-  addMonths,
   diffDays,
   eachDay,
-  endOfMonth,
-  formatShortDate,
   formatMonthYear,
   isSameDay,
   parseISODate,
-  startOfMonth,
   toISODate,
-  today as getToday,
   weekdayShort,
 } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
-const LABEL_W = 148;
-const DAY_W: Record<CalendarViewMode, number> = { day: 260, week: 136, month: 52 };
+const LABEL_W = 136;
+const DAY_W: Record<CalendarRangeDays, number> = { 7: 136, 14: 84, 30: 52 };
 
 const CHANNEL_BLOCK_STYLES: Record<string, string> = {
   booking: "bg-sky-100/90 text-sky-900 border-sky-300",
@@ -57,40 +47,35 @@ const CHANNEL_BLOCK_STYLES: Record<string, string> = {
   direct: "bg-emerald-100/90 text-emerald-900 border-emerald-300",
 };
 
-export function CalendarBoard(data: CalendarBoardData & { initialView?: CalendarViewMode }) {
+interface ReservationBlock {
+  res: ReservationVM;
+  left: number;
+  width: number;
+}
+
+export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRangeDays; initialAnchor?: string }) {
   const { rooms, reservations, ratePlans, guests, hotelCurrency } = data;
-  const [view, setView] = useState<CalendarViewMode>(data.initialView ?? "week");
-  const [anchorISO, setAnchorISO] = useState(() => toISODate(getToday()));
-  const [filters, setFilters] = useState({ roomTypeId: "all", channelId: "all", statusId: "all" });
+  const anchorISO = data.initialAnchor ?? data.todayISO;
+  const rangeDays = data.rangeDays;
+  const [filters, setFilters] = useState<CalendarFilters>({ roomTypeId: "all", channelId: "all", statusId: "all" });
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [selected, setSelected] = useState<ReservationVM | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createState, setCreateState] = useState<{
     open: boolean;
     roomId?: string;
     date?: string;
   }>({ open: false });
   const [movingId, setMovingId] = useState<string | null>(null);
+  const [navigating, startNavigation] = useTransition();
   const movePending = useRef(false);
   const router = useRouter();
 
-  const anchor = parseISODate(anchorISO);
-  const today = getToday();
+  const today = parseISODate(data.todayISO);
+  const range = useMemo(() => calendarTimelineRange(anchorISO, rangeDays), [anchorISO, rangeDays]);
+  const selected = findSelectedReservation(reservations, selectedId);
 
-  const range = useMemo(() => {
-    if (view === "day") return { start: anchor, days: 1 };
-    if (view === "week") {
-      // The selected date is always the first column. It keeps "Сегодня" at
-      // the very start of the timetable instead of hiding it mid-week.
-      return { start: anchor, days: 7 };
-    }
-    return {
-      start: startOfMonth(anchor),
-      days: diffDays(startOfMonth(anchor), addDays(endOfMonth(anchor), 1)),
-    };
-  }, [anchor, view]);
-
-  const days = useMemo(() => eachDay(range.start, addDays(range.start, range.days)), [range]);
-  const dayWidth = DAY_W[view];
+  const days = useMemo(() => eachDay(range.start, range.endExclusive), [range.start, range.endExclusive]);
+  const dayWidth = DAY_W[rangeDays];
 
   const visibleReservations = useMemo(
     () =>
@@ -104,31 +89,40 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
     [reservations, filters],
   );
 
-  function blocksForRoom(roomId: string) {
-    const out: {
-      res: ReservationVM;
-      left: number;
-      width: number;
-      clippedStart: boolean;
-    }[] = [];
+  const blocksByRoom = useMemo(() => {
+    const grouped = new Map<string, ReservationBlock[]>();
     for (const r of visibleReservations) {
-      if (r.roomId !== roomId) continue;
       const clipped = clipStay(r.checkIn, r.checkOut, range.start, range.days);
       if (!clipped) continue;
-      out.push({
+      const blocks = grouped.get(r.roomId) ?? [];
+      blocks.push({
         res: r,
         left: clipped.start * dayWidth,
         width: (clipped.end - clipped.start) * dayWidth - 4,
-        clippedStart: clipped.clippedStart,
       });
+      grouped.set(r.roomId, blocks);
     }
-    return out;
+    return grouped;
+  }, [dayWidth, range.days, range.start, visibleReservations]);
+
+  const monthSegments = useMemo(() => {
+    const segments: Array<{ key: string; label: string; days: number }> = [];
+    for (const day of days) {
+      const key = `${day.getUTCFullYear()}-${day.getUTCMonth()}`;
+      const current = segments.at(-1);
+      if (current?.key === key) current.days++;
+      else segments.push({ key, label: formatMonthYear(day), days: 1 });
+    }
+    return segments;
+  }, [days]);
+
+  function navigate(nextAnchor: string, nextRange: CalendarRangeDays = rangeDays) {
+    const query = new URLSearchParams({ date: nextAnchor, range: String(nextRange) });
+    startNavigation(() => router.push(`/dashboard/calendar?${query.toString()}`, { scroll: false }));
   }
 
   function shift(dir: 1 | -1) {
-    if (view === "day") setAnchorISO(toISODate(addDays(anchor, dir)));
-    else if (view === "week") setAnchorISO(toISODate(addDays(anchor, 7 * dir)));
-    else setAnchorISO(toISODate(addMonths(anchor, dir)));
+    navigate(shiftCalendarAnchor(anchorISO, rangeDays, dir));
   }
 
   async function handleDrop(reservationId: string, roomId: string, dateISO: string) {
@@ -170,113 +164,20 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
     for (const r of rooms) seen.set(r.roomTypeId, r.roomTypeName);
     return Array.from(seen.entries());
   }, [rooms]);
-  const channelOptions = ["booking", "ostrovok", "krisha", "direct"];
-
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => shift(-1)}
-            aria-label={view === "month" ? "Предыдущий месяц" : view === "week" ? "Предыдущая неделя" : "Предыдущий день"}
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setAnchorISO(toISODate(today))}>
-            {t.common.today}
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => shift(1)}
-            aria-label={view === "month" ? "Следующий месяц" : view === "week" ? "Следующая неделя" : "Следующий день"}
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-        </div>
-        <label className="flex items-center gap-2 text-sm font-semibold">
-          <span className="sr-only">Выбрать дату</span>
-          <input
-            type="date"
-            value={anchorISO}
-            onChange={(event) => event.target.value && setAnchorISO(event.target.value)}
-            className="h-8 rounded-md border border-input bg-background px-2 text-sm font-medium shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
-          />
-          <span className="hidden sm:inline">
-            {view === "month"
-              ? formatMonthYear(range.start)
-              : view === "week"
-                ? `${formatShortDate(range.start)} — ${formatShortDate(addDays(range.start, 6))}`
-                : formatShortDate(range.start)}
-          </span>
-        </label>
-
-        <Tabs value={view} onValueChange={(v) => setView(v as CalendarViewMode)}>
-          <TabsList className="ml-2">
-            <TabsTrigger value="day">{t.calendar.day}</TabsTrigger>
-            <TabsTrigger value="week">{t.calendar.week}</TabsTrigger>
-            <TabsTrigger value="month">{t.calendar.month}</TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Select
-            value={filters.roomTypeId}
-            onValueChange={(v) => setFilters((f) => ({ ...f, roomTypeId: v }))}
-          >
-            <SelectTrigger size="sm" className="w-[140px]">
-              <SelectValue placeholder={t.filters.roomType} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t.filters.allTypes}</SelectItem>
-              {roomTypeOptions.map(([id, name]) => (
-                <SelectItem key={id} value={id}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={filters.channelId}
-            onValueChange={(v) => setFilters((f) => ({ ...f, channelId: v }))}
-          >
-            <SelectTrigger size="sm" className="w-[150px]">
-              <SelectValue placeholder={t.filters.channel} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t.filters.allChannels}</SelectItem>
-              {channelOptions.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {channelLabel(c)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={filters.statusId}
-            onValueChange={(v) => setFilters((f) => ({ ...f, statusId: v }))}
-          >
-            <SelectTrigger size="sm" className="w-[150px]">
-              <SelectValue placeholder={t.filters.status} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t.filters.allStatuses}</SelectItem>
-              {["PENDING", "CONFIRMED", "CHECKED_IN"].map((s) => (
-                <SelectItem key={s} value={s}>
-                  {t.statuses.reservation[s as keyof typeof t.statuses.reservation]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button size="sm" onClick={() => setCreateState({ open: true })}>
-            <Plus className="mr-1.5 size-4" /> {t.calendar.newReservation}
-          </Button>
-          <ReservationImportDialog />
-        </div>
-      </div>
+      <CalendarToolbar
+        anchorISO={anchorISO}
+        rangeDays={rangeDays}
+        todayISO={data.todayISO}
+        filters={filters}
+        roomTypeOptions={roomTypeOptions}
+        navigating={navigating}
+        onNavigate={navigate}
+        onShift={shift}
+        onFiltersChange={setFilters}
+        onCreate={() => setCreateState({ open: true })}
+      />
 
       {/* Board */}
       {rooms.length === 0 ? (
@@ -292,15 +193,37 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
         />
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overscroll-x-contain">
             <div style={{ minWidth: LABEL_W + range.days * dayWidth }}>
+              {/* Compact month orientation */}
+              <div className="flex h-7 border-b bg-secondary/50">
+                <div
+                  className="sticky left-0 z-30 flex shrink-0 items-center border-r bg-secondary px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  style={{ width: LABEL_W }}
+                >
+                  Период
+                </div>
+                <div className="flex">
+                  {monthSegments.map((segment) => (
+                    <div
+                      key={segment.key}
+                      style={{ width: segment.days * dayWidth }}
+                      className="relative shrink-0 border-r py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground last:border-r-0"
+                    >
+                      <span className="sticky left-36 block w-fit whitespace-nowrap px-2">
+                        {segment.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
               {/* Day header */}
               <div className="flex h-12 border-b bg-secondary/60">
                 <div
-                  className="sticky left-0 z-20 flex shrink-0 items-end bg-secondary/95 px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  className="sticky left-0 z-30 flex shrink-0 items-end border-r bg-secondary px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
                   style={{ width: LABEL_W }}
                 >
-                  {t.calendar.roomsCount(rooms.length)}
+                  Номер
                 </div>
                 <div className="flex">
                   {days.map((d) => {
@@ -311,15 +234,11 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                         style={{ width: dayWidth }}
                         className={cn(
                           "flex shrink-0 flex-col items-center justify-center border-l first:border-l-0",
-                          isToday && "bg-accent",
-                          view !== "month" && "gap-0.5 py-1.5",
+                          isToday && "bg-primary/10",
+                          "gap-0.5 py-1.5",
                         )}
                       >
-                        {view !== "month" && (
-                          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            {weekdayShort(d)}
-                          </span>
-                        )}
+                        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{weekdayShort(d)}</span>
                         <span
                           className={cn(
                             "text-sm tabular-nums",
@@ -340,7 +259,7 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
               {rooms.map((room) => (
                 <div key={room.id} className="relative flex h-[68px] border-b last:border-b-0">
                   <div
-                    className="sticky left-0 z-20 flex shrink-0 flex-col justify-center border-r bg-card px-3"
+                    className="sticky left-0 z-30 flex shrink-0 flex-col justify-center border-r bg-card px-3"
                     style={{ width: LABEL_W }}
                   >
                     <span className="truncate text-sm font-semibold leading-tight" title={room.number}>{room.number}</span>
@@ -372,7 +291,7 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                             className={cn(
                               "border-l border-border/50 first:border-l-0 hover:bg-accent/60 focus-visible:bg-accent",
                               weekend && !isToday && "bg-secondary/30",
-                              isToday && "bg-accent/40",
+                              isToday && "border-l-2 border-l-primary/40 bg-primary/[0.06]",
                             )}
                           />
                         );
@@ -380,15 +299,18 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
                     </div>
 
                     {/* reservation blocks */}
-                    {blocksForRoom(room.id).map(({ res, left, width }) => (
+                    {(blocksByRoom.get(room.id) ?? []).map(({ res, left, width }) => (
                       <button
                         key={`${res.id}-${left}`}
                         type="button"
                         disabled={movingId === res.id}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelected(res);
+                          setSelectedId(res.id);
                           setDetailsOpen(true);
+                        }}
+                        onTouchStart={(event) => {
+                          event.currentTarget.draggable = false;
                         }}
                         onDragStart={(e) => e.dataTransfer.setData("text/plain", res.id)}
                         draggable={!movingId && ACTIVE_RESERVATION_STATUSES.includes(res.status)}
@@ -436,7 +358,10 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
           guests={guests}
           hotelCurrency={hotelCurrency}
           open={detailsOpen}
-          onOpenChange={setDetailsOpen}
+          onOpenChange={(open) => {
+            setDetailsOpen(open);
+            if (!open) setSelectedId(null);
+          }}
         />
       )}
 
@@ -452,10 +377,8 @@ export function CalendarBoard(data: CalendarBoardData & { initialView?: Calendar
           hotelCurrency={hotelCurrency}
           initial={{
             roomId: createState.roomId,
-            checkIn: createState.date,
-            checkOut: createState.date
-              ? addDays(parseISODate(createState.date), 1).toISOString().slice(0, 10)
-              : undefined,
+            checkIn: createState.date ?? data.todayISO,
+            checkOut: toISODate(addDays(parseISODate(createState.date ?? data.todayISO), 1)),
           }}
         />
       )}

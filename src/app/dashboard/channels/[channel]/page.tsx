@@ -6,6 +6,8 @@ import { PageHeader, EmptyState } from "@/components/shared/page-header";
 import { ConnectionStatusBadge, SyncStatusBadge } from "@/components/shared/status-badge";
 import { MappingEditor } from "@/components/channels/mapping-editor";
 import { SyncConnectionButton } from "@/components/channels/sync-connection-button";
+import { DeleteConnectionButton } from "@/components/channels/delete-connection-button";
+import { getSyncIncidentId, syncFailureMessage } from "@/lib/channels/sync-errors";
 import type { ExternalInventory } from "@/lib/channels/types";
 import type { RatePlanVM } from "@/lib/types";
 import { formatTimeAgo } from "@/lib/utils";
@@ -48,7 +50,7 @@ export default async function ChannelDetailPage({
     name: p.name,
     roomTypeId: p.roomTypeId,
     roomTypeName: p.roomType.name,
-    basePrice: p.basePrice,
+    basePrice: Number(p.basePrice),
     currency: p.currency,
     refundable: p.refundable,
     breakfastIncluded: p.breakfastIncluded,
@@ -85,7 +87,7 @@ export default async function ChannelDetailPage({
       </Link>
 
       <PageHeader title={channel.name} description={channel.description}>
-        {connection?.status === "CONNECTED" ? (
+        {connection ? (
           <>
             <Link
               href={`/dashboard/channels/${channelId}/logs`}
@@ -93,7 +95,13 @@ export default async function ChannelDetailPage({
             >
               <FileClock className="size-4" /> {t.channelsPage.syncLogs}
             </Link>
-            <SyncConnectionButton connectionId={connection.id} />
+            {connection.status !== "DISCONNECTED" ? (
+              <SyncConnectionButton connectionId={connection.id}
+                retry={connection.lastSyncStatus === "FAILED" || connection.status === "ERROR"}
+                disabled={["QUEUED", "RUNNING"].includes(connection.lastSyncStatus ?? "")} />
+            ) : null}
+            <DeleteConnectionButton connectionId={connection.id} channelName={channel.name}
+              disabled={["QUEUED", "RUNNING"].includes(connection.lastSyncStatus ?? "")} />
           </>
         ) : (
           <span className="text-sm text-muted-foreground">
@@ -128,6 +136,12 @@ export default async function ChannelDetailPage({
           </dd>
         </div>
       </section>
+
+      {connection && (connection.lastSyncStatus === "FAILED" || connection.status === "ERROR" || connection.lastError) ? (
+        <p role="status" className="break-words rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
+          {syncFailureMessage(getSyncIncidentId(connection.lastError))}
+        </p>
+      ) : null}
 
       {/* Mappings */}
       {!connection ? (

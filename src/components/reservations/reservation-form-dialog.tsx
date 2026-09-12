@@ -29,6 +29,7 @@ import type { GuestVM, RatePlanVM, RoomVM } from "@/lib/types";
 import { CHANNEL_CODES } from "@/lib/constants";
 import { formatMoney } from "@/lib/utils";
 import { t, channelLabel } from "@/lib/i18n";
+import { PRODUCT_AVAILABILITY } from "@/lib/product-availability";
 
 export interface ReservationFormProps {
   mode: "create" | "edit";
@@ -269,7 +270,7 @@ export function ReservationFormDialog({
           </div>
 
           {/* Occupancy + plan */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className={PRODUCT_AVAILABILITY.channels ? "grid grid-cols-3 gap-3" : "grid grid-cols-2 gap-3"}>
             <div className="space-y-1.5">
               <Label>{t.reservations.form.adults}</Label>
               <Select value={adults} onValueChange={setAdults}>
@@ -300,7 +301,7 @@ export function ReservationFormDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="col-span-1 space-y-1.5">
+            {PRODUCT_AVAILABILITY.channels ? <div className="col-span-1 space-y-1.5">
               <Label>{t.reservations.form.source}</Label>
               {mode === "create" ? (
                 <Select value={channel} onValueChange={setChannel}>
@@ -318,7 +319,7 @@ export function ReservationFormDialog({
               ) : (
                 <div className="pt-2 text-sm text-muted-foreground">{t.reservations.form.unchanged}</div>
               )}
-            </div>
+            </div> : null}
           </div>
 
           <div className="space-y-1.5">

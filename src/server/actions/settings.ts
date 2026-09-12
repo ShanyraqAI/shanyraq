@@ -14,17 +14,24 @@ import { ACTIVE_HOTEL_COOKIE } from "@/lib/auth/session";
 import { getCurrentMembership } from "@/lib/tenant";
 import { z } from "zod";
 import { assertBillingWriteAccess } from "@/lib/billing/service";
+import { sendHotelInvitation } from "@/lib/email";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { PublicError } from "@/server/errors";
+import { randomUUID } from "node:crypto";
+import { recordAnalyticsEventSafely } from "@/lib/analytics/service";
+import { accessLevelForPermissions, HOTEL_PERMISSIONS } from "@/lib/access";
 
 const createHotelSchema = z.object({ name: z.string().trim().min(2, "Введите название отеля").max(120) });
-const accessLevelSchema = z.enum(["OVERVIEW", "CALENDAR", "FULL"]);
+const permissionsSchema = z.array(z.enum(HOTEL_PERMISSIONS)).min(1, "Выберите хотя бы один раздел").max(HOTEL_PERMISSIONS.length)
+  .transform((values) => HOTEL_PERMISSIONS.filter((permission) => values.includes(permission)));
 const memberSchema = z.object({
   email: z.string().trim().toLowerCase().email("Некорректный email"),
-  accessLevel: accessLevelSchema,
+  permissions: permissionsSchema,
 });
 
 async function requireHotelOwner() {
   const membership = await getCurrentMembership();
-  if (!membership || membership.role !== "OWNER") throw new Error("Только владелец может управлять отелями и доступом");
+  if (!membership || membership.role !== "OWNER") throw new PublicError("Только владелец может управлять отелями и доступом");
   return membership;
 }
 
@@ -61,7 +68,7 @@ export async function createHotelAction(input: unknown): Promise<ActionResult<{ 
     if (!parsed.success) return fail(firstZodError(parsed.error));
     const owner = await requireHotelOwner();
     await assertBillingWriteAccess(owner.organizationId);
-    const slug = `hotel-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const slug = `hotel-${randomUUID()}`;
     const hotel = await db.$transaction(async (tx) => {
       const created = await tx.hotel.create({
         data: { orgId: owner.organizationId, slug, name: parsed.data.name, timezone: "Asia/Almaty", currency: "KZT", country: "Казахстан" },
@@ -74,6 +81,14 @@ export async function createHotelAction(input: unknown): Promise<ActionResult<{ 
     });
     const store = await cookies();
     store.set(ACTIVE_HOTEL_COOKIE, hotel.id, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 31_536_000 });
+    await recordAnalyticsEventSafely({
+      eventType: "hotel_created",
+      userId: owner.userId,
+      organizationId: owner.organizationId,
+      hotelId: hotel.id,
+      entityType: "Hotel",
+      entityId: hotel.id,
+    });
     revalidatePath("/dashboard", "layout");
     return ok(hotel, "Отель создан");
   } catch (error) {
@@ -100,16 +115,43 @@ export async function addHotelMemberAction(input: unknown): Promise<ActionResult
     const parsed = memberSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
     const owner = await requireHotelOwner();
-    const user = await db.user.findUnique({ where: { email: parsed.data.email }, select: { id: true } });
-    if (!user) return fail("Пользователь с таким email ещё не зарегистрирован в Shanyraq");
-    if (user.id === owner.userId) return fail("Владелец уже имеет полный доступ");
-    await db.membership.upsert({
-      where: { userId_hotelId: { userId: user.id, hotelId: owner.hotelId } },
-      update: { accessLevel: parsed.data.accessLevel, role: "STAFF" },
-      create: { organizationId: owner.organizationId, userId: user.id, hotelId: owner.hotelId, role: "STAFF", accessLevel: parsed.data.accessLevel },
-    });
+    await enforceRateLimit("hotel-invitation", `${owner.hotelId}:${parsed.data.email}`, 5, 60 * 60_000);
+    const accessLevel = accessLevelForPermissions(parsed.data.permissions);
+    const user = await db.user.findUnique({ where: { email: parsed.data.email }, select: { id: true, emailVerifiedAt: true } });
+    if (user?.id === owner.userId) return fail("Владелец уже имеет полный доступ");
+    if (user?.emailVerifiedAt) {
+      await db.membership.upsert({
+        where: { userId_hotelId: { userId: user.id, hotelId: owner.hotelId } },
+        update: { accessLevel, permissions: parsed.data.permissions, role: "STAFF", organizationId: owner.organizationId },
+        create: { organizationId: owner.organizationId, userId: user.id, hotelId: owner.hotelId, role: "STAFF", accessLevel, permissions: parsed.data.permissions },
+      });
+      await db.hotelInvitation.updateMany({
+        where: { hotelId: owner.hotelId, email: parsed.data.email, status: "PENDING" },
+        data: { status: "ACCEPTED", acceptedAt: new Date() },
+      });
+    } else {
+      const expiresAt = new Date(Date.now() + 7 * 86_400_000);
+      const invitation = await db.hotelInvitation.upsert({
+        where: { hotelId_email: { hotelId: owner.hotelId, email: parsed.data.email } },
+        create: {
+          organizationId: owner.organizationId,
+          hotelId: owner.hotelId,
+          invitedById: owner.userId,
+          email: parsed.data.email,
+          accessLevel,
+          permissions: parsed.data.permissions,
+          expiresAt,
+        },
+        update: { accessLevel, permissions: parsed.data.permissions, status: "PENDING", acceptedAt: null, expiresAt, invitedById: owner.userId },
+      });
+      const [hotel, inviter] = await Promise.all([
+        db.hotel.findUniqueOrThrow({ where: { id: owner.hotelId }, select: { name: true } }),
+        db.user.findUniqueOrThrow({ where: { id: owner.userId }, select: { fullName: true } }),
+      ]);
+      await sendHotelInvitation(parsed.data.email, hotel.name, inviter.fullName, `${invitation.id}-${expiresAt.getTime()}`);
+    }
     revalidatePath("/dashboard/settings");
-    return ok(undefined, "Доступ пользователя сохранён");
+    return ok(undefined, user?.emailVerifiedAt ? "Доступ пользователя сохранён" : "Приглашение отправлено на email");
   } catch (error) {
     return fail(toErrorMessage(error));
   }
@@ -117,12 +159,12 @@ export async function addHotelMemberAction(input: unknown): Promise<ActionResult
 
 export async function updateHotelMemberAccessAction(input: unknown): Promise<ActionResult> {
   try {
-    const parsed = z.object({ membershipId: z.string().min(1), accessLevel: accessLevelSchema }).safeParse(input);
+    const parsed = z.object({ membershipId: z.string().min(1), permissions: permissionsSchema }).safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
     const owner = await requireHotelOwner();
     const updated = await db.membership.updateMany({
       where: { id: parsed.data.membershipId, hotelId: owner.hotelId, role: { not: "OWNER" } },
-      data: { accessLevel: parsed.data.accessLevel },
+      data: { accessLevel: accessLevelForPermissions(parsed.data.permissions), permissions: parsed.data.permissions },
     });
     if (!updated.count) return fail("Пользователь не найден или его права нельзя изменить");
     revalidatePath("/dashboard/settings");
@@ -139,6 +181,20 @@ export async function removeHotelMemberAction(membershipId: string): Promise<Act
     if (!removed.count) return fail("Пользователь не найден или его нельзя удалить");
     revalidatePath("/dashboard/settings");
     return ok(undefined, "Доступ удалён");
+  } catch (error) {
+    return fail(toErrorMessage(error));
+  }
+}
+
+export async function cancelHotelInvitationAction(invitationId: string): Promise<ActionResult> {
+  try {
+    const owner = await requireHotelOwner();
+    const removed = await db.hotelInvitation.deleteMany({
+      where: { id: invitationId, hotelId: owner.hotelId, status: "PENDING" },
+    });
+    if (!removed.count) return fail("Приглашение не найдено");
+    revalidatePath("/dashboard/settings");
+    return ok(undefined, "Приглашение отменено");
   } catch (error) {
     return fail(toErrorMessage(error));
   }

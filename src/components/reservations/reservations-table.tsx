@@ -32,7 +32,10 @@ import { ReservationStatusBadge, ChannelLabel } from "@/components/shared/status
 import { EmptyState } from "@/components/shared/page-header";
 import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
 import { ReservationFormDialog } from "@/components/reservations/reservation-form-dialog";
+import { ReservationImportDialog } from "@/components/calendar/reservation-import-dialog";
+import { DataExportDialog } from "@/components/exports/data-export-dialog";
 import { setReservationStatusAction } from "@/server/actions/reservations";
+import { findSelectedReservation } from "@/lib/reservations/calendar-selection";
 import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
 import type { ReservationStatus } from "@/lib/constants";
 import { formatMoney } from "@/lib/utils";
@@ -52,8 +55,9 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [channel, setChannel] = useState("all");
-  const [selected, setSelected] = useState<ReservationVM | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const selected = findSelectedReservation(reservations, selectedId);
 
   const channelsPresent = useMemo(() => Array.from(new Set(reservations.map((r) => r.channel))), [reservations]);
 
@@ -82,17 +86,17 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t.reservations.searchPlaceholder}
-            className="w-[240px] pl-8"
+            className="w-full pl-8 sm:w-[240px]"
           />
         </div>
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger size="sm" className="w-[170px]">
+          <SelectTrigger size="sm" className="w-full sm:w-[170px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -105,7 +109,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           </SelectContent>
         </Select>
         <Select value={channel} onValueChange={setChannel}>
-          <SelectTrigger size="sm" className="w-[150px]">
+          <SelectTrigger size="sm" className="w-full sm:w-[150px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -118,18 +122,24 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           </SelectContent>
         </Select>
 
-        <div className="ml-auto flex items-center gap-4 text-sm text-muted-foreground">
-          <span>
-            <strong className="text-foreground tabular-nums">{stats.total}</strong>{" "}
-            {t.reservations.statsCount(stats.total)}
-          </span>
-          <span className="hidden sm:inline">
-            <strong className="text-foreground tabular-nums">{formatMoney(stats.revenue, { compact: true })}</strong>{" "}
-            {t.reservations.statsBooked}
-          </span>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-1.5 size-4" /> {t.reservations.newButton}
-          </Button>
+        <div className="flex w-full flex-wrap items-center gap-3 text-sm text-muted-foreground xl:ml-auto xl:w-auto">
+          <div className="flex items-center gap-3">
+            <span>
+              <strong className="text-foreground tabular-nums">{stats.total}</strong>{" "}
+              {t.reservations.statsCount(stats.total)}
+            </span>
+            <span className="hidden sm:inline">
+              <strong className="text-foreground tabular-nums">{formatMoney(stats.revenue, { compact: true })}</strong>{" "}
+              {t.reservations.statsBooked}
+            </span>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <ReservationImportDialog />
+            <DataExportDialog dataset="reservations" />
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-1.5 size-4" /> {t.reservations.newButton}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -161,7 +171,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
             </TableHeader>
             <TableBody>
               {filtered.slice(0, 100).map((r) => (
-                <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
+                <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelectedId(r.id)}>
                   <TableCell className="font-mono text-xs text-muted-foreground">#{r.id.slice(-8).toUpperCase()}</TableCell>
                   <TableCell className="font-medium">{r.guestName}</TableCell>
                   <TableCell>{r.roomNumber}</TableCell>
@@ -185,16 +195,16 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>{t.reservations.quickActions}</DropdownMenuLabel>
                         {(r.status === "CONFIRMED" || r.status === "PENDING") && (
-                          <ResAction row={r} label={t.reservations.checkIn} status="CHECKED_IN" onDone={() => setSelected(null)} />
+                          <ResAction row={r} label={t.reservations.checkIn} status="CHECKED_IN" onDone={() => setSelectedId(null)} />
                         )}
                         {r.status === "CHECKED_IN" && (
-                          <ResAction row={r} label={t.reservations.checkOut} status="CHECKED_OUT" onDone={() => setSelected(null)} />
+                          <ResAction row={r} label={t.reservations.checkOut} status="CHECKED_OUT" onDone={() => setSelectedId(null)} />
                         )}
                         {r.status === "PENDING" && (
-                          <ResAction row={r} label={t.reservations.confirm} status="CONFIRMED" onDone={() => setSelected(null)} />
+                          <ResAction row={r} label={t.reservations.confirm} status="CONFIRMED" onDone={() => setSelectedId(null)} />
                         )}
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => setSelected(r)}>{t.common.viewDetails}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setSelectedId(r.id)}>{t.common.viewDetails}</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -221,7 +231,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           hotelCurrency={hotelCurrency}
           open={Boolean(selected)}
           onOpenChange={(o) => {
-            if (!o) setSelected(null);
+            if (!o) setSelectedId(null);
           }}
         />
       )}

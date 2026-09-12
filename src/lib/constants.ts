@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { userNameFields, fullNameFromParts } from "@/lib/auth/names";
+import { diffDays, isISODate, parseISODate } from "@/lib/dates";
+import { MAX_NIGHTLY_PRICE, MIN_NIGHTLY_PRICE } from "@/lib/pricing";
 
 // ---------------------------------------------------------------------------
 // Domain enums (string unions — portable across SQLite/PostgreSQL)
@@ -14,7 +16,7 @@ export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 export const ROOM_STATUSES = ["AVAILABLE", "OCCUPIED", "CLEANING", "MAINTENANCE", "OUT_OF_ORDER"] as const;
 export type RoomStatus = (typeof ROOM_STATUSES)[number];
 
-export const SYNC_STATUSES = ["RUNNING", "SUCCESS", "PARTIAL", "FAILED"] as const;
+export const SYNC_STATUSES = ["QUEUED", "RUNNING", "SUCCESS", "PARTIAL", "FAILED"] as const;
 export type SyncStatus = (typeof SYNC_STATUSES)[number];
 
 export const CONNECTION_STATUSES = ["DISCONNECTED", "CONNECTED", "ERROR"] as const;
@@ -56,7 +58,8 @@ export const CHANNEL_META: Record<ChannelCode, { name: string; description: stri
 
 const isoDate = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Дата должна быть в формате ГГГГ-ММ-ДД");
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Дата должна быть в формате ГГГГ-ММ-ДД")
+  .refine(isISODate, "Укажите существующую календарную дату");
 
 export const createReservationSchema = z
   .object({
@@ -83,17 +86,29 @@ export const createReservationSchema = z
   });
 export type CreateReservationInput = z.infer<typeof createReservationSchema>;
 
-export const updateReservationSchema = z.object({
-  id: z.string().min(1),
-  guestId: z.string().min(1),
-  roomId: z.string().min(1),
-  checkIn: isoDate,
-  checkOut: isoDate,
-  adults: z.coerce.number().int().min(1).max(10),
-  children: z.coerce.number().int().min(0).max(10).default(0),
-  ratePlanId: z.string().min(1),
-  notes: z.string().max(2000).optional(),
-});
+export const updateReservationSchema = z
+  .object({
+    id: z.string().min(1),
+    guestId: z.string().min(1).optional(),
+    guestName: z.string().trim().max(160).optional(),
+    guestEmail: z.string().trim().email("Некорректный email").or(z.literal("")).optional(),
+    guestPhone: z.string().trim().max(40).optional(),
+    roomId: z.string().min(1),
+    checkIn: isoDate,
+    checkOut: isoDate,
+    adults: z.coerce.number().int().min(1).max(10),
+    children: z.coerce.number().int().min(0).max(10).default(0),
+    ratePlanId: z.string().min(1),
+    notes: z.string().max(2000).optional(),
+  })
+  .refine((v) => v.checkOut > v.checkIn, {
+    message: "Дата выезда должна быть позже даты заезда",
+    path: ["checkOut"],
+  })
+  .refine((v) => Boolean(v.guestId || v.guestName), {
+    message: "Выберите гостя из списка или введите имя",
+    path: ["guestName"],
+  });
 
 export const reservationStatusSchema = z.object({
   id: z.string().min(1),
@@ -116,7 +131,7 @@ export const saveRoomMappingsSchema = z.object({
       externalRoomTypeId: z.string().min(1),
       externalRoomName: z.string().min(1),
     }),
-  ),
+  ).max(500, "Слишком много сопоставлений"),
 });
 
 export const saveRateMappingsSchema = z.object({
@@ -127,7 +142,7 @@ export const saveRateMappingsSchema = z.object({
       externalRateId: z.string().min(1),
       externalRateName: z.string().min(1),
     }),
-  ),
+  ).max(500, "Слишком много сопоставлений"),
 });
 
 export const roomStatusSchema = z.object({
@@ -141,7 +156,9 @@ export const upsertRoomSchema = z.object({
   floor: z.coerce.number().int().min(-20).max(300),
   roomTypeName: z.string().trim().min(1, "Укажите тип номера").max(120),
   capacity: z.coerce.number().int().min(1).max(100),
-  basePrice: z.coerce.number().min(0).max(100_000_000),
+  basePrice: z.coerce.number()
+    .min(MIN_NIGHTLY_PRICE, "Цена за ночь должна быть не меньше 1 000 ₸")
+    .max(MAX_NIGHTLY_PRICE, "Цена за ночь должна быть не больше 999 000 ₸"),
   status: z.enum(ROOM_STATUSES),
 });
 
@@ -163,11 +180,17 @@ export const bulkRateUpdateSchema = z
     ratePlanId: z.string().min(1),
     from: isoDate,
     to: isoDate,
-    price: z.coerce.number().positive().max(100_000_000),
+    price: z.coerce.number()
+      .min(MIN_NIGHTLY_PRICE, "Цена за ночь должна быть не меньше 1 000 ₸")
+      .max(MAX_NIGHTLY_PRICE, "Цена за ночь должна быть не больше 999 000 ₸"),
     weekendsOnly: z.boolean().default(false),
   })
   .refine((v) => v.to >= v.from, {
     message: "Конечная дата не может быть раньше начальной",
+    path: ["to"],
+  })
+  .refine((v) => diffDays(parseISODate(v.from), parseISODate(v.to)) <= 366, {
+    message: "За один раз можно изменить тариф максимум на 366 дней",
     path: ["to"],
   });
 
@@ -209,6 +232,15 @@ export const registerSchema = z
   .transform((value) => ({ ...value, fullName: fullNameFromParts(value) }));
 export type RegisterInput = z.infer<typeof registerSchema>;
 
+export const verifyRegistrationSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Некорректный email").max(200),
+  code: z.string().regex(/^\d{6}$/, "Введите шестизначный код"),
+});
+
+export const passwordResetSchema = verifyRegistrationSchema.extend({
+  password: z.string().min(8, "Пароль должен содержать минимум 8 символов").max(64),
+});
+
 export const loginSchema = z.object({
   identifier: z.string().trim().min(3, "Введите email или телефон").max(200),
   password: z.string().min(1, "Введите пароль").max(64),
@@ -222,6 +254,9 @@ export const profileSchema = z.object({
     .trim()
     .url("Некорректная ссылка на изображение")
     .max(500)
+    .refine((value) => {
+      try { return new URL(value).protocol === "https:"; } catch { return false; }
+    }, "Ссылка на изображение должна использовать HTTPS")
     .or(z.literal(""))
     .optional(),
 });

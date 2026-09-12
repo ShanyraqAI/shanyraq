@@ -1,15 +1,20 @@
 import { getCurrentHotelId, getCurrentMembership } from "@/lib/tenant";
 import { redirect } from "next/navigation";
 import { assertBillingWriteAccess } from "@/lib/billing/service";
+import { AuthenticationError, AuthorizationError } from "@/server/errors";
+import { firstAllowedDashboardPath, hasHotelPermission, resolveHotelPermissions, type HotelPermission } from "@/lib/access";
 
-export type AccessRequirement = "CALENDAR" | "FULL";
+export type AccessRequirement = HotelPermission | "FULL";
 
 export async function requireSectionAccess(required: AccessRequirement): Promise<void> {
   const membership = await getCurrentMembership();
   if (!membership) redirect("/login");
-  if (membership.role === "OWNER" || membership.accessLevel === "FULL") return;
-  if (required === "CALENDAR" && membership.accessLevel === "CALENDAR") return;
-  redirect("/dashboard");
+  if (required === "FULL") {
+    if (membership.role === "OWNER" || membership.accessLevel === "FULL") return;
+  } else if (hasHotelPermission(membership, required)) {
+    return;
+  }
+  redirect(firstAllowedDashboardPath(resolveHotelPermissions(membership)));
 }
 
 /**
@@ -21,9 +26,15 @@ export async function requireSectionAccess(required: AccessRequirement): Promise
  * tenant boundary: the hotel id is resolved server-side and can never be
  * supplied by the client.
  */
-export async function requireSessionHotelId(options: { allowExpiredSync?: boolean } = {}): Promise<string> {
-  await requireSectionAccess("FULL");
+export async function requireSessionHotelId(options: { allowExpiredSync?: boolean; permission?: HotelPermission } = {}): Promise<string> {
   const membership = await getCurrentMembership();
-  if (membership && !options.allowExpiredSync) await assertBillingWriteAccess(membership.organizationId);
+  if (!membership) throw new AuthenticationError();
+  const allowed = options.permission
+    ? hasHotelPermission(membership, options.permission)
+    : membership.role === "OWNER" || membership.accessLevel === "FULL";
+  if (!allowed) {
+    throw new AuthorizationError();
+  }
+  if (!options.allowExpiredSync) await assertBillingWriteAccess(membership.organizationId);
   return getCurrentHotelId();
 }

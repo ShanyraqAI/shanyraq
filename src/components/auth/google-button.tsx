@@ -1,15 +1,10 @@
-"use client";
-
 /** Google "G" mark + entry point into the OAuth flow at /api/auth/google. */
 export function GoogleButton({ label, disabled }: { label: string; disabled?: boolean }) {
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => {
-        window.location.href = "/api/auth/google";
-      }}
-      className="flex h-10 w-full items-center justify-center gap-2.5 rounded-lg border bg-background text-sm font-medium transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
+    <a
+      href={disabled ? undefined : "/api/auth/google"}
+      aria-disabled={disabled}
+      className="flex h-10 w-full items-center justify-center gap-2.5 rounded-lg border bg-background text-sm font-medium transition-colors hover:bg-secondary aria-disabled:pointer-events-none aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
     >
       <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true">
         <path
@@ -30,6 +25,6 @@ export function GoogleButton({ label, disabled }: { label: string; disabled?: bo
         />
       </svg>
       {label}
-    </button>
+    </a>
   );
 }

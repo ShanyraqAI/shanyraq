@@ -9,25 +9,33 @@ import { writeAudit } from "@/lib/reservations/service";
 import { ok, fail, type ActionResult } from "@/server/types";
 import { toErrorMessage } from "@/server/errors";
 import { t } from "@/lib/i18n";
+import { recomputeExistingAvailability } from "@/lib/availability/service";
+import { enqueueHotelChannelSyncs } from "@/lib/channels/sync-outbox";
+import { wakeChannelSyncWorker } from "@/server/channel-sync";
+import { recordCurrentUserEvent } from "@/lib/analytics/service";
 
 export async function setRoomStatusAction(input: unknown): Promise<ActionResult> {
   try {
     const parsed = roomStatusSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await requireSessionHotelId();
-    const room = await db.room.findFirst({
-      where: { id: parsed.data.roomId, hotelId },
-      select: { id: true, number: true },
-    });
-    if (!room) return fail(t.rooms.errors.roomNotFound);
-    const updated = await db.room.updateMany({
-      where: { id: room.id, hotelId },
-      data: { status: parsed.data.status },
-    });
-    if (updated.count !== 1) return fail(t.rooms.errors.roomNotFound);
+    const hotelId = await requireSessionHotelId({ permission: "ROOMS" });
+    const room = await db.$transaction(async (tx) => {
+      const owned = await tx.room.findFirst({
+        where: { id: parsed.data.roomId, hotelId },
+        select: { id: true, number: true, roomTypeId: true },
+      });
+      if (!owned) throw new Error(t.rooms.errors.roomNotFound);
+      const updated = await tx.room.updateMany({
+        where: { id: owned.id, hotelId },
+        data: { status: parsed.data.status },
+      });
+      if (updated.count !== 1) throw new Error(t.rooms.errors.roomNotFound);
+      await recomputeExistingAvailability(hotelId, [owned.roomTypeId], tx);
+      await enqueueHotelChannelSyncs(tx, hotelId);
+      return owned;
+    }, { timeout: 30_000 });
     await writeAudit(hotelId, "room.status_changed", "Room", room.id, { status: parsed.data.status });
-    revalidatePath("/dashboard/rooms");
-    revalidatePath("/dashboard");
+    revalidateRoomConsumers();
     return ok(
       undefined,
       t.rooms.statusChanged(room.number, t.statuses.room[parsed.data.status]),
@@ -37,17 +45,17 @@ export async function setRoomStatusAction(input: unknown): Promise<ActionResult>
   }
 }
 
-export async function upsertRoomAction(input: unknown): Promise<ActionResult> {
+export async function upsertRoomAction(input: unknown): Promise<ActionResult<{ id: string }>> {
   try {
     const parsed = upsertRoomSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await requireSessionHotelId();
+    const hotelId = await requireSessionHotelId({ permission: "ROOMS" });
     const data = parsed.data;
 
     const room = await db.$transaction(async (tx) => {
       if (!data.id) await assertRoomCapacity(tx, hotelId);
       if (data.id) {
-        const owned = await tx.room.findFirst({ where: { id: data.id, hotelId }, select: { id: true } });
+        const owned = await tx.room.findFirst({ where: { id: data.id, hotelId }, select: { id: true, roomTypeId: true } });
         if (!owned) throw new Error(t.rooms.errors.roomNotFound);
       }
 
@@ -73,11 +81,17 @@ export async function upsertRoomAction(input: unknown): Promise<ActionResult> {
           });
 
       if (data.id) {
+        const previous = await tx.room.findFirstOrThrow({
+          where: { id: data.id, hotelId },
+          select: { roomTypeId: true },
+        });
         const result = await tx.room.updateMany({
           where: { id: data.id, hotelId },
           data: { number: data.number, floor: data.floor, status: data.status, roomTypeId: roomType.id },
         });
         if (result.count !== 1) throw new Error(t.rooms.errors.roomNotFound);
+        await recomputeExistingAvailability(hotelId, [previous.roomTypeId, roomType.id], tx);
+        await enqueueHotelChannelSyncs(tx, hotelId);
         return { id: data.id, number: data.number, action: "room.updated" };
       }
 
@@ -85,12 +99,15 @@ export async function upsertRoomAction(input: unknown): Promise<ActionResult> {
         data: { hotelId, roomTypeId: roomType.id, number: data.number, floor: data.floor, status: data.status },
         select: { id: true },
       });
+      await recomputeExistingAvailability(hotelId, [roomType.id], tx);
+      await enqueueHotelChannelSyncs(tx, hotelId);
       return { id: created.id, number: data.number, action: "room.created" };
-    });
+    }, { timeout: 30_000 });
 
     await writeAudit(hotelId, room.action, "Room", room.id, { number: room.number });
+    await recordCurrentUserEvent(data.id ? "room_updated" : "room_created", { type: "Room", id: room.id });
     revalidateRoomConsumers();
-    return ok(undefined, data.id ? "Номер сохранен" : "Номер добавлен");
+    return ok({ id: room.id }, data.id ? "Номер сохранен" : "Номер добавлен");
   } catch (error) {
     return fail(toErrorMessage(error));
   }
@@ -100,18 +117,22 @@ export async function deleteRoomAction(input: unknown): Promise<ActionResult> {
   try {
     const parsed = deleteRoomSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await requireSessionHotelId();
-    const room = await db.room.findFirst({
-      where: { id: parsed.data.roomId, hotelId },
-      select: { id: true, number: true, _count: { select: { reservations: true } } },
-    });
-    if (!room) return fail(t.rooms.errors.roomNotFound);
-    if (room._count.reservations > 0) {
-      return fail("Нельзя удалить номер с бронированиями. Измените его статус на «Не используется».");
-    }
-
-    const deleted = await db.room.deleteMany({ where: { id: room.id, hotelId } });
-    if (deleted.count !== 1) return fail(t.rooms.errors.roomNotFound);
+    const hotelId = await requireSessionHotelId({ permission: "ROOMS" });
+    const room = await db.$transaction(async (tx) => {
+      const owned = await tx.room.findFirst({
+        where: { id: parsed.data.roomId, hotelId },
+        select: { id: true, number: true, roomTypeId: true, _count: { select: { reservations: true } } },
+      });
+      if (!owned) throw new Error(t.rooms.errors.roomNotFound);
+      if (owned._count.reservations > 0) {
+        throw new Error("Нельзя удалить номер с бронированиями. Измените его статус на «Не используется».");
+      }
+      const deleted = await tx.room.deleteMany({ where: { id: owned.id, hotelId } });
+      if (deleted.count !== 1) throw new Error(t.rooms.errors.roomNotFound);
+      await recomputeExistingAvailability(hotelId, [owned.roomTypeId], tx);
+      await enqueueHotelChannelSyncs(tx, hotelId);
+      return owned;
+    }, { timeout: 30_000 });
     await writeAudit(hotelId, "room.deleted", "Room", room.id, { number: room.number });
     revalidateRoomConsumers();
     return ok(undefined, `Номер ${room.number} удален`);
@@ -125,4 +146,5 @@ function revalidateRoomConsumers() {
   revalidatePath("/dashboard/rooms");
   revalidatePath("/dashboard/calendar");
   revalidatePath("/dashboard/reservations");
+  wakeChannelSyncWorker();
 }

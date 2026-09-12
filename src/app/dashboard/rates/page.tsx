@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const HORIZON = 14;
 
 export default async function RatesPage() {
-  await requireSectionAccess("FULL");
+  await requireSectionAccess("RATES");
   const hotelId = await getCurrentHotelId();
   const start = today();
 
@@ -39,13 +39,13 @@ export default async function RatesPage() {
       name: plan.name,
       roomTypeId: plan.roomTypeId,
       roomTypeName: typeName,
-      basePrice: plan.basePrice,
+      basePrice: Number(plan.basePrice),
       currency: plan.currency,
       refundable: plan.refundable,
       breakfastIncluded: plan.breakfastIncluded,
       availableToday: availabilityToday.find((a) => a.roomTypeId === plan.roomTypeId)?.availableRooms ?? null,
     });
-    const byDate = new Map(allRates.filter((r) => r.ratePlanId === plan.id).map((r) => [toISODate(r.date), r.price]));
+    const byDate = new Map(allRates.filter((r) => r.ratePlanId === plan.id).map((r) => [toISODate(r.date), Number(r.price)]));
     prices[plan.id] = dates.map((d) => byDate.get(d) ?? null);
   }
 

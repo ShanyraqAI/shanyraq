@@ -7,9 +7,17 @@ import { requirePaymentConfig } from "@/lib/billing/config";
 import { BillingError, billingPlan } from "@/lib/billing/policy";
 import { applyPaymentResult, getSubscription, lockBillingOrganization } from "@/lib/billing/service";
 import { fetchPaymentStatus, initializePayment } from "@/lib/billing/freedompay";
+import { PRODUCT_AVAILABILITY } from "@/lib/product-availability";
+
+function assertBillingAvailable(): void {
+  if (!PRODUCT_AVAILABILITY.billing) {
+    throw new BillingError("Подписка и оплата временно скрыты на этапе закрытой беты.");
+  }
+}
 
 export async function createCheckoutAction(input: { planId: string; months: number; consent: boolean }) {
   try {
+    assertBillingAvailable();
     const membership = await getCurrentMembership();
     if (!membership || membership.role !== "OWNER") throw new BillingError("Оплатить подписку может только владелец организации.");
     const plan = billingPlan(input?.planId);
@@ -68,6 +76,7 @@ export async function createCheckoutAction(input: { planId: string; months: numb
 
 export async function checkPaymentAction(paymentId: string) {
   try {
+    assertBillingAvailable();
     const membership = await getCurrentMembership();
     if (!membership || membership.role !== "OWNER" || typeof paymentId !== "string" || paymentId.length > 50) throw new BillingError("Платёж недоступен.");
     const order = await db.billingPayment.findFirst({ where: { id: paymentId, organizationId: membership.organizationId } });

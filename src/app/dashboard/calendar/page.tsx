@@ -1,17 +1,31 @@
-import { db, getCurrentHotelId } from "@/lib/db";
+import { db, getCurrentHotel } from "@/lib/db";
 import { PageHeader } from "@/components/shared/page-header";
 import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { toReservationVM, type GuestVM, type RatePlanVM, type RoomVM } from "@/lib/types";
 import { t } from "@/lib/i18n";
 import { requireSectionAccess } from "@/server/guards";
+import { toISODate, todayInTimeZone } from "@/lib/dates";
+import { calendarTimelineRange, parseCalendarNavigation } from "@/lib/reservations/calendar-range";
+import { CalendarOpenTracker } from "@/components/analytics/calendar-open-tracker";
+import { DataExportDialog } from "@/components/exports/data-export-dialog";
+import { addDays } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
-export default async function CalendarPage() {
+type CalendarSearchParams = Promise<{
+  date?: string | string[];
+  range?: string | string[];
+}>;
+
+export default async function CalendarPage({ searchParams }: { searchParams: CalendarSearchParams }) {
   await requireSectionAccess("CALENDAR");
-  const hotelId = await getCurrentHotelId();
-  const [hotel, roomTypes, roomsRaw, ratePlansRaw, guestsRaw, reservationsRaw] = await Promise.all([
-    db.hotel.findUniqueOrThrow({ where: { id: hotelId } }),
+  const hotel = await getCurrentHotel();
+  const hotelId = hotel.id;
+  const params = await searchParams;
+  const todayISO = toISODate(todayInTimeZone(hotel.timezone));
+  const { anchorISO, rangeDays } = parseCalendarNavigation(params.date, params.range, todayISO);
+  const range = calendarTimelineRange(anchorISO, rangeDays);
+  const [roomTypes, roomsRaw, ratePlansRaw, guestsRaw, reservationsRaw] = await Promise.all([
     db.roomType.findMany({ where: { hotelId }, orderBy: { sortOrder: "asc" } }),
     db.room.findMany({
       where: { hotelId },
@@ -21,7 +35,12 @@ export default async function CalendarPage() {
     db.ratePlan.findMany({ where: { hotelId }, orderBy: { name: "asc" } }),
     db.guest.findMany({ where: { hotelId }, orderBy: { fullName: "asc" } }),
     db.reservation.findMany({
-      where: { hotelId },
+      where: {
+        hotelId,
+        status: { not: "CANCELLED" },
+        checkIn: { lt: range.endExclusive },
+        checkOut: { gt: range.start },
+      },
       include: {
         guest: { select: { id: true, fullName: true, email: true, phone: true, country: true } },
         room: { select: { id: true, number: true, floor: true, roomTypeId: true } },
@@ -31,16 +50,7 @@ export default async function CalendarPage() {
     }),
   ]);
 
-  // Which guest occupies each room tonight (for the label hint).
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const tonightByRoom = new Map<string, string>();
-  for (const r of reservationsRaw) {
-    const inHouse =
-      r.checkIn.toISOString().slice(0, 10) <= todayISO && r.checkOut.toISOString().slice(0, 10) > todayISO;
-    if (inHouse && ["CHECKED_IN", "CONFIRMED"].includes(r.status)) {
-      if (!tonightByRoom.has(r.room.id)) tonightByRoom.set(r.room.id, r.guest.fullName);
-    }
-  }
+  const roomTypeNames = new Map(roomTypes.map((roomType) => [roomType.id, roomType.name]));
 
   const rooms: RoomVM[] = roomsRaw.map((r) => ({
     id: r.id,
@@ -49,14 +59,14 @@ export default async function CalendarPage() {
     status: r.status as RoomVM["status"],
     roomTypeId: r.roomTypeId,
     roomTypeName: r.roomType.name,
-    guestTonight: tonightByRoom.get(r.id) ?? null,
+    guestTonight: null,
   }));
   const ratePlans: RatePlanVM[] = ratePlansRaw.map((p) => ({
     id: p.id,
     name: p.name,
     roomTypeId: p.roomTypeId,
-    roomTypeName: roomTypes.find((t) => t.id === p.roomTypeId)?.name ?? "",
-    basePrice: p.basePrice,
+    roomTypeName: roomTypeNames.get(p.roomTypeId) ?? "",
+    basePrice: Number(p.basePrice),
     currency: p.currency,
     refundable: p.refundable,
     breakfastIncluded: p.breakfastIncluded,
@@ -72,17 +82,22 @@ export default async function CalendarPage() {
 
   return (
     <div className="space-y-6">
+      <CalendarOpenTracker rangeDays={rangeDays} />
       <PageHeader
         title={t.calendar.title}
         description={t.calendar.description(rooms.length)}
-      />
+      >
+        <DataExportDialog dataset="calendar" defaultFrom={anchorISO} defaultTo={toISODate(addDays(range.endExclusive, -1))} />
+      </PageHeader>
       <CalendarBoard
         rooms={rooms}
         reservations={reservationsRaw.map(toReservationVM)}
         ratePlans={ratePlans}
         guests={guests}
         hotelCurrency={hotel.currency}
-        initialView="week"
+        todayISO={todayISO}
+        rangeDays={rangeDays}
+        initialAnchor={anchorISO}
       />
     </div>
   );

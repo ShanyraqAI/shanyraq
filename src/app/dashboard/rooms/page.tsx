@@ -14,7 +14,7 @@ import { requireSectionAccess } from "@/server/guards";
 export const dynamic = "force-dynamic";
 
 export default async function RoomsPage() {
-  await requireSectionAccess("FULL");
+  await requireSectionAccess("ROOMS");
   const hotelId = await getCurrentHotelId();
   const day = today();
 
@@ -54,7 +54,7 @@ export default async function RoomsPage() {
     roomTypeId: r.roomTypeId,
     roomTypeName: r.roomType.name,
     capacity: r.roomType.capacity,
-    basePrice: r.roomType.basePrice,
+    basePrice: Number(r.roomType.basePrice),
     guestTonight: guestByRoom.get(r.id) ?? null,
   }));
   const populatedRoomTypes = roomTypes.filter((type) => type.rooms.length > 0);
@@ -96,7 +96,7 @@ export default async function RoomsPage() {
                   </div>
                   <div>
                     <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t.rooms.terms.from}</dt>
-                    <dd className="mt-0.5 text-lg font-semibold tabular-nums">{formatMoney(type.basePrice)}</dd>
+                    <dd className="mt-0.5 text-lg font-semibold tabular-nums">{formatMoney(Number(type.basePrice))}</dd>
                   </div>
                 </dl>
                 <p className="mt-3 text-center text-xs text-muted-foreground">

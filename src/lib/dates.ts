@@ -43,6 +43,18 @@ export function today(): Date {
   return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 }
 
+/** Today's date in an IANA timezone, returned as a UTC-midnight business date. */
+export function todayInTimeZone(timeZone: string, now = new Date()): Date {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+  return parseISODate(`${values.get("year")}-${values.get("month")}-${values.get("day")}`);
+}
+
 export function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * MS_PER_DAY);
 }

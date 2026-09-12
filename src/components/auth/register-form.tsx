@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GoogleButton } from "@/components/auth/google-button";
-import { registerAction } from "@/server/actions/auth";
+import { registerAction, resendRegistrationCodeAction, verifyRegistrationCodeAction } from "@/server/actions/auth";
 import { t } from "@/lib/i18n";
 
 export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
@@ -21,6 +21,8 @@ export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
   const [contact, setContact] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+  const [code, setCode] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -38,11 +40,84 @@ export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
         toast.error(result.error);
         return;
       }
+      if (result.data?.verificationRequired && result.data.email) {
+        setVerificationEmail(result.data.email);
+        toast.success(result.message);
+        return;
+      }
       router.replace("/dashboard");
       router.refresh();
     } finally {
       setLoading(false);
     }
+  }
+
+  async function verifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!verificationEmail) return;
+    setLoading(true);
+    try {
+      const result = await verifyRegistrationCodeAction({ email: verificationEmail, code });
+      if (!result.ok) return toast.error(result.error);
+      toast.success(result.message);
+      router.replace("/dashboard");
+      router.refresh();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resendCode() {
+    if (!verificationEmail) return;
+    setLoading(true);
+    try {
+      const result = await resendRegistrationCodeAction(verificationEmail);
+      if (!result.ok) return toast.error(result.error);
+      toast.success(result.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (verificationEmail) {
+    return (
+      <form onSubmit={verifyCode} className="space-y-4">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold">Подтвердите почту</h2>
+          <p className="text-sm text-muted-foreground">
+            Мы отправили шестизначный код на {verificationEmail}. Он действует 10 минут.
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="registration-code">Код подтверждения</Label>
+          <Input
+            id="registration-code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]{6}"
+            maxLength={6}
+            placeholder="000000"
+            value={code}
+            onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+            className="text-center text-xl tracking-[0.45em]"
+            required
+            autoFocus
+          />
+        </div>
+        <Button type="submit" className="w-full" disabled={loading || code.length !== 6}>
+          {loading && <Loader2 className="mr-2 size-4 animate-spin" />}
+          Подтвердить и создать аккаунт
+        </Button>
+        <div className="flex items-center justify-between text-sm">
+          <button type="button" className="text-primary hover:underline" onClick={resendCode} disabled={loading}>
+            Отправить код повторно
+          </button>
+          <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => setVerificationEmail(null)} disabled={loading}>
+            Изменить email
+          </button>
+        </div>
+      </form>
+    );
   }
 
   return (

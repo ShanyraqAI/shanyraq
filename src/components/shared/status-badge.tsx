@@ -53,6 +53,7 @@ export function ConnectionStatusBadge({ status }: { status: ConnectionStatus }) 
 }
 
 const SYNC_STYLES: Record<SyncStatus, string> = {
+  QUEUED: "bg-violet-100 text-violet-800 border-violet-200",
   RUNNING: "bg-sky-100 text-sky-800 border-sky-200",
   SUCCESS: "bg-emerald-50 text-emerald-700 border-emerald-200",
   PARTIAL: "bg-amber-100 text-amber-800 border-amber-200",

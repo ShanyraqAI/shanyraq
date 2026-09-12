@@ -17,6 +17,8 @@ import { parseReservationWorkbook } from "@/lib/reservations/xlsx-import";
 import type { ReservationImportPreview, ReservationImportResult, ReservationImportRow } from "@/lib/reservations/import-types";
 import { importReservationRows } from "@/lib/reservations/import-service";
 import { allowedGoogleSheetRedirect, googleSheetExportUrl } from "@/lib/reservations/google-sheets";
+import { wakeChannelSyncWorker } from "@/server/channel-sync";
+import { recordCurrentUserEvent } from "@/lib/analytics/service";
 
 function revalidateAll() {
   revalidatePath("/dashboard");
@@ -24,15 +26,16 @@ function revalidateAll() {
   revalidatePath("/dashboard/reservations");
   revalidatePath("/dashboard/rooms");
   revalidatePath("/dashboard/guests");
+  wakeChannelSyncWorker();
 }
 
 async function resolveGuest(
   hotelId: string,
   input: { guestId?: string; guestName?: string; guestEmail?: string; guestPhone?: string },
-): Promise<string> {
+): Promise<{ id: string; created: boolean }> {
   if (input.guestId) {
     const existing = await db.guest.findFirst({ where: { id: input.guestId, hotelId }, select: { id: true } });
-    if (existing) return existing.id;
+    if (existing) return { id: existing.id, created: false };
   }
   const name = input.guestName?.trim();
   if (!name) throw new Error(t.reservations.errors.guestRequired);
@@ -40,7 +43,7 @@ async function resolveGuest(
     where: { hotelId, fullName: { equals: name } },
     select: { id: true },
   });
-  if (byName) return byName.id;
+  if (byName) return { id: byName.id, created: false };
   const created = await db.guest.create({
     data: {
       hotelId,
@@ -50,14 +53,14 @@ async function resolveGuest(
     },
     select: { id: true },
   });
-  return created.id;
+  return { id: created.id, created: true };
 }
 
 export async function createReservationAction(input: unknown): Promise<ActionResult<{ id: string }>> {
   try {
     const parsed = createReservationSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await requireSessionHotelId();
+    const hotelId = await requireSessionHotelId({ permission: "RESERVATIONS" });
     const data = parsed.data;
 
     const room = await db.room.findFirst({ where: { id: data.roomId, hotelId }, include: { roomType: true } });
@@ -77,23 +80,24 @@ export async function createReservationAction(input: unknown): Promise<ActionRes
         ratePlanId = fallbackPlan.id;
       } else {
         // Создаем временный тариф на лету из базовой цены типа номера
+        const hotel = await db.hotel.findUniqueOrThrow({ where: { id: hotelId }, select: { currency: true } });
         const tempPlan = await db.ratePlan.create({
           data: {
             hotelId,
             roomTypeId: room.roomTypeId,
             name: `Базовый — ${room.roomType.name}`,
             basePrice: room.roomType.basePrice,
-            currency: "KZT",
+            currency: hotel.currency,
           },
         });
         ratePlanId = tempPlan.id;
       }
     }
 
-    const guestId = await resolveGuest(hotelId, data);
+    const guest = await resolveGuest(hotelId, data);
     const reservation = await createReservation({
       hotelId,
-      guestId,
+      guestId: guest.id,
       roomId: data.roomId,
       ratePlanId: ratePlanId!,
       checkIn: data.checkIn,
@@ -104,6 +108,8 @@ export async function createReservationAction(input: unknown): Promise<ActionRes
       notes: data.notes ?? null,
       status: "CONFIRMED",
     });
+    await recordCurrentUserEvent("reservation_created", { type: "Reservation", id: reservation.id }, { source: data.sourceChannel });
+    if (guest.created) await recordCurrentUserEvent("guest_created", { type: "Guest", id: guest.id });
     revalidateAll();
     return ok({ id: reservation.id }, t.reservations.toasts.created);
   } catch (error) {
@@ -115,12 +121,13 @@ export async function updateReservationAction(input: unknown): Promise<ActionRes
   try {
     const parsed = updateReservationSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await requireSessionHotelId();
+    const hotelId = await requireSessionHotelId({ permission: "RESERVATIONS" });
     const data = parsed.data;
+    const guest = await resolveGuest(hotelId, data);
     await updateReservationDetails({
       id: data.id,
       hotelId,
-      guestId: data.guestId,
+      guestId: guest.id,
       roomId: data.roomId,
       ratePlanId: data.ratePlanId,
       checkIn: data.checkIn,
@@ -129,6 +136,8 @@ export async function updateReservationAction(input: unknown): Promise<ActionRes
       children: data.children,
       notes: data.notes ?? null,
     });
+    await recordCurrentUserEvent("reservation_updated", { type: "Reservation", id: data.id });
+    if (guest.created) await recordCurrentUserEvent("guest_created", { type: "Guest", id: guest.id });
     revalidateAll();
     return ok({ id: data.id }, t.reservations.toasts.updated);
   } catch (error) {
@@ -140,8 +149,13 @@ export async function setReservationStatusAction(input: unknown): Promise<Action
   try {
     const parsed = reservationStatusSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
-    const hotelId = await requireSessionHotelId();
+    const hotelId = await requireSessionHotelId({ permission: "RESERVATIONS" });
     await setReservationStatus(hotelId, parsed.data.id, parsed.data.status as ReservationStatus);
+    await recordCurrentUserEvent(
+      parsed.data.status === "CANCELLED" ? "reservation_cancelled" : "reservation_updated",
+      { type: "Reservation", id: parsed.data.id },
+      { status: parsed.data.status },
+    );
     revalidateAll();
     return ok(undefined, t.reservations.toasts.statusChanged(t.statuses.reservation[parsed.data.status]));
   } catch (error) {
@@ -151,8 +165,9 @@ export async function setReservationStatusAction(input: unknown): Promise<Action
 
 export async function cancelReservationAction(reservationId: string): Promise<ActionResult> {
   try {
-    const hotelId = await requireSessionHotelId();
+    const hotelId = await requireSessionHotelId({ permission: "RESERVATIONS" });
     await setReservationStatus(hotelId, reservationId, "CANCELLED");
+    await recordCurrentUserEvent("reservation_cancelled", { type: "Reservation", id: reservationId });
     revalidateAll();
     return ok(undefined, t.reservations.toasts.cancelled);
   } catch (error) {
@@ -167,7 +182,7 @@ export async function moveReservationAction(
   newCheckOut: string | undefined,
 ): Promise<ActionResult> {
   try {
-    const hotelId = await requireSessionHotelId();
+    const hotelId = await requireSessionHotelId({ permission: "RESERVATIONS" });
     const res = await db.reservation.findFirst({ where: { id: reservationId, hotelId } });
     if (!res) return fail(t.reservations.errors.reservationNotFound);
     const roomId = newRoomId ?? res.roomId;
@@ -192,6 +207,7 @@ export async function moveReservationAction(
       children: res.children,
       notes: res.notes,
     });
+    await recordCurrentUserEvent("reservation_updated", { type: "Reservation", id: res.id });
     revalidateAll();
     return ok(undefined, t.reservations.toasts.movedToRoom(room.number));
   } catch (error) {
@@ -242,7 +258,7 @@ async function fetchGoogleSheet(value: string): Promise<Buffer> {
 
 export async function previewReservationImportAction(formData: FormData): Promise<ActionResult<ReservationImportPreview>> {
   try {
-    const hotelId = await requireSessionHotelId();
+    const hotelId = await requireSessionHotelId({ permission: "RESERVATIONS" });
     const rooms = await db.room.findMany({ where: { hotelId }, select: { number: true } });
     const sheetName = String(formData.get("sheetName") ?? "").trim() || undefined;
     const source = String(formData.get("source") ?? "file");
@@ -286,7 +302,7 @@ function validateImportRows(input: unknown): ReservationImportRow[] {
 
 export async function confirmReservationImportAction(input: unknown): Promise<ActionResult<ReservationImportResult>> {
   try {
-    const hotelId = await requireSessionHotelId();
+    const hotelId = await requireSessionHotelId({ permission: "RESERVATIONS" });
     const rows = validateImportRows(input);
     const { imported, errors } = await importReservationRows(hotelId, rows);
     revalidateAll();

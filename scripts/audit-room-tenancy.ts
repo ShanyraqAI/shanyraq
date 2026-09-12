@@ -16,7 +16,6 @@ async function main() {
       },
     }),
     db.membership.findMany({
-      where: { hotelId: { not: null } },
       select: { id: true, organizationId: true, hotel: { select: { orgId: true } } },
     }),
     db.room.groupBy({
@@ -38,7 +37,7 @@ async function main() {
       reservation.hotelId !== reservation.roomType.hotelId,
   );
   const crossOrganizationMemberships = memberships.filter(
-    (membership) => membership.hotel?.orgId !== membership.organizationId,
+    (membership) => membership.hotel.orgId !== membership.organizationId,
   );
 
   const failures = {

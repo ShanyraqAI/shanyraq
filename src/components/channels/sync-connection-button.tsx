@@ -1,34 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { syncChannelAction } from "@/server/actions/channels";
 import { t } from "@/lib/i18n";
+import { channelRequestFailed } from "@/lib/channels/sync-errors";
 
-export function SyncConnectionButton({ connectionId }: { connectionId: string }) {
+export function SyncConnectionButton({ connectionId, retry = false, disabled = false }: {
+  connectionId: string; retry?: boolean; disabled?: boolean;
+}) {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
+  const inFlight = useRef(false);
 
   async function run() {
+    if (disabled || inFlight.current) return;
+    inFlight.current = true;
     setSyncing(true);
     try {
       const result = await syncChannelAction(connectionId);
       if (!result.ok) toast.error(result.error);
-      else if (result.data?.status === "PARTIAL") toast.warning(result.message);
       else toast.success(result.message);
-      router.refresh();
+    } catch {
+      toast.error(channelRequestFailed);
     } finally {
+      inFlight.current = false;
       setSyncing(false);
+      router.refresh();
     }
   }
 
   return (
-    <Button size="sm" onClick={run} disabled={syncing}>
+    <Button size="sm" onClick={run} disabled={syncing || disabled}>
       {syncing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
-      {syncing ? t.channelsPage.syncButtons.syncing : t.channelsPage.syncButtons.syncNow}
+      {syncing || disabled ? t.channelsPage.syncButtons.syncing : retry ? "Повторить попытку" : t.channelsPage.syncButtons.syncNow}
     </Button>
   );
 }

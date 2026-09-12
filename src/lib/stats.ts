@@ -15,7 +15,7 @@ export interface ReservationWithRelations {
   checkOut: Date;
   adults: number;
   children: number;
-  totalAmount: number;
+  totalAmount: number | { toString(): string };
   currency: string;
   sourceChannel: string;
   notes: string | null;
@@ -80,8 +80,9 @@ export async function getDashboardStats(hotelId: string, date: Date): Promise<Da
   const revenueByChannel: Record<string, number> = {};
   let revenueMonthToDate = 0;
   for (const r of monthReservations) {
-    revenueMonthToDate += r.totalAmount;
-    revenueByChannel[r.sourceChannel] = (revenueByChannel[r.sourceChannel] ?? 0) + r.totalAmount;
+    const amount = Number(r.totalAmount);
+    revenueMonthToDate += amount;
+    revenueByChannel[r.sourceChannel] = (revenueByChannel[r.sourceChannel] ?? 0) + amount;
   }
 
   const activeCount = await db.reservation.count({

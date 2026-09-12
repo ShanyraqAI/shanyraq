@@ -9,7 +9,7 @@ import { requireSectionAccess } from "@/server/guards";
 export const dynamic = "force-dynamic";
 
 export default async function GuestsPage() {
-  await requireSectionAccess("FULL");
+  await requireSectionAccess("GUESTS");
   const hotelId = await getCurrentHotelId();
   const [guestsRaw, reservationsRaw] = await Promise.all([
     db.guest.findMany({ where: { hotelId }, orderBy: { fullName: "asc" } }),

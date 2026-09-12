@@ -12,38 +12,61 @@ import {
 } from "@/lib/constants";
 import { getChannelProvider } from "@/lib/channels/provider-registry";
 import type { ChannelCredentials, ExternalInventory } from "@/lib/channels/types";
-import { runChannelSync, syncAllConnectedChannels } from "@/lib/channels/sync-service";
+import {
+  enqueueAllChannelSyncs,
+  enqueueChannelSync,
+} from "@/lib/channels/sync-outbox";
+import { wakeChannelSyncWorker } from "@/server/channel-sync";
 import { writeAudit } from "@/lib/reservations/service";
 import { ok, fail, type ActionResult } from "@/server/types";
-import { toErrorMessage } from "@/server/errors";
+import { PublicError } from "@/server/errors";
+import { channelRequestFailed, syncBusyMessage } from "@/lib/channels/sync-errors";
 import { t } from "@/lib/i18n";
+import { encryptChannelCredentials } from "@/lib/security/credentials";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { getSessionUser } from "@/lib/auth/session";
+import { PRODUCT_AVAILABILITY } from "@/lib/product-availability";
+
+function assertChannelsAvailable(): void {
+  if (!PRODUCT_AVAILABILITY.channels) {
+    throw new PublicError("Подключение каналов временно недоступно в закрытой бете.");
+  }
+}
 
 function revalidateChannels() {
-  revalidatePath("/dashboard/channels");
+  revalidatePath("/dashboard/channels", "layout");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/calendar");
 }
 
-/**
- * Credentials are stored as a development placeholder behind parseCredentials()
- * (see sync-service). They are NEVER returned to the client and never logged.
- */
+/** Never log provider exceptions: they can embed credentials. */
+function toErrorMessage(error: unknown): string {
+  if (error instanceof PublicError) return error.message;
+  const incidentId = crypto.randomUUID();
+  console.error("Channel action failed", { incidentId });
+  return `${channelRequestFailed} Код инцидента: ${incidentId}`;
+}
+
+/** Credentials are encrypted on the server and never returned to the client. */
 function storeCredentials(credentials: ChannelCredentials): string {
-  return JSON.stringify(credentials);
+  return encryptChannelCredentials(credentials);
 }
 
 export async function testChannelConnectionAction(input: unknown): Promise<ActionResult> {
   try {
+    assertChannelsAvailable();
     const parsed = connectChannelSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
+    const hotelId = await requireSessionHotelId();
+    await enforceRateLimit("channel-test", `${hotelId}:${parsed.data.channelId}`, 10, 15 * 60_000);
     const provider = getChannelProvider(parsed.data.channelId);
     const result = await provider.verifyCredentials({
       propertyId: parsed.data.externalPropertyId,
       username: parsed.data.username,
       apiKey: parsed.data.apiKey,
     });
-    if (result.ok) return ok(undefined, result.message);
-    return fail(result.error);
+    if (result.ok) return ok(undefined, "Проверка подключения выполнена.");
+    return fail("Не удалось проверить подключение. Проверьте введённые данные.");
   } catch (error) {
     return fail(toErrorMessage(error));
   }
@@ -51,6 +74,7 @@ export async function testChannelConnectionAction(input: unknown): Promise<Actio
 
 export async function connectChannelAction(input: unknown): Promise<ActionResult<{ connectionId: string }>> {
   try {
+    assertChannelsAvailable();
     const parsed = connectChannelSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
     const hotelId = await requireSessionHotelId();
@@ -72,12 +96,14 @@ export async function connectChannelAction(input: unknown): Promise<ActionResult
         channelId: data.channelId,
         status: "CONNECTED",
         externalPropertyId: credentials.propertyId,
-        credentialsJson: storeCredentials(credentials),
+        credentialsEncrypted: storeCredentials(credentials),
+        credentialsJson: null,
       },
       update: {
         status: "CONNECTED",
         externalPropertyId: credentials.propertyId,
-        credentialsJson: storeCredentials(credentials),
+        credentialsEncrypted: storeCredentials(credentials),
+        credentialsJson: null,
         lastError: null,
       },
     });
@@ -95,19 +121,41 @@ export async function connectChannelAction(input: unknown): Promise<ActionResult
 
 export async function disconnectChannelAction(connectionId: string): Promise<ActionResult> {
   try {
+    assertChannelsAvailable();
     const hotelId = await requireSessionHotelId();
+    if (typeof connectionId !== "string" || !connectionId || connectionId.length > 128) {
+      return fail(t.channelsPage.errors.connectionNotFound);
+    }
     const connection = await db.channelConnection.findFirst({
-      where: { id: connectionId, hotelId },
-      include: { channel: true },
+      where: { id: connectionId, hotelId, channel: { isInternal: false } },
+      select: { channel: { select: { name: true } } },
     });
     if (!connection) return fail(t.channelsPage.errors.connectionNotFound);
 
-    await db.$transaction([
-      db.channelRoomMapping.deleteMany({ where: { connectionId } }),
-      db.channelRateMapping.deleteMany({ where: { connectionId } }),
-      db.channelConnection.delete({ where: { id: connectionId } }),
-    ]);
-    await writeAudit(hotelId, "channel.disconnected", "ChannelConnection", connectionId);
+    const session = await getSessionUser();
+    const actorUserId = session?.hotelId === hotelId ? session.id : null;
+    await db.$transaction(async (tx) => {
+      // One conditional DELETE races safely with the sync claim. Related
+      // credentials, mappings and logs cascade; reservations are independent.
+      const removed = await tx.channelConnection.deleteMany({
+        where: {
+          id: connectionId, hotelId, channel: { isInternal: false },
+          OR: [{ lastSyncStatus: null }, { lastSyncStatus: { not: "RUNNING" } }],
+          syncJobs: { none: { status: { in: ["PENDING", "RUNNING"] } } },
+        },
+      });
+      if (removed.count !== 1) throw new PublicError(syncBusyMessage);
+      await tx.auditLog.create({
+        data: {
+          hotelId,
+          actor: actorUserId ? "user" : "system",
+          actorUserId,
+          action: "channel.disconnected",
+          entity: "ChannelConnection",
+          entityId: connectionId,
+        },
+      });
+    });
     revalidateChannels();
     return ok(undefined, t.channelsPage.toasts.disconnected(connection.channel.name));
   } catch (error) {
@@ -117,6 +165,7 @@ export async function disconnectChannelAction(connectionId: string): Promise<Act
 
 export async function saveRoomMappingsAction(input: unknown): Promise<ActionResult> {
   try {
+    assertChannelsAvailable();
     const parsed = saveRoomMappingsSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
     const hotelId = await requireSessionHotelId();
@@ -157,6 +206,7 @@ export async function saveRoomMappingsAction(input: unknown): Promise<ActionResu
 
 export async function saveRateMappingsAction(input: unknown): Promise<ActionResult> {
   try {
+    assertChannelsAvailable();
     const parsed = saveRateMappingsSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
     const hotelId = await requireSessionHotelId();
@@ -200,11 +250,14 @@ export async function saveRateMappingsAction(input: unknown): Promise<ActionResu
  */
 export async function fetchExternalInventoryAction(channelCode: string): Promise<ActionResult<ExternalInventory>> {
   try {
+    assertChannelsAvailable();
+    const hotelId = await requireSessionHotelId();
+    await enforceRateLimit("channel-inventory", `${hotelId}:${channelCode}`, 20, 15 * 60_000);
     const provider = getChannelProvider(channelCode);
     const inventory = await provider.fetchExternalInventory({
       connectionId: "",
       channelId: channelCode as ChannelCode,
-      hotelId: "",
+      hotelId,
       externalPropertyId: null,
       credentials: null,
       importCursor: 0,
@@ -221,30 +274,34 @@ export async function syncChannelAction(connectionId: string): Promise<
     reservationsImported: number;
     message: string | null;
     error: string | null;
+    incidentId: string | null;
   }>
 > {
   try {
+    assertChannelsAvailable();
     const hotelId = await requireSessionHotelId({ allowExpiredSync: true });
+    if (typeof connectionId !== "string" || !connectionId || connectionId.length > 128) {
+      return fail(t.channelsPage.errors.connectionNotFound);
+    }
     const owned = await db.channelConnection.findFirst({
-      where: { id: connectionId, hotelId },
+      where: { id: connectionId, hotelId, channel: { isInternal: false } },
       select: { id: true },
     });
     if (!owned) return fail(t.channelsPage.errors.connectionNotFound);
 
-    const summary = await runChannelSync(connectionId);
+    await enforceRateLimit("channel-sync", `${hotelId}:${connectionId}`, 10, 60_000);
+    await enqueueChannelSync(connectionId, hotelId);
+    wakeChannelSyncWorker();
     revalidateChannels();
-    revalidatePath("/dashboard/reservations");
-    if (summary.status === "FAILED") {
-      return { ok: false, error: summary.message ?? t.channelsPage.syncButtons.failed };
-    }
     return ok(
       {
-        status: summary.status,
-        reservationsImported: summary.reservationsImported,
-        message: summary.message,
+        status: "QUEUED",
+        reservationsImported: 0,
+        message: t.channelsPage.syncButtons.queued,
         error: null,
+        incidentId: null,
       },
-      summary.message ?? t.channelsPage.syncButtons.complete,
+      t.channelsPage.syncButtons.queued,
     );
   } catch (error) {
     return fail(toErrorMessage(error));
@@ -253,23 +310,23 @@ export async function syncChannelAction(connectionId: string): Promise<
 
 export async function syncAllChannelsAction(): Promise<ActionResult<{ results: { channelId: string; status: string; error: string | null }[] }>> {
   try {
+    assertChannelsAvailable();
     const hotelId = await requireSessionHotelId({ allowExpiredSync: true });
-    const summaries = await syncAllConnectedChannels(hotelId);
+    await enforceRateLimit("channel-sync-all", hotelId, 5, 60_000);
+    const jobs = await enqueueAllChannelSyncs(hotelId);
+    if (jobs.length > 0) wakeChannelSyncWorker(jobs.length);
     revalidateChannels();
     return ok(
       {
-        results: summaries.map((s) => ({
-          channelId: s.channelId,
-          status: s.status,
-          error: s.status === "FAILED" ? (s.message ?? t.statuses.sync.FAILED) : null,
+        results: jobs.map((job) => ({
+          channelId: job.channelId,
+          status: "QUEUED",
+          error: null,
         })),
       },
-      summaries.length === 0
+      jobs.length === 0
         ? t.channelsPage.syncButtons.nothingToSync
-        : t.channelsPage.syncButtons.syncedSome(
-            summaries.filter((s) => s.status !== "FAILED").length,
-            summaries.length,
-          ),
+        : t.channelsPage.syncButtons.queuedSome(jobs.length),
     );
   } catch (error) {
     return fail(toErrorMessage(error));

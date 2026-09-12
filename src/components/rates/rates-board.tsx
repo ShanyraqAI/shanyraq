@@ -32,6 +32,7 @@ import { formatMoney } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { WEEKDAYS_SHORT } from "@/lib/dates";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { formatCompactNightlyPrice, MAX_NIGHTLY_PRICE, MIN_NIGHTLY_PRICE } from "@/lib/pricing";
 
 export interface RatesBoardProps {
   plans: (RatePlanVM & { availableToday: number | null })[];
@@ -136,7 +137,7 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
                 </Select>
               </div>
               <div className="space-y-1.5"><Label>Название тарифа</Label><Input value={newPlanName} onChange={(e) => setNewPlanName(e.target.value)} placeholder="Например, Базовый" /></div>
-              <div className="space-y-1.5"><Label>Базовая цена за ночь</Label><Input type="number" value={newPlanPrice} onChange={(e) => setNewPlanPrice(e.target.value)} placeholder="35000" /></div>
+              <div className="space-y-1.5"><Label>Базовая цена за ночь</Label><Input type="number" min={MIN_NIGHTLY_PRICE} max={MAX_NIGHTLY_PRICE} step="500" value={newPlanPrice} onChange={(e) => setNewPlanPrice(e.target.value)} placeholder="35000" /><p className="text-xs text-muted-foreground">От 1 000 до 999 000 ₸</p></div>
               <label className="flex items-center gap-2 text-sm"><Checkbox checked={newPlanRefundable} onCheckedChange={(v) => setNewPlanRefundable(v === true)} /> Возвратный</label>
               <label className="flex items-center gap-2 text-sm"><Checkbox checked={newPlanBreakfast} onCheckedChange={(v) => setNewPlanBreakfast(v === true)} /> Завтрак включен</label>
             </div>
@@ -215,7 +216,7 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
                             : "border-transparent bg-emerald-50 font-medium text-emerald-700"
                         }
                       >
-                        {Math.round(p / 1000)}k
+                        {formatCompactNightlyPrice(p)}
                       </Badge>
                     )}
                   </TableCell>
@@ -252,12 +253,14 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
             <Input
               id="bulk-price"
               type="number"
-              min={1000}
+              min={MIN_NIGHTLY_PRICE}
+              max={MAX_NIGHTLY_PRICE}
               step={500}
               placeholder="25000"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
             />
+            <p className="text-xs text-muted-foreground">От 1 000 до 999 000 ₸</p>
           </div>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={weekendsOnly} onCheckedChange={(v) => setWeekendsOnly(v === true)} />
@@ -288,7 +291,7 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
               </Select>
             </div>
             <div className="space-y-1.5"><Label>Название тарифа</Label><Input value={newPlanName} onChange={(e) => setNewPlanName(e.target.value)} placeholder="Например, Базовый" /></div>
-            <div className="space-y-1.5"><Label>Базовая цена за ночь</Label><Input type="number" value={newPlanPrice} onChange={(e) => setNewPlanPrice(e.target.value)} placeholder="35000" /></div>
+            <div className="space-y-1.5"><Label>Базовая цена за ночь</Label><Input type="number" min={MIN_NIGHTLY_PRICE} max={MAX_NIGHTLY_PRICE} step="500" value={newPlanPrice} onChange={(e) => setNewPlanPrice(e.target.value)} placeholder="35000" /><p className="text-xs text-muted-foreground">От 1 000 до 999 000 ₸</p></div>
             <label className="flex items-center gap-2 text-sm"><Checkbox checked={newPlanRefundable} onCheckedChange={(v) => setNewPlanRefundable(v === true)} /> Возвратный</label>
             <label className="flex items-center gap-2 text-sm"><Checkbox checked={newPlanBreakfast} onCheckedChange={(v) => setNewPlanBreakfast(v === true)} /> Завтрак включен</label>
           </div>

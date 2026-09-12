@@ -2,12 +2,15 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createSession } from "@/lib/auth/session";
-import { exchangeGoogleCode, googleOAuthConfigured, OAUTH_STATE_COOKIE } from "@/lib/auth/google";
+import { appOrigin, exchangeGoogleCode, googleOAuthConfigured, OAUTH_STATE_COOKIE } from "@/lib/auth/google";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { recordAnalyticsEvent, recordAnalyticsEventSafely } from "@/lib/analytics/service";
 
 /** Finishes the Google flow: validates state, upserts the user, opens a session. */
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const loginUrl = new URL("/login", url.origin);
+  const origin = appOrigin();
+  const loginUrl = new URL("/login", origin);
 
   if (!googleOAuthConfigured()) {
     loginUrl.searchParams.set("error", "google");
@@ -31,58 +34,112 @@ export async function GET(request: Request) {
     return NextResponse.redirect(loginUrl);
   }
 
-  const profile = await exchangeGoogleCode(code, url.origin);
+  const profile = await exchangeGoogleCode(code);
   if (!profile?.email || profile.email_verified !== true) {
     loginUrl.searchParams.set("error", "google");
     return NextResponse.redirect(loginUrl);
   }
 
+  try {
+    await enforceRateLimit("google-oauth-callback", profile.sub, 10, 15 * 60_000);
+  } catch {
+    loginUrl.searchParams.set("error", "google");
+    return NextResponse.redirect(loginUrl);
+  }
+
   const email = profile.email.toLowerCase();
-  let user = await db.user.findUnique({ where: { email }, select: { id: true, onboardingCompleted: true } });
+  let user: { id: string; onboardingCompleted: boolean } | null = await db.user.findFirst({
+    where: { oauthAccounts: { some: { provider: "google", providerAccountId: profile.sub } } },
+    select: { id: true, onboardingCompleted: true },
+  });
 
   if (!user) {
     const displayName = profile.name?.trim() || email.split("@")[0];
-    const newUser = await db.user.create({
-      data: {
-        email,
-        fullName: displayName,
-        emailVerifiedAt: new Date(),
+    user = await db.$transaction(async (tx) => {
+      const existing = await tx.user.findUnique({ where: { email }, select: { id: true, onboardingCompleted: true, emailVerifiedAt: true } });
+      const wasCreated = !existing;
+      if (existing && !existing.emailVerifiedAt) throw new Error("Existing email is not verified");
+      let accountUser: { id: string; onboardingCompleted: boolean } | null = existing
+        ? { id: existing.id, onboardingCompleted: existing.onboardingCompleted }
+        : null;
+      const invitations = await tx.hotelInvitation.findMany({ where: { email, status: "PENDING", expiresAt: { gt: new Date() } } });
+      if (!accountUser) {
+        accountUser = await tx.user.create({
+          data: {
+            email,
+            emailVerifiedAt: new Date(),
+            fullName: displayName,
         firstName: profile.given_name?.trim() || null,
         lastName: profile.family_name?.trim() ?? null,
-        avatarUrl: profile.picture ?? null,
-      },
-      select: { id: true, onboardingCompleted: true },
+            avatarUrl: profile.picture ?? null,
+            onboardingCompleted: invitations.length > 0,
+          },
+          select: { id: true, onboardingCompleted: true },
+        });
+        if (invitations.length === 0) {
+          const org = await tx.organization.create({ data: { name: `${displayName} — Организация` } });
+          const hotel = await tx.hotel.create({
+            data: { orgId: org.id, slug: `hotel-${crypto.randomUUID()}`, name: `Отель ${displayName.split(" ")[0]}`, timezone: "Asia/Almaty", currency: "KZT", country: "Казахстан" },
+          });
+          await tx.membership.create({ data: { organizationId: org.id, userId: accountUser.id, hotelId: hotel.id, role: "OWNER", accessLevel: "FULL" } });
+        }
+      }
+      if (!accountUser) throw new Error("Unable to provision Google account");
+      await tx.oAuthAccount.create({ data: { userId: accountUser.id, provider: "google", providerAccountId: profile.sub } });
+      if (invitations.length > 0) {
+        await tx.membership.createMany({ data: invitations.map((item) => ({ organizationId: item.organizationId, hotelId: item.hotelId, userId: accountUser.id, role: "STAFF", accessLevel: item.accessLevel, permissions: item.permissions })), skipDuplicates: true });
+        await tx.hotelInvitation.updateMany({ where: { id: { in: invitations.map((item) => item.id) } }, data: { status: "ACCEPTED", acceptedAt: new Date() } });
+      }
+      if (wasCreated) {
+        const membership = await tx.membership.findFirst({
+          where: { userId: accountUser.id },
+          orderBy: { createdAt: "asc" },
+          select: { organizationId: true, hotelId: true, role: true },
+        });
+        await recordAnalyticsEvent({
+          eventType: "signup_completed",
+          userId: accountUser.id,
+          organizationId: membership?.organizationId,
+          hotelId: membership?.hotelId,
+          entityType: "User",
+          entityId: accountUser.id,
+          metadata: { method: "google" },
+        }, tx);
+        if (membership?.role === "OWNER") {
+          await recordAnalyticsEvent({
+            eventType: "hotel_created",
+            userId: accountUser.id,
+            organizationId: membership.organizationId,
+            hotelId: membership.hotelId,
+            entityType: "Hotel",
+            entityId: membership.hotelId,
+          }, tx);
+        }
+      }
+      return accountUser;
     });
-
-    const org = await db.organization.create({
-      data: { name: `${displayName} — Организация` },
-    });
-
-    const hotel = await db.hotel.create({
-      data: {
-        orgId: org.id,
-        slug: `hotel-${newUser.id.slice(0, 8)}-${Date.now().toString(36)}`,
-        name: `Отель ${displayName.split(" ")[0]}`,
-        timezone: "Asia/Almaty",
-        currency: "KZT",
-        country: "Казахстан",
-      },
-    });
-
-    await db.membership.create({
-      data: {
-        organizationId: org.id,
-        userId: newUser.id,
-        hotelId: hotel.id,
-        role: "OWNER",
-      },
-    });
-
-    user = newUser;
   }
 
-  await createSession(user.id);
+  if (!user) {
+    loginUrl.searchParams.set("error", "google");
+    return NextResponse.redirect(loginUrl);
+  }
+
+  const sessionId = await createSession(user.id);
+  const membership = await db.membership.findFirst({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+    select: { organizationId: true, hotelId: true },
+  });
+  await recordAnalyticsEventSafely({
+    eventType: "login",
+    userId: user.id,
+    organizationId: membership?.organizationId,
+    hotelId: membership?.hotelId,
+    sessionId,
+    metadata: { method: "google" },
+  });
 
   const redirectUrl = user.onboardingCompleted ? "/dashboard" : "/onboarding";
-  return NextResponse.redirect(new URL(redirectUrl, url.origin));
+  return NextResponse.redirect(new URL(redirectUrl, origin));
 }

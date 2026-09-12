@@ -3,10 +3,12 @@
  * against the seeded database, then restores state via db:reset.
  */
 import { PrismaClient } from "@prisma/client";
+import { assertDisposableDatabase } from "../src/lib/security/database-safety";
 
 const db = new PrismaClient();
 
 async function main() {
+  assertDisposableDatabase();
   // Lazy-import app services after env is set.
   const { runChannelSync } = await import("../src/lib/channels/sync-service");
   const { createReservation, OverbookingError } = await import("../src/lib/reservations/service");
@@ -19,7 +21,7 @@ async function main() {
     include: { channel: true },
   });
   console.log("== Running Booking.com mock sync ==");
-  const summary = await runChannelSync(bookingConn.id);
+  const summary = await runChannelSync(bookingConn.id, hotel.id);
   console.log("Sync result:", summary.status, "| imported:", summary.reservationsImported, "| rates:", summary.ratesUpdated, "| avail:", summary.availabilityUpdated);
   console.log("Message:", summary.message);
   if (summary.reservationsImported === 0) throw new Error("Expected at least one import");

@@ -1,10 +1,13 @@
 import { db } from "@/lib/db";
 import { getChannelProvider } from "./provider-registry";
 import type { ChannelConnectionContext, ExternalReservation } from "./types";
-import type { ChannelCredentials, AvailabilityUpdate, RateUpdate } from "./types";
+import type { AvailabilityUpdate, RateUpdate } from "./types";
 import { parseISODate, addDays, toISODate } from "@/lib/dates";
 import { createReservation, findFreeRoom, hasAvailabilityForStay, writeAudit } from "@/lib/reservations/service";
 import { t, pluralize } from "@/lib/i18n";
+import { decryptChannelCredentials } from "@/lib/security/credentials";
+import { PublicError } from "@/server/errors";
+import { getSyncIncidentId, syncBusyMessage, syncFailureMessage } from "./sync-errors";
 
 /**
  * Synchronization engine.
@@ -26,23 +29,38 @@ export interface SyncSummary {
   ratesUpdated: number;
   availabilityUpdated: number;
   message: string | null;
+  incidentId: string | null;
 }
 
 const SYNC_HORIZON_DAYS = 30;
 
-export async function runChannelSync(connectionId: string): Promise<SyncSummary> {
-  const connection = await db.channelConnection.findUniqueOrThrow({
-    where: { id: connectionId },
-    include: {
-      channel: true,
-      roomMappings: true,
-      rateMappings: { include: { ratePlan: true } },
-    },
-  });
-  const hotelId = connection.hotelId;
-
-  const log = await db.syncLog.create({
-    data: { connectionId: connection.id, channelId: connection.channelId, status: "RUNNING" },
+export async function runChannelSync(connectionId: string, hotelId: string): Promise<SyncSummary> {
+  // Atomic claim shared by single sync, bulk sync and deletion across servers.
+  const { connection, log } = await db.$transaction(async (tx) => {
+    const claimed = await tx.channelConnection.updateMany({
+      where: {
+        id: connectionId, hotelId,
+        status: { in: ["CONNECTED", "ERROR"] },
+        channel: { isInternal: false },
+        OR: [{ lastSyncStatus: null }, { lastSyncStatus: { not: "RUNNING" } }],
+      },
+      data: { lastSyncStatus: "RUNNING" },
+    });
+    if (claimed.count !== 1) {
+      const existing = await tx.channelConnection.findFirst({
+        where: { id: connectionId, hotelId }, select: { lastSyncStatus: true },
+      });
+      throw new PublicError(existing?.lastSyncStatus === "RUNNING"
+        ? syncBusyMessage : "Подключение недоступно для синхронизации.");
+    }
+    const connection = await tx.channelConnection.findUniqueOrThrow({
+      where: { id: connectionId, hotelId },
+      include: { channel: true, roomMappings: true, rateMappings: { include: { ratePlan: true } } },
+    });
+    const log = await tx.syncLog.create({
+      data: { connectionId, channelId: connection.channelId, status: "RUNNING" },
+    });
+    return { connection, log };
   });
 
   let reservationsImported = 0;
@@ -52,15 +70,15 @@ export async function runChannelSync(connectionId: string): Promise<SyncSummary>
   const notes: string[] = [];
 
   try {
-    if (connection.status !== "CONNECTED") {
+    if (connection.status !== "CONNECTED" && connection.status !== "ERROR") {
       throw new Error("Канал не подключён.");
     }
     const provider = getChannelProvider(connection.channelId);
     const context = buildContext(connection);
 
     // 1. Verify connection is alive.
-    if (!connection.credentialsJson) throw new Error("Для этого подключения не заданы учётные данные.");
-    const credentials = parseCredentials(connection.credentialsJson);
+    if (!connection.credentialsEncrypted) throw new Error("Подключение нужно настроить заново: защищённые учётные данные отсутствуют.");
+    const credentials = decryptChannelCredentials(connection.credentialsEncrypted);
     const verification = await provider.verifyCredentials(credentials);
     if (!verification.ok) throw new Error(`Проверка подключения не пройдена: ${verification.error}`);
 
@@ -103,14 +121,17 @@ export async function runChannelSync(connectionId: string): Promise<SyncSummary>
     if (notes.length > 0) message += ` — ${notes[0]}`;
 
     const status: SyncSummary["status"] = skipped > 0 ? "PARTIAL" : "SUCCESS";
-    return finishLog(log.id, connection, status, {
+    return await finishLog(log.id, connection, status, {
       reservationsImported,
       ratesUpdated,
       availabilityUpdated,
       message,
     });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Неизвестная ошибка синхронизации";
+  } catch {
+    const incidentId = crypto.randomUUID();
+    // Provider exceptions can contain credentials, URLs and response bodies.
+    console.error("Channel sync failed", { incidentId, connectionId: connection.id, logId: log.id });
+    const errorMessage = syncFailureMessage(incidentId);
     return finishLog(log.id, connection, "FAILED", {
       reservationsImported,
       ratesUpdated,
@@ -123,12 +144,21 @@ export async function runChannelSync(connectionId: string): Promise<SyncSummary>
 
 export async function syncAllConnectedChannels(hotelId: string): Promise<SyncSummary[]> {
   const connections = await db.channelConnection.findMany({
-    where: { hotelId, status: "CONNECTED" },
+    where: { hotelId, status: { in: ["CONNECTED", "ERROR"] }, channel: { isInternal: false } },
     select: { id: true, channelId: true },
   });
   const summaries: SyncSummary[] = [];
   for (const c of connections) {
-    summaries.push(await runChannelSync(c.id));
+    try {
+      summaries.push(await runChannelSync(c.id, hotelId));
+    } catch (error) {
+      if (!(error instanceof PublicError)) throw error;
+      summaries.push({
+        logId: "", channelId: c.channelId, status: "FAILED", incidentId: null,
+        reservationsImported: 0, ratesUpdated: 0, availabilityUpdated: 0,
+        message: error.message,
+      });
+    }
   }
   return summaries;
 }
@@ -276,7 +306,7 @@ async function pushRatesToChannel(
       updates.push({
         externalRateId: mapping.externalRateId,
         date: toISODate(r.date),
-        price: r.price,
+        price: Number(r.price),
         currency,
       });
     }
@@ -321,6 +351,7 @@ async function finishLog(
         lastSyncAt: finishedAt,
         lastSyncStatus: status,
         lastError: counters.error ?? null,
+        status: status === "FAILED" ? "ERROR" : "CONNECTED",
       },
     }),
   ]);
@@ -329,7 +360,8 @@ async function finishLog(
     channelId: connection.channelId,
     status,
     ...counters,
-    message: counters.message,
+    message: counters.error ?? counters.message,
+    incidentId: getSyncIncidentId(counters.error),
   };
 }
 
@@ -339,6 +371,7 @@ function buildContext(connection: {
   channelId: string;
   externalPropertyId: string | null;
   credentialsJson: string | null;
+  credentialsEncrypted: string | null;
   importCursor: number;
 }): ChannelConnectionContext {
   return {
@@ -346,7 +379,7 @@ function buildContext(connection: {
     channelId: connection.channelId as ChannelConnectionContext["channelId"],
     hotelId: connection.hotelId,
     externalPropertyId: connection.externalPropertyId,
-    credentials: connection.credentialsJson ? parseCredentials(connection.credentialsJson) : null,
+    credentials: connection.credentialsEncrypted ? decryptChannelCredentials(connection.credentialsEncrypted) : null,
     importCursor: connection.importCursor,
   };
 }
@@ -356,19 +389,6 @@ function buildContext(connection: {
  * only replaces this one function. Credentials are NEVER logged and NEVER
  * returned to the browser.
  */
-export function parseCredentials(json: string): ChannelCredentials {
-  try {
-    const parsed = JSON.parse(json) as Partial<ChannelCredentials>;
-    return {
-      propertyId: String(parsed.propertyId ?? ""),
-      username: String(parsed.username ?? ""),
-      apiKey: String(parsed.apiKey ?? ""),
-    };
-  } catch {
-    return { propertyId: "", username: "", apiKey: "" };
-  }
-}
-
 function startOfTodayUtc(): Date {
   const now = new Date();
   return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));

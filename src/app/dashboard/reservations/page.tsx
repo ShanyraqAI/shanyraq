@@ -9,7 +9,7 @@ import { requireSectionAccess } from "@/server/guards";
 export const dynamic = "force-dynamic";
 
 export default async function ReservationsPage() {
-  await requireSectionAccess("FULL");
+  await requireSectionAccess("RESERVATIONS");
   const hotelId = await getCurrentHotelId();
   const [hotel, roomsRaw, roomTypes, ratePlansRaw, guestsRaw, reservations] = await Promise.all([
     db.hotel.findUniqueOrThrow({ where: { id: hotelId } }),
@@ -38,7 +38,7 @@ export default async function ReservationsPage() {
     name: p.name,
     roomTypeId: p.roomTypeId,
     roomTypeName: roomTypes.find((t) => t.id === p.roomTypeId)?.name ?? "",
-    basePrice: p.basePrice,
+    basePrice: Number(p.basePrice),
     currency: p.currency,
     refundable: p.refundable,
     breakfastIncluded: p.breakfastIncluded,

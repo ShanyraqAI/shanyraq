@@ -7,9 +7,8 @@ export interface CalendarBoardData {
   ratePlans: RatePlanVM[];
   guests: GuestVM[];
   hotelCurrency: string;
+  todayISO: string;
 }
-
-export type CalendarViewMode = "day" | "week" | "month";
 
 export interface CalendarFilters {
   roomTypeId: string;

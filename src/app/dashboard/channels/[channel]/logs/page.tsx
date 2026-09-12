@@ -6,6 +6,7 @@ import { PageHeader, EmptyState } from "@/components/shared/page-header";
 import { SyncStatusBadge } from "@/components/shared/status-badge";
 import { t } from "@/lib/i18n";
 import { requireSectionAccess } from "@/server/guards";
+import { getSyncIncidentId, syncFailureMessage } from "@/lib/channels/sync-errors";
 import {
   Table,
   TableBody,
@@ -85,8 +86,8 @@ export default async function ChannelLogsPage({
                   <TableCell className="text-right tabular-nums">{log.ratesUpdated}</TableCell>
                   <TableCell className="text-right tabular-nums">{log.availabilityUpdated}</TableCell>
                   <TableCell className="max-w-[360px] text-sm text-muted-foreground">
-                    {log.error ? (
-                      <span className="text-destructive">{log.error}</span>
+                    {log.status === "FAILED" || log.error ? (
+                      <span className="break-words text-destructive">{syncFailureMessage(getSyncIncidentId(log.error) ?? log.id)}</span>
                     ) : (
                       (log.message ?? "—")
                     )}

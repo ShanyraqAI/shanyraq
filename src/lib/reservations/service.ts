@@ -3,6 +3,8 @@ import { ACTIVE_RESERVATION_STATUSES, type ReservationStatus } from "@/lib/const
 import { addDays, diffDays, parseISODate, today } from "@/lib/dates";
 import { recomputeAvailability, remainingUnitsOnDate } from "@/lib/availability/service";
 import { PublicError } from "@/server/errors";
+import { getSessionUser } from "@/lib/auth/session";
+import { enqueueHotelChannelSyncs } from "@/lib/channels/sync-outbox";
 import type { Prisma } from "@prisma/client";
 
 type ReservationDb = typeof db | Prisma.TransactionClient;
@@ -153,16 +155,17 @@ export async function createReservation(params: CreateReservationParams) {
     const reservation = await tx.reservation.create({
       data: {
         hotelId: params.hotelId, guestId: params.guestId, roomId: room.id, roomTypeId: room.roomTypeId,
-        sourceChannel: params.sourceChannel,
+        ratePlanId: params.ratePlanId, sourceChannel: params.sourceChannel,
         externalReservationId: params.externalReservationId ?? null, checkIn, checkOut,
         adults: params.adults, children: params.children, status: params.status ?? "CONFIRMED",
         currency: price.currency, totalAmount: price.total, notes: params.notes ?? null,
       },
     });
+    await recomputeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, tx);
+    await enqueueHotelChannelSyncs(tx, params.hotelId);
     return { reservation, roomTypeId: room.roomTypeId };
   }, { timeout: 15_000 });
 
-  await recomputeAvailability(params.hotelId, result.roomTypeId, checkIn, checkOut);
   await writeAudit(params.hotelId, "reservation.created", "Reservation", result.reservation.id, {
     channel: params.sourceChannel,
     externalId: params.externalReservationId ?? undefined,
@@ -205,24 +208,23 @@ export async function updateReservationDetails(params: UpdateReservationParams) 
     const updated = await tx.reservation.update({
       where: { id: existing.id },
       data: {
-        guestId: params.guestId, roomId: room.id, roomTypeId: room.roomTypeId,
+        guestId: params.guestId, roomId: room.id, roomTypeId: room.roomTypeId, ratePlanId: params.ratePlanId,
         checkIn, checkOut, adults: params.adults, children: params.children,
         currency: price.currency, totalAmount: price.total, notes: params.notes ?? null,
       },
     });
+    await recomputeAvailability(params.hotelId, existing.roomTypeId, existing.checkIn, existing.checkOut, tx);
+    if (
+      existing.roomTypeId !== room.roomTypeId ||
+      existing.checkIn.getTime() !== checkIn.getTime() ||
+      existing.checkOut.getTime() !== checkOut.getTime()
+    ) {
+      await recomputeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, tx);
+    }
+    await enqueueHotelChannelSyncs(tx, params.hotelId);
     return { existing, room, updated };
   }, { timeout: 15_000 });
-  const { existing, room, updated } = result;
-
-  // Availability may change on both old and new ranges.
-  await recomputeAvailability(params.hotelId, existing.roomTypeId, existing.checkIn, existing.checkOut);
-  if (
-    existing.roomTypeId !== room.roomTypeId ||
-    existing.checkIn.getTime() !== checkIn.getTime() ||
-    existing.checkOut.getTime() !== checkOut.getTime()
-  ) {
-    await recomputeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut);
-  }
+  const { updated } = result;
   await writeAudit(params.hotelId, "reservation.updated", "Reservation", updated.id);
   return updated;
 }
@@ -276,14 +278,15 @@ export async function setReservationStatus(hotelId: string, reservationId: strin
         await tx.room.update({ where: { id: current.roomId }, data: { status: "AVAILABLE" } });
       }
     }
+    const wasActive = ACTIVE_RESERVATION_STATUSES.includes(currentStatus);
+    const isActive = ACTIVE_RESERVATION_STATUSES.includes(status);
+    if (wasActive !== isActive) {
+      await recomputeAvailability(hotelId, current.roomTypeId, current.checkIn, current.checkOut, tx);
+    }
+    await enqueueHotelChannelSyncs(tx, hotelId);
     return { reservation: current, updated: next, changed: true };
   }, { timeout: 15_000 });
   if (!changed) return updated;
-
-  // Cancelling/no-show frees inventory.
-  if (status === "CANCELLED" || status === "NO_SHOW") {
-    await recomputeAvailability(hotelId, reservation.roomTypeId, reservation.checkIn, reservation.checkOut);
-  }
   await writeAudit(hotelId, `reservation.${status.toLowerCase()}`, "Reservation", reservation.id);
   return updated;
 }
@@ -336,9 +339,13 @@ export async function writeAudit(
   entityId?: string,
   meta?: Record<string, unknown>,
 ): Promise<void> {
+  const session = await getSessionUser().catch(() => null);
+  const actorUserId = session?.hotelId === hotelId ? session.id : null;
   await db.auditLog.create({
     data: {
       hotelId,
+      actor: actorUserId ? "user" : "system",
+      actorUserId,
       action,
       entity,
       entityId: entityId ?? null,

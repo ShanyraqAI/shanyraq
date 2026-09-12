@@ -5,6 +5,7 @@ import { SyncAllButton } from "@/components/channels/sync-all-button";
 import type { RatePlanVM } from "@/lib/types";
 import { t } from "@/lib/i18n";
 import { requireSectionAccess } from "@/server/guards";
+import { getSyncIncidentId } from "@/lib/channels/sync-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export default async function ChannelsPage() {
     name: p.name,
     roomTypeId: p.roomTypeId,
     roomTypeName: p.roomType.name,
-    basePrice: p.basePrice,
+    basePrice: Number(p.basePrice),
     currency: p.currency,
     refundable: p.refundable,
     breakfastIncluded: p.breakfastIncluded,
@@ -49,7 +50,8 @@ export default async function ChannelsPage() {
       externalPropertyId: conn?.externalPropertyId ?? null,
       lastSyncAt: conn?.lastSyncAt?.toISOString() ?? null,
       lastSyncStatus: conn?.lastSyncStatus ?? null,
-      lastError: conn?.lastError ?? null,
+      syncFailed: conn?.lastSyncStatus === "FAILED" || conn?.status === "ERROR" || Boolean(conn?.lastError),
+      incidentId: getSyncIncidentId(conn?.lastError),
       roomMappings: conn
         ? conn.roomMappings.map((m) => ({
             roomTypeId: m.roomTypeId,
@@ -75,6 +77,9 @@ export default async function ChannelsPage() {
       >
         <SyncAllButton />
       </PageHeader>
+      <p className="rounded-lg border bg-secondary/40 p-3 text-sm text-muted-foreground">
+        Внешние каналы пока работают через тестовые адаптеры. Реальные API-вызовы не выполняются.
+      </p>
       <ChannelCards
         channels={cards}
         internalRoomTypes={roomTypes}

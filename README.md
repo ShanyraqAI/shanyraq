@@ -1,148 +1,92 @@
-# Shanyraq AI — Hotel PMS & Channel Manager (MVP)
+# Shanyraq AI — Hotel PMS & Channel Manager
 
-Shanyraq AI is a SaaS platform for hotels: a property management system (rooms,
-reservations, guests, rates) with a built-in channel manager that keeps
-Booking.com, Ostrovok, Krisha and direct sales synchronized through a single
-normalized core.
+Production SaaS for hotel operations: organizations and hotels, rooms, guests,
+reservations, rates, availability, access control and a channel-manager core.
 
-## Quick start
+## Requirements
+
+- Node.js 20.9 or newer
+- PostgreSQL (production uses Neon)
+- Environment variables copied from `.env.example`
+
+## Local start
 
 ```bash
-npm install          # also runs `prisma generate`
-npm run db:reset     # creates the SQLite database + seeds demo data
-npm run dev          # http://localhost:3000 → redirects to /dashboard
+npm install
+npm run db:migrate
+npm run dev
 ```
 
-> Requires Node.js 18+. If `node`/`npm` are not on PATH, install Node LTS or add
-> your Node folder to PATH.
+Database resets are intentionally blocked unless the explicit disposable-database
+guards in `.env.example` are configured. Never run `db:reset` against shared or
+production data.
 
-## Scripts
+## Commands
 
-| Command             | What it does                                        |
-| ------------------- | --------------------------------------------------- |
-| `npm run dev`       | Development server                                  |
-| `npm run build`     | Prisma generate + production build                   |
-| `npm run lint`      | ESLint                                              |
-| `npm run db:push`   | Sync `prisma/schema.prisma` to the database          |
-| `npm run db:seed`   | Seed demo data                                       |
-| `npm run db:reset`  | Reset database + reseed (restores the demo dataset)  |
-| `npm run test:smoke`| Business-logic smoke test (sync + overbooking guards)|
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the development server |
+| `npm run build` | Generate Prisma Client and create a production build |
+| `npm run lint` | Run ESLint |
+| `npm run db:migrate` | Apply committed Prisma migrations |
+| `npm run db:seed` | Seed required reference data |
+| `npm run db:seed:demo` | Seed disposable demo data (guarded) |
+| `npm run db:reset` | Reset a disposable database (strictly guarded) |
+| `npm run db:check:channel-secrets` | Count legacy and encrypted channel credentials |
+| `npm run db:migrate:channel-secrets` | Encrypt legacy channel credentials and erase plaintext |
+| `npm run test:smoke` | Run destructive business smoke tests on a disposable database |
+| `npm run test:room-tenancy` | Audit room tenant isolation |
 
-## Demo dataset
+## Production configuration
 
-- **Hotel:** Shanyraq Hotel Astana (Asia/Almaty, KZT)
-- **Rooms:** 101–103 Standard · 201–203 Deluxe · 301–302 Suite
-- **26 reservations** anchored around *today*: past stays, in-house guests,
-  today's arrivals & departures, upcoming bookings, a pending and a cancelled one
-- Rate plans with a 45-day price calendar (weekend pricing), availability rows
-- Booking.com + Ostrovok pre-connected with room/rate mappings and sync history;
-  Krisha left unconnected so you can run the full connect → map → sync flow
+Set every applicable variable from `.env.example` in Vercel. In particular:
 
-## The MVP demo flow
+- `DATABASE_URL` — pooled PostgreSQL connection string.
+- `APP_URL` — canonical HTTPS origin of the production application.
+- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` — optional Google OAuth.
+- `RESEND_API_KEY`, `EMAIL_FROM`, `VERIFICATION_CODE_SECRET` — email code
+  verification and hotel invitations.
+- `CHANNEL_CREDENTIALS_ENCRYPTION_KEY` — stable 32-byte key; rotating it requires
+  decrypting and re-encrypting existing channel credentials.
+- `BLOB_READ_WRITE_TOKEN` — private server token for avatar uploads.
 
-1. Open `/dashboard` — KPIs are computed live from reservations (occupancy,
-   arrivals/departures today, MTD revenue, rooms available tonight)
-2. Open the **Calendar** — week-view timeline; click blocks for details,
-   click empty cells to create bookings, drag blocks to move them
-3. Create a reservation — the calendar, dashboard and reservation list all update
-4. Open **Channels** — see Booking.com / Ostrovok connected, Krisha not connected
-5. Click **Connect** on Krisha — test credentials (mock), save, then map rooms
-   and rates to Krisha's external catalogue
-6. Hit **Sync** — reservations are imported through the adapter, availability
-   and rates are pushed back, and a sync log is recorded
-7. Open the channel's **Logs** page for the synchronization history
+Deployments apply schema changes with `prisma migrate deploy`; do not use
+`prisma db push` in production. After introducing the encryption key for an
+existing database, run `npm run db:migrate:channel-secrets` once from a trusted
+environment before enabling channel synchronization.
 
-## Architecture
+## Security model
 
-```
-                ┌─────────────── Shanyraq Core ───────────────┐
-                │  Hotel · Rooms · Reservations · Rates ·      │
-                │  Guests · Availability                       │
-                └───────┬───────────────┬───────────────┬─────┘
-                        │               │               │
-                 BookingAdapter  OstrovokAdapter  KrishaAdapter      ← lib/channels/providers/*
-                        │               │               │
-                  External APIs  External APIs  External APIs        ← mocked for the MVP
-```
+- Email accounts become active only after a short-lived six-digit verification
+  code is confirmed. Codes are HMAC-hashed, rate-limited and attempt-limited.
+- Sessions and tenant access are checked server-side. Memberships belong to an
+  organization and a concrete hotel.
+- Tenant ownership is enforced both in service queries and with composite
+  PostgreSQL foreign keys.
+- Reservation writes use database transactions and advisory locks to prevent
+  concurrent overbooking.
+- Channel credentials are encrypted with AES-256-GCM and are never returned to
+  browser code or written to application logs.
+- Avatar uploads validate actual PNG/JPEG signatures and dimensions before they
+  are stored in Vercel Blob.
+- Unknown server errors return a generic incident identifier; details remain in
+  server logs.
 
-Key principle: internal models never know about channel-specific shapes.
-Every channel implements the same `ChannelProvider` interface
-(`src/lib/channels/types.ts`); mock providers simulate latency, credential
-checks and incremental reservation feeds deterministically. Swapping in real
-APIs later means implementing `RealXProvider` and registering it in
-`provider-registry.ts` — nothing else changes.
+## Channel providers
 
-Synchronization (`src/lib/channels/sync-service.ts`) runs per connection:
-verify → pull → normalize → overbooking guard → store → push rates → push
-availability → record `SyncLog`. The function is job-shaped so a queue/worker
-can wrap it without touching callers.
+The normalized channel interface and persistence flow are production-oriented,
+but Booking.com, Ostrovok and Krisha provider adapters remain deterministic mock
+implementations until official API credentials and provider certification are
+supplied. The UI must present that boundary clearly; mock adapters must never be
+described as a live third-party connection.
 
-Overbooking protection lives in `src/lib/reservations/service.ts`: demand is
-refused when a type is sold out, physical room double-booking is impossible,
-and inventory can never go negative.
+## Verification before release
 
-### Data model (Prisma)
-
-`Hotel → RoomType → Room`, `Guest`, `Reservation`,
-`RatePlan → Rate`, `Availability`,
-`Channel → ChannelConnection → ChannelRoomMapping / ChannelRateMapping / SyncLog`,
-plus `Organization/User/Membership`, `Notification`, `AuditLog` for the next stage.
-See `prisma/schema.prisma`.
-
-### Dates & timezones
-
-Hotel business dates are stored as UTC midnights and handled exclusively
-through `src/lib/dates.ts` helpers — check-in days can never shift due to
-timezone conversion. The hotel's IANA timezone is stored on the hotel record.
-
-### Database provider
-
-Продакшен использует **PostgreSQL (Neon)**. Схема не использует engine-specific фичи (статусы — строки, валидация через Zod/TS), поэтому локально можно было использовать SQLite, но сейчас проект полностью на PostgreSQL:
-
-1. `provider = "postgresql"` в `prisma/schema.prisma`
-2. `DATABASE_URL` — Neon connection string (см. `.env` / `.env.example`)
-3. `npm run db:push && npm run db:seed`
-
-Локальные `*.db` файлы удалены, `src/lib/db-init-sql.ts` и `gen:sql` больше не нужны — схема управляется `prisma db push`.
-
-### Security notes
-
-- All mutations go through server actions validated with Zod
-- Channel credentials are stored server-side only and never sent to the browser
-  or logged; `parseCredentials()` is the single point to swap for an encrypted
-  secret store
-- Tenant access funnels through `getCurrentHotelId()` — the seam where real
-  authentication plugs in later
-
-## Deployment — Vercel + Neon PostgreSQL
-
-Приложение готово к деплою на Vercel с Neon PostgreSQL (персистентность, сессии не теряются при холодных стартах).
-
-### Шаги деплоя
-
-1. Push репозиторий в GitHub
-2. В Vercel: **Add New → Project → Import** репозиторий (framework auto-detected)
-3. Environment variables:
-   - `DATABASE_URL` — pooled connection string из Neon Console (`postgresql://...?sslmode=require`)
-   - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — из Google Cloud Console (Authorized redirect URI: `https://<vercel-app>.vercel.app/api/auth/google/callback`)
-4. Deploy — схема применяется `prisma db push` (или `prisma migrate`), затем `src/lib/bootstrap.ts` сидирует системные `Channel` один раз
-5. Проверьте логи: не должно быть `Session table does not exist` — bootstrap больше не зависит от SQLite DDL
-
-## Project layout
-
-```
-src/
-  app/dashboard/…        overview, calendar, reservations, rooms, guests,
-                         rates, channels (+ [channel], logs), reports, settings
-  components/
-    calendar/            interactive timeline board
-    channels/            cards, connect dialog, mapping editor, sync buttons
-    dashboard/ guests/ rates/ reservations/ rooms/ settings/ shared/ ui/
-  lib/
-    channels/            provider interface, mock providers, registry, sync
-    availability/ reservations/   domain services
-    db.ts stats.ts dates.ts constants.ts types.ts utils.ts
-  server/actions/        Zod-validated server actions
-prisma/                  schema + seed
-scripts/smoke.ts         business-logic smoke tests
+```bash
+npm run lint
+npx tsc --noEmit
+npm run build
+npm audit
+npx prisma migrate status
+npm run db:check:channel-secrets
 ```

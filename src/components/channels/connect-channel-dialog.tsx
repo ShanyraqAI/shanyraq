@@ -22,9 +22,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MappingEditor } from "./mapping-editor";
+import { DeleteConnectionButton } from "./delete-connection-button";
 import {
   connectChannelAction,
-  disconnectChannelAction,
   fetchExternalInventoryAction,
   testChannelConnectionAction,
 } from "@/server/actions/channels";
@@ -117,19 +117,6 @@ export function ConnectChannelDialog({
     }
   }
 
-  async function handleDisconnect() {
-    if (!channel.connectionId) return;
-    if (!window.confirm(t.channelsPage.dialog.disconnectConfirm(channel.name))) return;
-    const result = await disconnectChannelAction(channel.connectionId);
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success(result.message);
-    onOpenChange(false);
-    router.refresh();
-  }
-
   return (
     <Dialog
       open={open}
@@ -211,9 +198,10 @@ export function ConnectChannelDialog({
                 {t.channelsPage.dialog.summaryPropertyId} <strong>{propertyId || channel.externalPropertyId}</strong>
                 {username ? <>{t.channelsPage.dialog.summaryUser}<strong>{username}</strong></> : null}
               </span>
-              <Button variant="ghost" size="sm" className="text-destructive hover:bg-red-50 hover:text-destructive" onClick={handleDisconnect}>
-                {t.common.disconnect}
-              </Button>
+              {channel.connectionId ? (
+                <DeleteConnectionButton connectionId={channel.connectionId} channelName={channel.name}
+                  disabled={saving || testing} onDeleted={() => onOpenChange(false)} />
+              ) : null}
             </div>
 
             {inventoryError ? (

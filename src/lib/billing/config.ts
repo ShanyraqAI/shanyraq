@@ -1,4 +1,5 @@
 import { BillingError } from "./policy";
+import { PRODUCT_AVAILABILITY } from "@/lib/product-availability";
 
 export function paymentConfig() {
   const merchantId = process.env.FREEDOMPAY_MERCHANT_ID ?? "";
@@ -21,6 +22,7 @@ export function requirePaymentConfig() {
 
 /** Never enforce deadlines until the live provider and explicit rollout date are configured. */
 export function billingLaunch(): Date | null {
+  if (!PRODUCT_AVAILABILITY.billing) return null;
   const value = process.env.BILLING_START_AT;
   if (process.env.BILLING_ENABLED !== "true" || paymentConfig()?.mode !== "live" || !value?.endsWith("Z")) return null;
   const date = new Date(value);

@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
  */
 
 export interface CurrentUser {
+  sessionId: string;
   id: string;
   email: string | null;
   phone: string | null;
@@ -15,11 +16,13 @@ export interface CurrentUser {
   lastName: string;
   avatarUrl: string | null;
   onboardingCompleted: boolean;
+  platformRole: string | null;
   membershipId: string | null;
   hotelId: string | null;
   organizationId: string | null;
   role: string | null;
   accessLevel: string | null;
+  permissions: string[];
 }
 
 export interface CurrentMembership {
@@ -29,6 +32,7 @@ export interface CurrentMembership {
   hotelId: string;
   userId: string;
   accessLevel: string;
+  permissions: string[];
 }
 
 export interface CurrentHotel {
@@ -48,6 +52,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   const sessionUser = await getSessionUser();
   if (!sessionUser) return null;
   return {
+    sessionId: sessionUser.sessionId,
     id: sessionUser.id,
     email: sessionUser.email,
     phone: sessionUser.phone,
@@ -56,18 +61,20 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     lastName: sessionUser.lastName,
     avatarUrl: sessionUser.avatarUrl,
     onboardingCompleted: sessionUser.onboardingCompleted,
+    platformRole: sessionUser.platformRole,
     membershipId: sessionUser.membershipId,
     hotelId: sessionUser.hotelId,
     organizationId: sessionUser.organizationId,
     role: sessionUser.role,
     accessLevel: sessionUser.accessLevel,
+    permissions: sessionUser.permissions,
   };
 }
 
 export async function getCurrentMembership(): Promise<CurrentMembership | null> {
   const user = await getCurrentUser();
   if (!user || !user.membershipId || !user.organizationId || !user.hotelId || !user.role || !user.accessLevel) return null;
-  return { id: user.membershipId, role: user.role, accessLevel: user.accessLevel, organizationId: user.organizationId, hotelId: user.hotelId, userId: user.id };
+  return { id: user.membershipId, role: user.role, accessLevel: user.accessLevel, permissions: user.permissions, organizationId: user.organizationId, hotelId: user.hotelId, userId: user.id };
 }
 
 export async function getCurrentHotel(): Promise<CurrentHotel | null> {

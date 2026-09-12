@@ -1,87 +1,97 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/tenant";
 
+const hotelDetailsSchema = z.object({
+  action: z.literal("save-hotel"),
+  hotelName: z.string().trim().min(2, "Название отеля обязательно").max(120),
+  city: z.string().trim().min(2, "Город обязателен").max(120),
+  country: z.string().trim().min(2).max(120),
+  language: z.enum(["ru", "kk", "en"]).default("ru"),
+  currency: z.enum(["KZT", "USD", "EUR"]),
+  timezone: z.string().trim().max(64).refine((value) => {
+    try { new Intl.DateTimeFormat("en", { timeZone: value }); return true; } catch { return false; }
+  }, "Некорректный часовой пояс"),
+  propertyType: z.enum(["Отель", "Апарт-отель", "Апартаменты", "Хостел", "Гостевой дом", "Другое"]),
+});
+
+const onboardingSchema = z.discriminatedUnion("action", [
+  hotelDetailsSchema,
+  z.object({ action: z.literal("room-created") }),
+  z.object({ action: z.literal("complete"), skipReservation: z.boolean().default(false) }),
+]);
+
+function validOrigin(request: Request): boolean {
+  const origin = request.headers.get("origin");
+  const configured = process.env.APP_URL ?? (process.env.NODE_ENV === "development" ? "http://localhost:3000" : "");
+  return Boolean(origin && configured && new URL(origin).origin === new URL(configured).origin);
+}
+
 export async function POST(request: Request) {
   try {
-    // Check if user is authenticated and onboarding is not complete
+    if (!validOrigin(request)) return NextResponse.json({ ok: false, error: "Недопустимый источник запроса" }, { status: 403 });
+    const contentLength = Number(request.headers.get("content-length") ?? 0);
+    if (contentLength > 10_000) return NextResponse.json({ ok: false, error: "Слишком большой запрос" }, { status: 413 });
     const user = await getCurrentUser();
-    if (!user) {
+    if (!user?.hotelId || !user.organizationId) {
       return NextResponse.json({ ok: false, error: "Не авторизован" }, { status: 401 });
     }
+    if (user.onboardingCompleted) return NextResponse.json({ ok: true });
 
-    if (user.onboardingCompleted) {
-      return NextResponse.json({ ok: true });
-    }
+    const parsed = onboardingSchema.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Некорректные данные" }, { status: 400 });
+    const now = new Date();
 
-    const body = await request.json();
-    const {
-      hotelName,
-      city,
-      country,
-      language,
-      currency,
-      timezone,
-      propertyType,
-    } = body;
-
-    // Validate required fields
-    if (!hotelName?.trim()) {
-      return NextResponse.json({ ok: false, error: "Название отеля обязательно" }, { status: 400 });
-    }
-    if (!city?.trim()) {
-      return NextResponse.json({ ok: false, error: "Город обязателен" }, { status: 400 });
-    }
-    if (!propertyType) {
-      return NextResponse.json({ ok: false, error: "Тип объекта обязателен" }, { status: 400 });
-    }
-    // Update or create hotel with onboarding data
-    let hotelId = user.hotelId;
-    if (hotelId) {
-      await db.hotel.update({
-        where: { id: hotelId },
-        data: { name: hotelName, city, country, propertyType, language: language || "ru", timezone, currency },
+    if (parsed.data.action === "save-hotel") {
+      const data = parsed.data;
+      await db.$transaction(async (tx) => {
+        const updated = await tx.hotel.updateMany({
+          where: { id: user.hotelId!, orgId: user.organizationId! },
+          data: { name: data.hotelName, city: data.city, country: data.country, propertyType: data.propertyType, language: data.language, timezone: data.timezone, currency: data.currency },
+        });
+        if (updated.count !== 1) throw new Error("Hotel unavailable during onboarding");
+        const current = await tx.productExperience.findUnique({
+          where: { userId_hotelId: { userId: user.id, hotelId: user.hotelId! } },
+          select: { setupStep: true },
+        });
+        await tx.productExperience.upsert({
+          where: { userId_hotelId: { userId: user.id, hotelId: user.hotelId! } },
+          create: { userId: user.id, hotelId: user.hotelId!, setupStep: 2, lastSeenAt: now },
+          update: { setupStep: Math.max(2, current?.setupStep ?? 1), lastSeenAt: now },
+        });
       });
-    } else {
-      // Legacy user without hotel — create one now
-      const org = user.organizationId
-        ? await db.organization.findUnique({ where: { id: user.organizationId } })
-        : await db.organization.create({ data: { name: `${hotelName} — Организация` } });
-      const newHotel = await db.hotel.create({
-        data: {
-          orgId: org!.id,
-          slug: `hotel-${user.id.slice(0, 8)}-${Date.now().toString(36)}`,
-          name: hotelName,
-          city,
-          country,
-          propertyType,
-          language: language || "ru",
-          timezone,
-          currency,
-        },
-      });
-      hotelId = newHotel.id;
-      if (user.membershipId) {
-        await db.membership.update({ where: { id: user.membershipId }, data: { hotelId } });
-      } else if (user.organizationId) {
-        await db.membership.create({ data: { organizationId: user.organizationId, userId: user.id, hotelId, role: "OWNER" } });
-      }
+      return NextResponse.json({ ok: true, nextStep: 2 });
     }
 
-    // Update user preferences
-    await db.user.update({
-      where: { id: user.id },
-      data: {
-        onboardingCompleted: true,
-      },
-    });
+    const roomCount = await db.room.count({ where: { hotelId: user.hotelId } });
+    if (roomCount === 0) return NextResponse.json({ ok: false, error: "Сначала добавьте первый номер" }, { status: 409 });
 
+    if (parsed.data.action === "room-created") {
+      await db.productExperience.upsert({
+        where: { userId_hotelId: { userId: user.id, hotelId: user.hotelId } },
+        create: { userId: user.id, hotelId: user.hotelId, setupStep: 3, lastSeenAt: now },
+        update: { setupStep: 3, lastSeenAt: now },
+      });
+      return NextResponse.json({ ok: true, nextStep: 3 });
+    }
+
+    if (!parsed.data.skipReservation) {
+      const reservationCount = await db.reservation.count({ where: { hotelId: user.hotelId } });
+      if (reservationCount === 0) return NextResponse.json({ ok: false, error: "Сначала создайте бронирование или выберите «Сделать позже»" }, { status: 409 });
+    }
+
+    await db.$transaction([
+      db.user.update({ where: { id: user.id }, data: { onboardingCompleted: true } }),
+      db.productExperience.upsert({
+        where: { userId_hotelId: { userId: user.id, hotelId: user.hotelId } },
+        create: { userId: user.id, hotelId: user.hotelId, setupStep: 3, setupCompletedAt: now, lastSeenAt: now },
+        update: { setupStep: 3, setupCompletedAt: now, lastSeenAt: now },
+      }),
+    ]);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("Onboarding error:", error);
-    return NextResponse.json(
-      { ok: false, error: "Не удалось завершить онбординг" },
-      { status: 500 }
-    );
+    console.error("Onboarding error", { incidentId: crypto.randomUUID(), error: error instanceof Error ? error.name : "Unknown" });
+    return NextResponse.json({ ok: false, error: "Не удалось сохранить шаг настройки" }, { status: 500 });
   }
 }
