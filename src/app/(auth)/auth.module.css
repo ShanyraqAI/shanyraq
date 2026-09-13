@@ -1,0 +1,35 @@
+.page {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: 100svh;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 2.5rem 1rem;
+  background: #e9eee7;
+  color-scheme: only light;
+}
+
+.page::before {
+  content: "";
+  position: absolute;
+  z-index: -2;
+  inset: -12px;
+  background: url("/brand/hotel-lobby.webp") center 52% / cover no-repeat;
+  filter: blur(4px);
+  transform: scale(1.025);
+}
+
+.page::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(135deg, #f7f6efdd 8%, #edf1e7c7 52%, #173b2dcc 118%);
+}
+
+@media (max-width: 700px), (pointer: coarse) {
+  .page { align-items: flex-start; overflow: auto; padding-block: 1.75rem; }
+  .page::before { filter: none; opacity: .52; transform: none; }
+}

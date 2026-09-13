@@ -103,7 +103,7 @@ export default async function SuperAdminPage() {
         </div>
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader><TableRow className="border-white/10 hover:bg-transparent"><TableHead className="text-slate-400">Отель / пользователь</TableHead><TableHead className="text-slate-400">Тема</TableHead><TableHead className="text-slate-400">Сообщение</TableHead><TableHead className="text-slate-400">Страница</TableHead><TableHead className="text-slate-400">Дата</TableHead><TableHead className="text-slate-400">Обработка</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow className="border-white/10 hover:bg-transparent"><TableHead className="text-slate-400">Отель / пользователь</TableHead><TableHead className="text-slate-400">Контакты</TableHead><TableHead className="text-slate-400">Тема</TableHead><TableHead className="text-slate-400">Сообщение</TableHead><TableHead className="text-slate-400">Страница</TableHead><TableHead className="text-slate-400">Дата</TableHead><TableHead className="text-slate-400">Обработка</TableHead></TableRow></TableHeader>
             <TableBody>
               {supportRequests.map((request) => (
                 <TableRow key={request.id} className="border-white/10 align-top hover:bg-white/[0.04]">
@@ -116,7 +116,12 @@ export default async function SuperAdminPage() {
                       <span className="font-medium text-white">Публичный сайт</span>
                     )}
                     <div className="mt-1 text-xs text-slate-500">{request.user?.fullName ?? request.name ?? "Посетитель"}</div>
-                    <div className="text-xs text-slate-500">{request.user?.email ?? request.user?.phone ?? request.contact ?? "Контакт не указан"}</div>
+                  </TableCell>
+                  <TableCell className="min-w-52 text-xs text-slate-400">
+                    {request.user?.email ? <div><span className="text-slate-500">Email:</span> {request.user.email}</div> : null}
+                    {request.user?.phone ? <div className="mt-1"><span className="text-slate-500">Телефон:</span> {request.user.phone}</div> : null}
+                    {request.contact && request.contact !== request.user?.email && request.contact !== request.user?.phone ? <div className="mt-1"><span className="text-slate-500">Из заявки:</span> {request.contact}</div> : null}
+                    {!request.user?.email && !request.user?.phone && !request.contact ? <span className="text-slate-500">Контакт не указан</span> : null}
                   </TableCell>
                   <TableCell><Badge variant="secondary" className="bg-white/10 text-slate-200">{{ QUESTION: "Вопрос", PROBLEM: "Проблема", CONFUSING: "Непонятно", SUGGESTION: "Идея" }[request.category] ?? request.category}</Badge></TableCell>
                   <TableCell className="max-w-xl whitespace-normal text-slate-300">

@@ -13,6 +13,7 @@ export function LandingMotion({ children, className }: { children: ReactNode; cl
     const container = root.current;
     if (!container) return;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const lite = window.matchMedia("(max-width: 1024px), (pointer: coarse)");
     const scene = container.querySelector<HTMLElement>("[data-laptop-scene]");
     const lid = container.querySelector<HTMLElement>("[data-laptop-lid]");
     const laptop = container.querySelector<HTMLElement>("[data-laptop]");
@@ -57,16 +58,20 @@ export function LandingMotion({ children, className }: { children: ReactNode; cl
         const side = card.dataset.flyingCard === "left" ? -1 : 1;
         const flight = smooth(clamp(current / .8));
         const arc = Math.sin(flight * Math.PI);
-        card.style.transform = `translate3d(${side * (flight * 140 + arc * 24)}px, ${-flight * (130 + index * 19) - arc * 45}px, 0) rotate(${side * (-3 + flight * 14)}deg) scale(${1 - flight * .18})`;
+        card.style.transform = lite.matches
+          ? `translate3d(0, ${-flight * (24 + index * 3)}px, 0)`
+          : `translate3d(${side * (flight * 140 + arc * 24)}px, ${-flight * (130 + index * 19) - arc * 45}px, 0) rotate(${side * (-3 + flight * 14)}deg) scale(${1 - flight * .18})`;
         card.style.opacity = String(1 - smooth(clamp((current - .12) / .52)));
       });
-      activeReveals.forEach(element => {
-        const top = element.getBoundingClientRect().top;
-        const amount = reduced.matches || element.contains(document.activeElement) ? 1 : smooth(clamp((window.innerHeight - top - 15) / Math.min(230, window.innerHeight * .3)));
-        element.style.opacity = String(.15 + amount * .85);
-        element.style.translate = `0 ${(1 - amount) * 35}px`;
-        element.style.setProperty("--reveal", String(amount));
-      });
+      if (!reduced.matches && !lite.matches) {
+        activeReveals.forEach(element => {
+          const top = element.getBoundingClientRect().top;
+          const amount = element.contains(document.activeElement) ? 1 : smooth(clamp((window.innerHeight - top - 15) / Math.min(230, window.innerHeight * .3)));
+          element.style.opacity = String(.15 + amount * .85);
+          element.style.translate = `0 ${(1 - amount) * 35}px`;
+          element.style.setProperty("--reveal", String(amount));
+        });
+      }
       if (current !== target) frame = requestAnimationFrame(render);
     }
     function schedule() { if (!frame) frame = requestAnimationFrame(render); }
@@ -80,7 +85,7 @@ export function LandingMotion({ children, className }: { children: ReactNode; cl
     }, { rootMargin: "100px 0px" });
     reveals.forEach(element => observer.observe(element));
     function configure() {
-      if (reduced.matches) {
+      if (reduced.matches || lite.matches) {
         current = 0;
         reveals.forEach(element => { element.style.opacity = "1"; element.style.translate = "none"; element.style.setProperty("--reveal", "1"); });
       }
@@ -97,6 +102,7 @@ export function LandingMotion({ children, className }: { children: ReactNode; cl
     window.addEventListener("resize", schedule);
     container.addEventListener("focusin", schedule);
     reduced.addEventListener("change", configure);
+    lite.addEventListener("change", configure);
     configure();
     return () => {
       cancelAnimationFrame(frame);
@@ -106,6 +112,7 @@ export function LandingMotion({ children, className }: { children: ReactNode; cl
       window.removeEventListener("resize", schedule);
       container.removeEventListener("focusin", schedule);
       reduced.removeEventListener("change", configure);
+      lite.removeEventListener("change", configure);
     };
   }, []);
 

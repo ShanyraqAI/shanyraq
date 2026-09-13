@@ -23,7 +23,7 @@ export function AuthShell({
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card p-6 shadow-sm sm:p-8">
+      <div className="rounded-2xl border border-white/70 bg-[#fffdf8]/90 p-6 shadow-[0_24px_80px_rgba(18,48,35,0.16)] backdrop-blur-xl sm:p-8">
         {children}
       </div>
 

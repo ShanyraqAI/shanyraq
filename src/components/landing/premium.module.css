@@ -295,6 +295,12 @@
 @media (max-width: 1050px) { .operationsGrid { grid-template-columns: 1fr 1fr; } .reservationsPanel { grid-column: 1 / -1; } .reservationDetail { grid-column: 2; grid-row: 2; } .roomsPanel { grid-column: 1; grid-row: 2; } .roomTiles { flex-direction: column; } }
 @media (max-width: 600px) { .operationsGrid { grid-template-columns: 1fr; } .operationsGrid > article { grid-column: 1; grid-row: auto; } .roomsPanel { order: 3; } .connector .mobileParticle { display: block; position: absolute; left: -2px; top: 0; width: 6px; height: 6px; border-radius: 50%; background: #94ffd0; box-shadow: 0 0 5px #28b975, 0 0 12px #20a864; animation: verticalFlow 2.4s linear infinite; } .reservationFacts { grid-template-columns: 1fr 1fr; } }
 @media (prefers-reduced-motion: reduce) { .flowParticle, .mobileParticle { display: none !important; } .recommendation, .recommendation::before, .recommendation h3 > svg { animation: none; } }
+@media (max-width: 1024px), (pointer: coarse) {
+  .notification, .heroIntro, .laptop { will-change: auto; }
+  .laptopShadow { filter: none; opacity: .28; }
+  .flowParticle { filter: none; }
+  .recommendation, .recommendation::before, .recommendation h3 > svg { animation: none; }
+}
 @media (min-width: 901px) and (max-height: 780px) { .laptop { width: min(65%, 540px); } .heroIntro h1 { font-size: 42px; } .stage { margin-top: 15px; padding-bottom: 60px; } .notification { width: 155px; } .arrivals { top: 135px; } .revenue { top: 126px; } .aiNotice { top: 232px; } }
 @media (min-width: 901px) and (max-height: 780px) { .laptop { width: min(62%, 490px); } .heroIntro h1 { font-size: 40px; margin-block: 8px; } .heroIntro { padding-top: 84px; } .stage { margin-top: 10px; } }
 .calendarZoom { display: none; text-align: center; position: relative; z-index: 6; }

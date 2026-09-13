@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Download, Plus, Search, UserRound } from "lucide-react";
+import { ArrowRight, Plus, Search, UserRound } from "lucide-react";
 import p from "./premium.module.css";
 
 const reservations = [
@@ -22,20 +22,10 @@ export function ReservationsShowcase() {
   const guest = reservations[selected];
   const visible = reservations.filter(g => g.name.toLowerCase().includes(query.toLowerCase()) && (status === "Все статусы" || g.status === status));
 
-  function exportReservations() {
-    const rows = visible.map(g => [g.id, g.name, g.room, `${g.start} – ${g.end}`, g.channel, g.amount, g.status].join(";"));
-    const url = URL.createObjectURL(new Blob(["\uFEFFID;Гость;Номер;Даты;Канал;Сумма;Статус\r\n" + rows.join("\r\n")], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "Shanyraq-пример-бронирований.csv";
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
   return <div className={p.operationsGrid}>
     <article className={`${p.panel} ${p.reservationsPanel}`} data-scroll-reveal>
       <div className={p.panelHeading}><h3>Бронирования</h3><span className={p.example}>Пример данных</span></div>
-      <div className={p.reservationToolbar}><p><b>{visible.length}</b> бронирований <span><b>₸ {money(visible.reduce((sum, g) => sum + g.amount, 0))}</b> забронировано</span></p><button type="button" onClick={exportReservations}><Download size={13} /> Экспорт</button><Link href="/register"><Plus size={14} /> Новая бронь</Link></div>
+      <div className={p.reservationToolbar}><p><b>{visible.length}</b> бронирований <span><b>₸ {money(visible.reduce((sum, g) => sum + g.amount, 0))}</b> забронировано</span></p><Link href="/register"><Plus size={14} /> Новая бронь</Link></div>
       <div className={p.filters}><select aria-label="Статус бронирования" value={status} onChange={e => setStatus(e.target.value)}>{["Все статусы", "Подтверждено", "Заселён", "Выселен"].map(value => <option key={value}>{value}</option>)}</select><label><Search size={13} /><input aria-label="Поиск гостя" placeholder="Поиск гостя…" value={query} onChange={e => setQuery(e.target.value)} /></label></div>
       <div className={p.tableScroll}><table className={`${p.dataTable} ${p.reservationsTable}`}><thead><tr>{["ID", "Гость", "Номер", "Даты", "Канал", "Сумма", "Статус"].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>{visible.map(g => <tr key={g.id} data-selected={guest.id === g.id}><td>#{g.id}</td><td><button type="button" onClick={() => setSelected(reservations.indexOf(g))} aria-pressed={guest.id === g.id}>{g.name}</button></td><td>{g.room}</td><td>{g.start} → {g.end}</td><td><span className={p.channelLabel}><i style={{ background: g.color }} />{g.channel}</span></td><td>{money(g.amount)} ₸</td><td><span className={p.greenBadge}>{g.status}</span></td></tr>)}</tbody></table></div>
       {!visible.length && <p className={p.emptyState}>Гости не найдены. Измените поиск или статус.</p>}

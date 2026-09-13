@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, Check, ChevronDown, CircleCheck, Download, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check, ChevronDown, CircleCheck, ShieldCheck, Sparkles } from "lucide-react";
 import { BrandLogo } from "@/components/shared/brand-logo";
 import { ReservationsShowcase } from "./reservations-showcase";
 import { ChannelConnector } from "./channel-connector";
@@ -19,18 +19,6 @@ function StoryHeading({ number, label, title, description }: { number: string; l
 export function ProductStory() {
   const [rateType, setRateType] = useState("Делюкс");
   const [showRecommendation, setShowRecommendation] = useState(false);
-  const [exported, setExported] = useState(false);
-
-  function exportReport() {
-    const csv = "\uFEFFПоказатель;Значение;Изменение\r\n" + reportRows.map(row => row.join(";")).join("\r\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "Shanyraq-Пример-отчёта-Сентябрь-2026.csv";
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setExported(true);
-  }
 
   return <div className={p.productStory}>
     <section id="features" className={`${s.container} ${p.storySection}`}>
@@ -62,7 +50,7 @@ export function ProductStory() {
     <section className={`${s.container} ${p.storySection}`}>
       <StoryHeading number="04" label="Отчёты и AI" title="Отчёты, экспорт и AI-рекомендации" description="Важные цифры перед глазами. Больше понимания — больше уверенности в решениях." />
       <div className={p.reportsGrid}>
-        <article className={p.panel} data-scroll-reveal><div className={p.panelHeading}><h3>Отчёты</h3><span className={p.example}>Сентябрь 2026 · пример</span><button className={p.exportButton} onClick={exportReport} type="button"><Download size={13} /> Скачать CSV</button></div><table className={p.dataTable}><thead><tr><th>Показатель</th><th>Значение</th><th>Изменение</th></tr></thead><tbody>{reportRows.map(row => <tr key={row[0]}><td>{row[0]}</td><td><strong>{row[1]}</strong></td><td className={p.positive}>↗ {row[2]}</td></tr>)}</tbody></table><p className={p.exportStatus} role="status">{exported ? "Пример отчёта скачан. CSV открывается в Excel." : "Скачайте пример отчёта и откройте его в Excel."}</p></article>
+        <article className={p.panel} data-scroll-reveal><div className={p.panelHeading}><h3>Отчёты</h3><span className={p.example}>Сентябрь 2026 · пример</span></div><table className={p.dataTable}><thead><tr><th>Показатель</th><th>Значение</th><th>Изменение</th></tr></thead><tbody>{reportRows.map(row => <tr key={row[0]}><td>{row[0]}</td><td><strong>{row[1]}</strong></td><td className={p.positive}>↗ {row[2]}</td></tr>)}</tbody></table><p className={p.exportStatus}>Демонстрационный срез показателей за месяц.</p></article>
         <article className={`${p.panel} ${p.recommendation}`} data-scroll-reveal><div className={p.panelHeading}><h3><Sparkles size={22} /> Shanyraq AI</h3><span className={p.example}>В разработке</span></div><p>На следующие выходные ожидается высокая загрузка. Рекомендуем <strong>увеличить тариф на 8–12%.</strong></p><div className={p.recommendationBottom}><span>Пример рекомендации</span><button type="button" aria-label="Подробнее о рекомендации" aria-expanded={showRecommendation} onClick={() => setShowRecommendation(!showRecommendation)}><ArrowRight size={20} /></button></div>{showRecommendation && <div className={p.recommendationDetails}>В рекомендации будут учитываться загрузка объекта, даты и динамика бронирований. Решение об изменении цены всегда остаётся за вами.</div>}</article>
       </div>
     </section>

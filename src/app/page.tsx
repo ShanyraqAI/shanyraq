@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { LandingHeader } from "@/components/landing/landing-header";
 import { FaqSection, SecuritySection } from "@/components/landing/landing-sections";
@@ -17,6 +17,11 @@ export const metadata: Metadata = {
   title: "Shanyraq AI — управляйте отелем из одного окна",
   description: "Бронирования, номера, гости и оплаты в единой системе. Управляйте гостиницей, апарт-отелем и посуточными квартирами с Shanyraq AI. Бесплатно на время бета-теста.",
   openGraph: { title: "Shanyraq AI — управляйте отелем из одного окна", description: "Вся работа вашего объекта — в одном пространстве.", locale: "ru_KZ", type: "website" },
+};
+
+export const viewport: Viewport = {
+  colorScheme: "only light",
+  themeColor: "#faf9f6",
 };
 
 export default function Home() {
