@@ -3,135 +3,101 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import s from "./landing.module.css";
 
+const clamp = (value: number) => Math.max(0, Math.min(1, value));
+const smooth = (value: number) => value * value * (3 - 2 * value);
+
 export function LandingMotion({ children, className }: { children: ReactNode; className: string }) {
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const container = root.current;
     if (!container) return;
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const mouse = window.matchMedia("(hover: hover) and (pointer: fine)");
-    const sections = Array.from(container.querySelectorAll<HTMLElement>("main > section, footer"));
-    const revealSelector = [s.sectionHeading, s.problemHeading, s.problemGrid, s.featureCard, s.priceCard,
-      s.importVisual, s.demoFrame, s.stepsGrid, s.securityGrid, s.roadmapGrid, s.faqList, s.finalCta]
-      .map((name) => `.${name}`).join(",");
-    const reveals = Array.from(container.querySelectorAll<HTMLElement>(revealSelector));
-    let observer: IntersectionObserver | undefined;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const scene = container.querySelector<HTMLElement>("[data-laptop-scene]");
+    const lid = container.querySelector<HTMLElement>("[data-laptop-lid]");
+    const laptop = container.querySelector<HTMLElement>("[data-laptop]");
+    const screen = container.querySelector<HTMLElement>("[data-laptop-screen]");
+    const intro = container.querySelector<HTMLElement>("[data-hero-intro]");
+    const closed = container.querySelector<HTMLElement>("[data-closed-message]");
+    const hint = container.querySelector<HTMLElement>("[data-hero-hint]");
+    const prompt = container.querySelector<HTMLElement>("[data-scroll-prompt]");
+    const cards = Array.from(container.querySelectorAll<HTMLElement>("[data-flying-card]"));
+    const reveals = Array.from(container.querySelectorAll<HTMLElement>(`[data-scroll-reveal], .${s.sectionHeading}, .${s.priceCard}, .${s.securityGrid}, .${s.faqList}, footer`));
+    const activeReveals = new Set<HTMLElement>();
     let frame = 0;
-    let current = window.scrollY;
-    let target = current;
+    let current = 0;
     let previousTime = 0;
-    let direction = 0;
-    let stops: number[] = [];
 
-    const measure = () => {
-      stops = sections.map((section) => Math.max(0, section.getBoundingClientRect().top + window.scrollY - 32));
-    };
-    const cancel = () => {
-      cancelAnimationFrame(frame);
+    // Animate from actual scroll position without intercepting wheel, touch or keyboard input.
+    function render(time: number) {
       frame = 0;
-      current = target = window.scrollY;
-      direction = 0;
-    };
-    const animate = (time: number) => {
-      const elapsed = Math.min(time - previousTime, 40);
+      if (!scene || !lid || !laptop || !screen) return;
+      const rect = scene.getBoundingClientRect();
+      const travel = Math.max(1, scene.offsetHeight - (scene.firstElementChild as HTMLElement).offsetHeight);
+      const target = reduced.matches ? 0 : clamp(-rect.top / travel);
+      const elapsed = Math.min(time - previousTime || 16, 64);
       previousTime = time;
-      target = Math.min(target, Math.max(0, document.documentElement.scrollHeight - window.innerHeight));
-      current += (target - current) * (1 - Math.exp(-elapsed / 165));
-      if (Math.abs(target - current) < 1) current = target;
-      // Native smooth scrolling must not compete with this single animation loop.
-      window.scrollTo({ top: current, behavior: "instant" });
-      current = window.scrollY;
-      if (Math.abs(target - current) >= 1) frame = requestAnimationFrame(animate);
-      else frame = 0;
-    };
-    const wheel = (event: WheelEvent) => {
-      if (reducedMotion.matches || !mouse.matches || event.defaultPrevented || !event.cancelable ||
-        event.ctrlKey || event.metaKey || event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY) || !event.deltaY) return;
-      if (getComputedStyle(document.body).overflowY === "hidden" || document.querySelector('[role="dialog"]')) {
-        cancel();
-        return;
-      }
-      // Leave nested scroll areas (including the calendar) under native control.
-      for (const node of event.composedPath()) {
-        if (node === container) break;
-        if (node instanceof HTMLElement && /auto|scroll/.test(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight + 1) {
-          cancel();
-          return;
-        }
-      }
-      event.preventDefault();
-      const nextDirection = Math.sign(event.deltaY);
-      if (!frame || direction !== nextDirection) current = target = window.scrollY;
-      direction = nextDirection;
-      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
-      const delta = Math.max(-500, Math.min(500, event.deltaY * unit)) * 0.75;
-      const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-      const reach = window.innerHeight * 0.85;
-      target = Math.max(0, Math.min(max, Math.max(current - reach, Math.min(current + reach, target + delta))));
-      // Ease into the next section. Once there, the next wheel input continues normally.
-      const stop = direction > 0
-        ? stops.find((position) => position > current + 36 && position <= target + 45)
-        : stops.findLast((position) => position < current - 36 && position >= target - 45);
-      if (stop !== undefined) target = Math.max(0, Math.min(max, stop));
-      if (!frame) {
-        previousTime = performance.now();
-        frame = requestAnimationFrame(animate);
-      }
-    };
-    const keyboard = (event: KeyboardEvent) => {
-      if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " ", "Tab", "Escape"].includes(event.key)) cancel();
-    };
-    const configureReveals = () => {
-      cancel();
-      observer?.disconnect();
-      reveals.forEach((element) => element.removeAttribute("data-reveal"));
-      if (reducedMotion.matches || !("IntersectionObserver" in window)) return;
-      observer = new IntersectionObserver((entries) => {
-        entries.forEach(({ target: element, isIntersecting }) => {
-          if (!isIntersecting) return;
-          element.setAttribute("data-reveal", "visible");
-          observer?.unobserve(element);
-        });
-      }, { rootMargin: "0px 0px -24px 0px", threshold: 0 });
-      reveals.forEach((element) => {
-        // Already visible content stays visible, including direct hash navigation.
-        if (element.getBoundingClientRect().top < window.innerHeight - 24) return;
-        element.setAttribute("data-reveal", "pending");
-        observer?.observe(element);
+      current += (target - current) * (1 - Math.exp(-elapsed / 75));
+      if (Math.abs(current - target) < .0005) current = target;
+      const progress = smooth(clamp((current - .08) / .84));
+      lid.style.transform = `rotateX(${88 * progress}deg)`;
+      laptop.style.transform = `translate3d(0, ${-105 * progress}px, 0) scale(${1 - .31 * progress})`;
+      screen.style.opacity = String(1 - smooth(clamp((progress - .72) / .28)));
+      const unavailable = progress > .65;
+      screen.inert = unavailable;
+      screen.style.pointerEvents = unavailable ? "none" : "auto";
+      if (intro) { intro.style.opacity = String(1 - smooth(clamp(current / .46))); intro.style.transform = `translateY(${-70 * progress}px)`; intro.inert = current > .42; }
+      if (hint) hint.style.opacity = String(1 - clamp(current * 5));
+      if (prompt) prompt.style.opacity = String(1 - clamp(current * 3));
+      if (closed) { closed.style.opacity = String(smooth(clamp((current - .52) / .35))); closed.style.transform = `translateY(${25 * (1 - progress)}px)`; closed.inert = current < .6; }
+      cards.forEach((card, index) => {
+        const side = card.dataset.flyingCard === "left" ? -1 : 1;
+        const flight = smooth(clamp(current / .8));
+        const arc = Math.sin(flight * Math.PI);
+        card.style.transform = `translate3d(${side * (flight * 140 + arc * 24)}px, ${-flight * (130 + index * 19) - arc * 45}px, 0) rotate(${side * (-3 + flight * 14)}deg) scale(${1 - flight * .18})`;
+        card.style.opacity = String(1 - smooth(clamp((current - .12) / .52)));
       });
-    };
-    const focus = (event: FocusEvent) => {
-      cancel();
-      if (!(event.target instanceof HTMLElement)) return;
-      reveals.filter((element) => element.contains(event.target as Node)).forEach((element) => {
-        element.setAttribute("data-reveal", "visible");
-        observer?.unobserve(element);
+      activeReveals.forEach(element => {
+        const top = element.getBoundingClientRect().top;
+        const amount = reduced.matches || element.contains(document.activeElement) ? 1 : smooth(clamp((window.innerHeight - top - 15) / Math.min(230, window.innerHeight * .3)));
+        element.style.opacity = String(.15 + amount * .85);
+        element.style.translate = `0 ${(1 - amount) * 35}px`;
+        element.style.setProperty("--reveal", String(amount));
       });
-    };
-    const resize = new ResizeObserver(measure);
+      if (current !== target) frame = requestAnimationFrame(render);
+    }
+    function schedule() { if (!frame) frame = requestAnimationFrame(render); }
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        const element = entry.target as HTMLElement;
+        if (entry.isIntersecting) activeReveals.add(element);
+        else { activeReveals.delete(element); element.style.opacity = "1"; element.style.translate = "none"; }
+      });
+      schedule();
+    }, { rootMargin: "100px 0px" });
+    reveals.forEach(element => observer.observe(element));
+    function configure() {
+      if (reduced.matches) {
+        current = 0;
+        reveals.forEach(element => { element.style.opacity = "1"; element.style.translate = "none"; element.style.setProperty("--reveal", "1"); });
+      }
+      schedule();
+    }
+    const resize = new ResizeObserver(schedule);
     resize.observe(container);
-    measure();
-    configureReveals();
-    container.addEventListener("wheel", wheel, { passive: false });
-    container.addEventListener("focusin", focus);
-    window.addEventListener("keydown", keyboard);
-    window.addEventListener("pointerdown", cancel, { passive: true });
-    window.addEventListener("touchstart", cancel, { passive: true });
-    window.addEventListener("resize", measure);
-    reducedMotion.addEventListener("change", configureReveals);
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    container.addEventListener("focusin", schedule);
+    reduced.addEventListener("change", configure);
+    configure();
     return () => {
-      cancel();
-      observer?.disconnect();
+      cancelAnimationFrame(frame);
+      observer.disconnect();
       resize.disconnect();
-      reveals.forEach((element) => element.removeAttribute("data-reveal"));
-      container.removeEventListener("wheel", wheel);
-      container.removeEventListener("focusin", focus);
-      window.removeEventListener("keydown", keyboard);
-      window.removeEventListener("pointerdown", cancel);
-      window.removeEventListener("touchstart", cancel);
-      window.removeEventListener("resize", measure);
-      reducedMotion.removeEventListener("change", configureReveals);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      container.removeEventListener("focusin", schedule);
+      reduced.removeEventListener("change", configure);
     };
   }, []);
 
