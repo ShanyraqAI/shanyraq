@@ -198,3 +198,27 @@
  .faqList details[open]::details-content { block-size: auto; }
 }
 @media (prefers-reduced-motion: reduce) { .faqList details::details-content { transition: none; } }
+
+.header { position: fixed; transition: background .3s, box-shadow .3s; }
+.header[data-scrolled="true"] { background: #f8faf2ed; box-shadow: 0 5px 25px #15362a14; border-color: #dbe3d7; }
+.laptopPreview { height: 420px; }
+.laptopPreview .productSidebar { display: flex; width: 132px; padding: 16px 10px; }
+.laptopPreview .sidebarBottom { display: block; }
+.laptopPreview .productMain { padding: 14px 12px 10px; }
+.laptopPreview .previewChrome { height: 24px; }
+.laptopPreview .productTitle { margin-bottom: 12px; }
+.laptopPreview .productTitle h3 { font-size: 16px; }
+.laptopPreview .previewNew span { display: inline; }
+.laptopPreview .calendarToolbar { margin-bottom: 12px; font-size: 10px; }
+.laptopPreview .calendarGrid { min-width: 0; grid-template-columns: 114px repeat(7, minmax(0, 1fr)); grid-template-rows: 34px repeat(5, 48px); }
+.laptopPreview .booking { margin: 4px 2px; padding: 4px 6px; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+.laptopPreview .booking > span { font-size: 9px; line-height: 12px; overflow: hidden; text-overflow: ellipsis; }
+.laptopPreview .booking small { font-size: 8px; line-height: 12px; margin: 0; flex-shrink: 0; }
+.laptopPreview .booking small svg { width: 10px; height: 10px; flex-shrink: 0; }
+.laptopPreview .apartmentCell { padding: 8px 6px; font-size: 8px; }
+.laptopPreview .apartmentCell small { font-size: 6px; }
+.laptopPreview .calendarLegend { margin-top: 10px; }
+.laptopPreview .guestPanel { max-height: 270px; width: 230px; overflow-y: auto; }
+.betaBadge { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #b8c9ab; border-radius: 100px; background: #e7eedc; color: #315b42; padding: 8px 15px; font-size: 12px; font-weight: 700; letter-spacing: .8px; }
+.betaBanner { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; margin: 25px auto 35px; color: #546b50; font-size: 13px; }
+.betaBanner button { text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }

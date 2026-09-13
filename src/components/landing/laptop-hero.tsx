@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowDown, ArrowRight, ArrowUpRight, Check, ChevronRight, LogIn, LogOut, MousePointer2, Play, Sparkles } from "lucide-react";
+import { CalendarZoom } from "./calendar-zoom";
 import { CalendarPreview } from "./calendar-preview";
 import { BrandLogo } from "@/components/shared/brand-logo";
 import s from "./landing.module.css";
@@ -27,16 +28,17 @@ export function LaptopHero() {
           <Link href="/register" className={s.primaryButton}>Попробовать бесплатно <ArrowRight size={16} /></Link>
           <a href="#demo" className={s.secondaryButton}><Play size={17} /> Смотреть демо</a>
         </div>
-        <div className={s.trialNote}><Check size={13} /> 14 дней бесплатно <span>·</span> Карта не требуется</div>
+        <div className={s.trialNote}><Check size={13} /> Бесплатно на время бета-теста <span>·</span> Карта не требуется</div>
       </div>
 
       <div className={p.stage} id="demo" data-laptop-stage>
         <div className={p.laptop} data-laptop>
           <div className={p.laptopLid} data-laptop-lid>
             <div className={p.camera} />
-            <div className={p.screen} data-laptop-screen><CalendarPreview inLaptop /></div>
+            <div className={p.screen} data-laptop-screen><div className={p.screenContent} data-screen-content><CalendarPreview inLaptop /></div></div>
             <div className={p.screenReflection} aria-hidden="true" />
             <div className={p.lidBrand} aria-hidden="true">SHANYRAQ AI</div>
+            <div className={p.lidBack} aria-hidden="true" />
           </div>
           <div className={p.laptopDeck} aria-hidden="true"><div className={p.keyboard} /><div className={p.trackpad} /></div>
           <div className={p.laptopBase} aria-hidden="true"><span /></div>
@@ -49,6 +51,7 @@ export function LaptopHero() {
         <div className={`${p.notification} ${p.revenue}`} data-flying-card="right" aria-hidden="true"><span>Выручка</span><strong>₸ 1 284 000</strong><small><ArrowUpRight size={14} /> <b>18.4%</b></small><div className={p.miniBars}>{[12, 20, 30, 42].map(h => <i key={h} style={{ height: h }} />)}</div></div>
         <div className={`${p.notification} ${p.aiNotice}`} data-flying-card="right" aria-hidden="true"><span><Sparkles size={19} /> <b>Shanyraq AI</b></span><p>Найден риск<br /><strong>овербукинга</strong></p><ChevronRight size={17} /></div>
       </div>
+      <CalendarZoom />
       <div className={p.interactionHint} data-hero-hint><MousePointer2 size={13} /> Нажмите на бронь в календаре — откроется карточка гостя</div>
       <div className={p.scrollPrompt} data-scroll-prompt><span>Всё это — в одном пространстве</span><ArrowDown size={20} /></div>
       <div className={p.closedMessage} data-closed-message><BrandLogo variant="mark" style={{ width: 34, height: 34 }} /><p>Всё под контролем.<br /><strong>Даже когда ноутбук закрыт.</strong></p><a href="#features" aria-label="К возможностям"><ArrowDown size={20} /></a></div>

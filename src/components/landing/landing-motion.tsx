@@ -17,6 +17,8 @@ export function LandingMotion({ children, className }: { children: ReactNode; cl
     const lid = container.querySelector<HTMLElement>("[data-laptop-lid]");
     const laptop = container.querySelector<HTMLElement>("[data-laptop]");
     const screen = container.querySelector<HTMLElement>("[data-laptop-screen]");
+    const screenContent = container.querySelector<HTMLElement>("[data-screen-content]");
+    const header = container.querySelector<HTMLElement>("header");
     const intro = container.querySelector<HTMLElement>("[data-hero-intro]");
     const closed = container.querySelector<HTMLElement>("[data-closed-message]");
     const hint = container.querySelector<HTMLElement>("[data-hero-hint]");
@@ -40,8 +42,9 @@ export function LandingMotion({ children, className }: { children: ReactNode; cl
       current += (target - current) * (1 - Math.exp(-elapsed / 75));
       if (Math.abs(current - target) < .0005) current = target;
       const progress = smooth(clamp((current - .08) / .84));
-      lid.style.transform = `rotateX(${88 * progress}deg)`;
-      laptop.style.transform = `translate3d(0, ${-105 * progress}px, 0) scale(${1 - .31 * progress})`;
+      lid.style.transform = `rotateX(${-90 * progress}deg)`;
+      laptop.style.transform = `translate3d(0, ${-130 * progress}px, 0) scale(${1 - .18 * progress}) rotateX(-12deg)`;
+      if (header) header.dataset.scrolled = String(window.scrollY > 30);
       screen.style.opacity = String(1 - smooth(clamp((progress - .72) / .28)));
       const unavailable = progress > .65;
       screen.inert = unavailable;
@@ -83,8 +86,13 @@ export function LandingMotion({ children, className }: { children: ReactNode; cl
       }
       schedule();
     }
-    const resize = new ResizeObserver(schedule);
+    const resize = new ResizeObserver(() => {
+      if (screen && screenContent) screenContent.style.zoom = String(screen.clientWidth / 800);
+      if (laptop && lid) laptop.style.setProperty("--device-depth", `${lid.offsetHeight}px`);
+      schedule();
+    });
     resize.observe(container);
+    if (screen) resize.observe(screen);
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
     container.addEventListener("focusin", schedule);
