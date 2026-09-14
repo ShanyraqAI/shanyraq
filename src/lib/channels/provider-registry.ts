@@ -13,16 +13,22 @@ import { MockBookingProvider } from "./providers/mock-booking";
 import { MockOstrovokProvider } from "./providers/mock-ostrovok";
 import { MockKrishaProvider } from "./providers/mock-krisha";
 import { DirectProvider } from "./providers/direct";
+import { mockChannelProvidersEnabled } from "./runtime-policy";
+import { PublicError } from "@/server/errors";
 
-const registry: Record<string, ChannelProvider> = {
+const directProvider = new DirectProvider();
+const mockRegistry: Record<string, ChannelProvider> = {
   booking: new MockBookingProvider(),
   ostrovok: new MockOstrovokProvider(),
   krisha: new MockKrishaProvider(),
-  direct: new DirectProvider(),
 };
 
 export function getChannelProvider(code: string): ChannelProvider {
-  const provider = registry[code];
+  if (code === "direct") return directProvider;
+  if (!mockChannelProvidersEnabled()) {
+    throw new PublicError("Внешний канал недоступен: промышленный адаптер ещё не подключён.");
+  }
+  const provider = mockRegistry[code];
   if (!provider) throw new Error(`Unknown channel: ${code}`);
   return provider;
 }

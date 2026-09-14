@@ -1,10 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
 import { processChannelSyncJobs } from "@/lib/channels/sync-queue";
+import { channelSyncEnabled } from "@/lib/channels/runtime-policy";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 export async function GET(request: Request) {
+  if (!channelSyncEnabled()) return Response.json({ disabled: true }, { status: 404 });
   const secret = process.env.CRON_SECRET;
   if (!secret) return new Response("Not configured", { status: 503 });
 

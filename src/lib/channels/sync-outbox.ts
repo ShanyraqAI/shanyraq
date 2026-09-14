@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { PublicError } from "@/server/errors";
 import { channelSyncDeduplicationKey } from "./queue-policy";
+import { channelSyncEnabled } from "./runtime-policy";
 
 const DEFAULT_MAX_ATTEMPTS = 6;
 type QueueTransaction = Prisma.TransactionClient;
@@ -18,6 +19,7 @@ export async function enqueueChannelSync(
   connectionId: string,
   hotelId: string,
 ): Promise<EnqueuedSyncJob> {
+  if (!channelSyncEnabled()) throw new PublicError("Синхронизация каналов временно отключена.");
   return db.$transaction(async (tx) => {
     const connection = await tx.channelConnection.findFirst({
       where: {
@@ -75,6 +77,7 @@ export async function enqueueHotelChannelSyncs(
   tx: QueueTransaction,
   hotelId: string,
 ): Promise<number> {
+  if (!channelSyncEnabled()) return 0;
   const connections = await tx.channelConnection.findMany({
     where: {
       hotelId,
@@ -109,6 +112,7 @@ export async function enqueueHotelChannelSyncs(
 }
 
 export async function enqueueAllChannelSyncs(hotelId: string): Promise<EnqueuedSyncJob[]> {
+  if (!channelSyncEnabled()) return [];
   const connections = await db.channelConnection.findMany({
     where: {
       hotelId,

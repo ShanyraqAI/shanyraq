@@ -134,6 +134,8 @@ export interface CreateReservationParams {
   externalReservationId?: string | null;
   status?: ReservationStatus;
   notes?: string | null;
+  /** Channel-originated imports must not recursively trigger another pull. */
+  enqueueChannelSync?: boolean;
 }
 
 export async function createReservation(params: CreateReservationParams) {
@@ -162,7 +164,7 @@ export async function createReservation(params: CreateReservationParams) {
       },
     });
     await recomputeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, tx);
-    await enqueueHotelChannelSyncs(tx, params.hotelId);
+    if (params.enqueueChannelSync !== false) await enqueueHotelChannelSyncs(tx, params.hotelId);
     return { reservation, roomTypeId: room.roomTypeId, room, guest };
   }, { timeout: 15_000 });
 

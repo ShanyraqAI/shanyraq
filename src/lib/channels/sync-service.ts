@@ -8,6 +8,7 @@ import { t, pluralize } from "@/lib/i18n";
 import { decryptChannelCredentials } from "@/lib/security/credentials";
 import { PublicError } from "@/server/errors";
 import { getSyncIncidentId, syncBusyMessage, syncFailureMessage } from "./sync-errors";
+import { channelSyncEnabled } from "./runtime-policy";
 
 /**
  * Synchronization engine.
@@ -35,6 +36,7 @@ export interface SyncSummary {
 const SYNC_HORIZON_DAYS = 30;
 
 export async function runChannelSync(connectionId: string, hotelId: string): Promise<SyncSummary> {
+  if (!channelSyncEnabled()) throw new PublicError("Синхронизация каналов временно отключена.");
   // Atomic claim shared by single sync, bulk sync and deletion across servers.
   const { connection, log } = await db.$transaction(async (tx) => {
     const claimed = await tx.channelConnection.updateMany({
@@ -235,6 +237,7 @@ async function importExternalReservation(
     externalReservationId: external.externalId,
     status: "CONFIRMED",
     notes: external.notes ?? null,
+    enqueueChannelSync: false,
   });
   return "imported";
 }

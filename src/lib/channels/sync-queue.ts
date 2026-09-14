@@ -5,6 +5,7 @@ import {
   channelSyncBatchSize,
   channelSyncRetryDelayMs,
 } from "./queue-policy";
+import { channelSyncEnabled } from "./runtime-policy";
 
 interface ClaimedSyncJob {
   id: string;
@@ -151,6 +152,7 @@ async function failOrRetrySyncJob(job: ClaimedSyncJob, safeError: string): Promi
 }
 
 export async function processChannelSyncJobs(options: { limit?: number } = {}): Promise<SyncQueueRun> {
+  if (!channelSyncEnabled()) return { claimed: 0, succeeded: 0, retried: 0, failed: 0 };
   const limit = channelSyncBatchSize(options.limit ?? 1);
   const workerId = crypto.randomUUID();
   const result: SyncQueueRun = { claimed: 0, succeeded: 0, retried: 0, failed: 0 };

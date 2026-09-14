@@ -13,6 +13,7 @@
     "db:migrate:e2e": "node --env-file=.env scripts/migrate-e2e.mjs",
     "db:migrate:channel-secrets": "node --env-file=.env scripts/migrate-channel-credentials.mjs --apply",
     "db:check:channel-secrets": "node --env-file=.env scripts/migrate-channel-credentials.mjs",
+    "db:cleanup:demo-channels": "tsx scripts/cleanup-demo-channel-data.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:demo": "tsx prisma/seed-demo.ts",
     "db:reset": "tsx scripts/reset-database.ts",
