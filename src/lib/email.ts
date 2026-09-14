@@ -4,7 +4,13 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]!);
 }
 
-async function sendEmail(to: string, subject: string, html: string, idempotencyKey: string): Promise<void> {
+async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  idempotencyKey: string,
+  scheduledAt?: Date,
+): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
   if (!apiKey || !from) throw new PublicError("Отправка писем пока не настроена. Обратитесь к администратору.");
@@ -15,7 +21,13 @@ async function sendEmail(to: string, subject: string, html: string, idempotencyK
       "Content-Type": "application/json",
       "Idempotency-Key": idempotencyKey,
     },
-    body: JSON.stringify({ from, to: [to], subject, html }),
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject,
+      html,
+      ...(scheduledAt ? { scheduled_at: scheduledAt.toISOString() } : {}),
+    }),
     cache: "no-store",
   });
   if (!response.ok) {
@@ -105,6 +117,7 @@ export async function sendDailyOperationsDigest(input: {
   arrivals: string[];
   departures: string[];
   idempotencyKey: string;
+  scheduledAt?: Date;
 }): Promise<void> {
   const arrivals = input.arrivals.length ? `Номера: ${input.arrivals.join(", ")}` : "Нет";
   const departures = input.departures.length ? `Номера: ${input.departures.join(", ")}` : "Нет";
@@ -114,5 +127,6 @@ export async function sendDailyOperationsDigest(input: {
     `План отеля на сегодня — ${input.hotelName}`,
     `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#172033"><h2>Доброе утро, ${escapeHtml(input.recipientName)}</h2><p>Короткая сводка по отелю «${escapeHtml(input.hotelName)}» на ${escapeHtml(input.date)}.</p><div style="display:flex;gap:12px"><div style="flex:1;padding:16px;border:1px solid #e2e8f0;border-radius:12px"><strong>Заезды: ${input.arrivals.length}</strong><p>${escapeHtml(arrivals)}</p></div><div style="flex:1;padding:16px;border:1px solid #e2e8f0;border-radius:12px"><strong>Выезды: ${input.departures.length}</strong><p>${escapeHtml(departures)}</p></div></div><p style="margin-top:22px"><a href="${escapeHtml(appUrl)}/dashboard">Открыть панель отеля</a></p></div>`,
     input.idempotencyKey,
+    input.scheduledAt,
   );
 }

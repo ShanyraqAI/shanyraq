@@ -91,6 +91,35 @@ function hotelClock(now: Date, timezone: string): { date: string; hour: number }
   return { date: `${value("year")}-${value("month")}-${value("day")}`, hour: Number(value("hour")) };
 }
 
+function localTimeToUtc(date: string, hour: number, timezone: string): Date {
+  const [year, month, day] = date.split("-").map(Number);
+  const desiredAsUtc = Date.UTC(year, month - 1, day, hour);
+  let candidate = new Date(desiredAsUtc);
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(candidate);
+    const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "0";
+    const actualAsUtc = Date.UTC(
+      Number(value("year")),
+      Number(value("month")) - 1,
+      Number(value("day")),
+      Number(value("hour")),
+      Number(value("minute")),
+    );
+    candidate = new Date(candidate.getTime() + desiredAsUtc - actualAsUtc);
+  }
+
+  return candidate;
+}
+
 export async function sendScheduledDigests(now = new Date()): Promise<{ sent: number; skipped: number }> {
   const hotels = await db.hotel.findMany({
     where: { memberships: { some: {} } },
@@ -107,8 +136,7 @@ export async function sendScheduledDigests(now = new Date()): Promise<{ sent: nu
   let skipped = 0;
   for (const hotel of hotels) {
     const clock = hotelClock(now, hotel.timezone);
-    const due = hotel.memberships.filter((membership) => membership.digestHour === clock.hour);
-    if (!due.length) continue;
+    const due = hotel.memberships;
     const day = parseISODate(clock.date);
     const [arrivals, departures] = await Promise.all([
       db.reservation.findMany({
@@ -143,6 +171,10 @@ export async function sendScheduledDigests(now = new Date()): Promise<{ sent: nu
         arrivals: arrivals.map((item) => item.room.number),
         departures: departures.map((item) => item.room.number),
         idempotencyKey: `daily-digest-${notification.id}`,
+        scheduledAt: (() => {
+          const deliveryTime = localTimeToUtc(clock.date, recipient.digestHour, hotel.timezone);
+          return deliveryTime.getTime() > now.getTime() ? deliveryTime : undefined;
+        })(),
       });
       await db.notification.update({ where: { id: notification.id }, data: { emailSentAt: new Date() } });
       sent++;
