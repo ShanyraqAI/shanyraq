@@ -19,6 +19,7 @@ test("report prorates stay revenue across the selected nights", () => {
   assert.equal(report.summary.occupancy, 0.5);
   assert.equal(report.summary.adr, 10_000);
   assert.equal(report.summary.revpar, 5_000);
+  assert.deepEqual(report.daily.map((day) => day.date.toISOString().slice(0, 10)), ["2026-09-03", "2026-09-02"]);
 });
 
 test("report source filter and cancelled stays do not inflate metrics", () => {

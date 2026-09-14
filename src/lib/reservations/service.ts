@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { ACTIVE_RESERVATION_STATUSES, type ReservationStatus } from "@/lib/constants";
-import { addDays, diffDays, parseISODate, today } from "@/lib/dates";
+import { addDays, diffDays, formatISODate, parseISODate, toISODate, today } from "@/lib/dates";
 import { recomputeAvailability, remainingUnitsOnDate } from "@/lib/availability/service";
 import { PublicError } from "@/server/errors";
 import { getSessionUser } from "@/lib/auth/session";
@@ -98,7 +98,7 @@ async function assertTypeAvailability(
     const night = addDays(checkIn, i);
     const reserved = reservations.filter((r) => r.checkIn <= night && r.checkOut > night).length;
     if (reserved >= totalRooms) {
-      throw new OverbookingError(`Свободные номера категории «${await roomTypeName(roomTypeId, client)}» на ${night.toISOString().slice(0, 10)} закончились.`);
+      throw new OverbookingError(`Свободные номера категории «${await roomTypeName(roomTypeId, client)}» на ${formatISODate(toISODate(night))} закончились.`);
     }
   }
 }
@@ -171,7 +171,7 @@ export async function createReservation(params: CreateReservationParams) {
   await writeAudit(params.hotelId, "reservation.created", "Reservation", result.reservation.id, {
     channel: params.sourceChannel,
     externalId: params.externalReservationId ?? undefined,
-    reference: reservationReference(result.reservation.id, params.externalReservationId),
+    reference: reservationReference(result.reservation.sequenceNumber, result.reservation.id),
   }, undefined, {
     guest: result.guest.fullName,
     room: result.room.number,
@@ -183,7 +183,7 @@ export async function createReservation(params: CreateReservationParams) {
   });
   await notifyNewReservation(params.hotelId, {
     id: result.reservation.id,
-    reference: reservationReference(result.reservation.id, params.externalReservationId),
+    reference: reservationReference(result.reservation.sequenceNumber, result.reservation.id),
     guestName: result.guest.fullName,
     roomNumber: result.room.number,
     checkIn: params.checkIn,
@@ -253,7 +253,7 @@ export async function updateReservationDetails(params: UpdateReservationParams) 
   }, { timeout: 15_000 });
   const { updated } = result;
   await writeAudit(params.hotelId, "reservation.updated", "Reservation", updated.id, {
-    reference: reservationReference(updated.id, updated.externalReservationId),
+    reference: reservationReference(updated.sequenceNumber, updated.id),
   }, {
     guest: result.existing.guest.fullName,
     room: result.existing.room.number,
@@ -329,7 +329,7 @@ export async function setReservationStatus(hotelId: string, reservationId: strin
   }, { timeout: 15_000 });
   if (!changed) return updated;
   await writeAudit(hotelId, `reservation.${status.toLowerCase()}`, "Reservation", reservation.id, {
-    reference: reservationReference(reservation.id, reservation.externalReservationId),
+    reference: reservationReference(reservation.sequenceNumber, reservation.id),
   }, { status: reservation.status }, { status });
   return updated;
 }
@@ -401,8 +401,8 @@ export async function writeAudit(
   });
 }
 
-function reservationReference(id: string, externalId?: string | null): string {
-  return externalId || id.slice(-6).toUpperCase();
+function reservationReference(sequenceNumber: number | null, fallbackId: string): string {
+  return sequenceNumber == null ? fallbackId.slice(-6).toUpperCase() : String(sequenceNumber).padStart(3, "0");
 }
 
 async function notifyNewReservation(
@@ -424,7 +424,7 @@ async function notifyNewReservation(
     hotelId,
     type: "NEW_RESERVATION",
     title: `Новая бронь №${reservation.reference}`,
-    body: `${reservation.guestName} · номер ${reservation.roomNumber} · ${reservation.checkIn}–${reservation.checkOut}`,
+    body: `${reservation.guestName} · номер ${reservation.roomNumber} · ${formatISODate(reservation.checkIn)}–${formatISODate(reservation.checkOut)}`,
     href: `/dashboard/reservations?reservation=${reservation.id}`,
     dedupeKey: `new-reservation:${reservation.id}`,
   });

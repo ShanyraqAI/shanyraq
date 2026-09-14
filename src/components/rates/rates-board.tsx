@@ -33,6 +33,7 @@ import { t } from "@/lib/i18n";
 import { WEEKDAYS_SHORT } from "@/lib/dates";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCompactNightlyPrice, MAX_NIGHTLY_PRICE, MIN_NIGHTLY_PRICE } from "@/lib/pricing";
+import { formatSequenceNumber } from "@/lib/types";
 
 export interface RatesBoardProps {
   plans: (RatePlanVM & { availableToday: number | null })[];
@@ -181,6 +182,7 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
                   <div className="flex items-center justify-between gap-2">
                     <div className="leading-tight">
                       <div className="font-medium">{plan.name}</div>
+                      <div className="font-mono text-[11px] text-muted-foreground">Тариф {formatSequenceNumber(plan.sequenceNumber)}</div>
                       <div className="text-xs text-muted-foreground whitespace-nowrap">
                         {plan.roomTypeName}
                         {plan.breakfastIncluded ? t.rates.meta.breakfast : ""}

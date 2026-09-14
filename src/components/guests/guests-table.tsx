@@ -33,13 +33,14 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/page-header";
 import { ChannelLabel, ReservationStatusBadge } from "@/components/shared/status-badge";
 import { upsertGuestAction } from "@/server/actions/guests";
-import type { ReservationVM } from "@/lib/types";
+import { formatSequenceNumber, reservationDisplayId, type ReservationVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
 import { t } from "@/lib/i18n";
 
 export interface GuestRow {
   id: string;
+  sequenceNumber: number | null;
   fullName: string;
   email: string | null;
   phone: string | null;
@@ -53,11 +54,12 @@ export interface GuestRow {
 interface Props {
   guests: GuestRow[];
   reservations: ReservationVM[]; // full list to derive history per guest
+  initialSelectedId?: string | null;
 }
 
-export function GuestsTable({ guests, reservations }: Props) {
+export function GuestsTable({ guests, reservations, initialSelectedId = null }: Props) {
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [editOpen, setEditOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -67,6 +69,7 @@ export function GuestsTable({ guests, reservations }: Props) {
     return guests.filter(
       (g) =>
         g.fullName.toLowerCase().includes(q) ||
+        `гость ${formatSequenceNumber(g.sequenceNumber)}`.includes(q) ||
         (g.email ?? "").toLowerCase().includes(q) ||
         (g.phone ?? "").includes(q),
     );
@@ -112,6 +115,7 @@ export function GuestsTable({ guests, reservations }: Props) {
           <Table>
             <TableHeader>
               <TableRow className="bg-secondary/50 hover:bg-secondary/50">
+                <TableHead>ID</TableHead>
                 <TableHead>{t.guests.table.name}</TableHead>
                 <TableHead>{t.dashboard.table.email}</TableHead>
                 <TableHead>{t.dashboard.table.phone}</TableHead>
@@ -123,6 +127,7 @@ export function GuestsTable({ guests, reservations }: Props) {
             <TableBody>
               {filtered.map((g) => (
                 <TableRow key={g.id} className="cursor-pointer" onClick={() => setSelectedId(g.id)}>
+                  <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">Гость {formatSequenceNumber(g.sequenceNumber)}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2.5">
                       <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
@@ -142,7 +147,7 @@ export function GuestsTable({ guests, reservations }: Props) {
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     {t.guests.searchEmpty}
                   </TableCell>
                 </TableRow>
@@ -165,7 +170,7 @@ export function GuestsTable({ guests, reservations }: Props) {
                   {selected.fullName}
                 </DialogTitle>
                 <DialogDescription>
-                  {t.guests.profile.subtitle}
+                  Гость {formatSequenceNumber(selected.sequenceNumber)} · {t.guests.profile.subtitle}
                 </DialogDescription>
               </DialogHeader>
 
@@ -204,7 +209,7 @@ export function GuestsTable({ guests, reservations }: Props) {
                   <ul className="divide-y rounded-lg border">
                     {history.map((r) => (
                       <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2.5 text-sm">
-                        <span className="font-mono text-xs text-muted-foreground">#{r.id.slice(-8).toUpperCase()}</span>
+                        <span className="font-mono text-xs text-muted-foreground">{reservationDisplayId(r.sequenceNumber)}</span>
                         <span className="font-medium">
                           {t.guests.profile.roomLabel(r.roomNumber)}
                         </span>

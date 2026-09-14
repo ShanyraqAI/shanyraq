@@ -5,7 +5,7 @@ import { getCurrentHotel, getCurrentMembership } from "@/lib/tenant";
 import { PageHeader, EmptyState } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ACTIVITY_TYPES, activitySummary, auditChanges, parseAuditPayload } from "@/lib/activity";
+import { ACTIVITY_TYPES, USER_VISIBLE_ACTIVITY_ACTIONS, activitySummary, auditChanges, parseAuditPayload } from "@/lib/activity";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,10 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
   const logs = await db.auditLog.findMany({
     where: {
       hotelId: hotel.id,
-      ...(type ? { action: { startsWith: type } } : {}),
+      action: {
+        in: [...USER_VISIBLE_ACTIVITY_ACTIONS],
+        ...(type ? { startsWith: type } : {}),
+      },
       ...(query ? {
         OR: [
           { action: { contains: query, mode: "insensitive" as const } },
@@ -32,6 +35,11 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
     take: 100,
     include: { actorUser: { select: { fullName: true } } },
   });
+  const reservationIds = logs.filter((log) => log.entity === "Reservation" && log.entityId).map((log) => log.entityId!);
+  const reservationNumbers = new Map((await db.reservation.findMany({
+    where: { hotelId: hotel.id, id: { in: reservationIds } },
+    select: { id: true, sequenceNumber: true },
+  })).map((reservation) => [reservation.id, reservation.sequenceNumber]));
 
   return (
     <div className="space-y-6">
@@ -47,7 +55,9 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
       {logs.length ? (
         <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
           {logs.map((log) => {
-            const meta = parseAuditPayload(log.metaJson);
+            const storedMeta = parseAuditPayload(log.metaJson);
+            const reservationNumber = log.entityId ? reservationNumbers.get(log.entityId) : null;
+            const meta = reservationNumber == null ? storedMeta : { ...storedMeta, reference: String(reservationNumber).padStart(3, "0") };
             const changes = auditChanges(parseAuditPayload(log.oldValueJson), parseAuditPayload(log.newValueJson));
             return (
               <article key={log.id} className="grid gap-4 border-b p-5 last:border-b-0 md:grid-cols-[170px_1fr]">

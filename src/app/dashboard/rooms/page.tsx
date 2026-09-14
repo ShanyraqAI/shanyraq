@@ -1,6 +1,6 @@
 import { Users } from "lucide-react";
 import { db, getCurrentHotelId } from "@/lib/db";
-import { today, toISODate } from "@/lib/dates";
+import { formatISOCompactDate, today, toISODate } from "@/lib/dates";
 import { formatMoney, formatPercent } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/page-header";
 import { RoomsGrid } from "@/components/rooms/rooms-grid";
@@ -100,7 +100,7 @@ export default async function RoomsPage() {
                   </div>
                 </dl>
                 <p className="mt-3 text-center text-xs text-muted-foreground">
-                  {t.rooms.availableForDate(available, type.rooms.length, toISODate(day).slice(5))}
+                  {t.rooms.availableForDate(available, type.rooms.length, formatISOCompactDate(toISODate(day)))}
                 </p>
               </CardContent>
             </Card>

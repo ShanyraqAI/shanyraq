@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatShortDate, todayInTimeZone } from "@/lib/dates";
+import { formatISODate, formatShortDate, todayInTimeZone } from "@/lib/dates";
 import { channelLabel } from "@/lib/i18n";
 import { parseReportFilters } from "@/lib/reports/performance";
 import { getHotelPerformanceReport } from "@/lib/reports/service";
@@ -65,7 +65,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
         <Card className="min-w-0 shadow-sm">
-          <CardHeader><CardTitle className="text-base">Динамика загрузки</CardTitle><CardDescription>{report.period.from} — {report.period.to} · доступный фонд рассчитан по текущему статусу номеров</CardDescription></CardHeader>
+          <CardHeader><CardTitle className="text-base">Динамика загрузки</CardTitle><CardDescription>{formatISODate(report.period.from)} — {formatISODate(report.period.to)} · сначала последние даты</CardDescription></CardHeader>
           <CardContent className="overflow-x-auto">
             <div className="flex h-[220px] min-w-[720px] items-end gap-1.5">
               {report.daily.map((day, index) => (

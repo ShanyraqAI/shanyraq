@@ -1,6 +1,31 @@
 type AuditPayload = Record<string, unknown>;
 
-const ACTION_LABELS: Record<string, string> = {
+export const USER_VISIBLE_ACTIVITY_ACTIONS = [
+  "reservation.created",
+  "reservation.updated",
+  "reservation.cancelled",
+  "reservation.checked_in",
+  "reservation.checked_out",
+  "reservation.no_show",
+  "reservation.confirmed",
+  "room.created",
+  "room.updated",
+  "room.deleted",
+  "room.status_changed",
+  "ratePlan.created",
+  "rates.bulk_updated",
+  "hotel.settings_updated",
+  "channel.connected",
+  "channel.disconnected",
+  "channel.room_mappings_saved",
+  "channel.rate_mappings_saved",
+  "staff.access_saved",
+  "staff.permissions_updated",
+  "staff.access_removed",
+  "staff.invitation_accepted",
+] as const;
+
+const ACTION_LABELS: Record<(typeof USER_VISIBLE_ACTIVITY_ACTIONS)[number], string> = {
   "reservation.created": "создана бронь",
   "reservation.updated": "изменена бронь",
   "reservation.cancelled": "отменена бронь",
@@ -80,7 +105,7 @@ export function parseAuditPayload(value: string | null): AuditPayload {
 }
 
 export function activitySummary(action: string, entityId: string | null, meta: AuditPayload): string {
-  const label = ACTION_LABELS[action] ?? action;
+  const label = ACTION_LABELS[action as keyof typeof ACTION_LABELS] ?? "изменены данные";
   const reference = typeof meta.reference === "string" ? meta.reference : entityId?.slice(-6).toUpperCase();
   const number = typeof meta.number === "string" ? meta.number : null;
   if (action.startsWith("reservation.")) return `${label}${reference ? ` №${reference}` : ""}`;
@@ -102,7 +127,11 @@ function formatAuditValue(value: unknown): string {
   if (value === undefined || value === null || value === "") return "—";
   if (typeof value === "boolean") return value ? "Да" : "Нет";
   if (typeof value === "number") return new Intl.NumberFormat("ru-RU").format(value);
-  if (typeof value === "string") return STATUS_LABELS[value] ?? value;
+  if (typeof value === "string") {
+    const isoDate = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (isoDate) return `${isoDate[3]}.${isoDate[2]}.${isoDate[1]}`;
+    return STATUS_LABELS[value] ?? value;
+  }
   if (Array.isArray(value)) return value.map(formatAuditValue).join(", ");
   return JSON.stringify(value);
 }

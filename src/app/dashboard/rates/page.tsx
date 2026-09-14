@@ -36,6 +36,7 @@ export default async function RatesPage() {
     const typeName = roomTypes.find((t) => t.id === plan.roomTypeId)?.name ?? "";
     planVMs.push({
       id: plan.id,
+      sequenceNumber: plan.sequenceNumber,
       name: plan.name,
       roomTypeId: plan.roomTypeId,
       roomTypeName: typeName,

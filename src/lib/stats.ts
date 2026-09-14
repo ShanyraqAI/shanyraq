@@ -10,6 +10,7 @@ import { addDays, startOfMonth } from "./dates";
 
 export interface ReservationWithRelations {
   id: string;
+  sequenceNumber: number | null;
   status: string;
   checkIn: Date;
   checkOut: Date;
@@ -182,7 +183,7 @@ export async function getAllReservations(hotelId: string): Promise<ReservationWi
   const rows = await db.reservation.findMany({
     where: { hotelId },
     include: RESERVATION_INCLUDE,
-    orderBy: [{ checkIn: "asc" }, { createdAt: "desc" }],
+    orderBy: [{ createdAt: "desc" }, { sequenceNumber: "desc" }],
   });
   return rows as ReservationWithRelations[];
 }

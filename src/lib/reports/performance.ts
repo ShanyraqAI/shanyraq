@@ -91,7 +91,7 @@ export function calculatePerformance(
   }
 
   return {
-    daily,
+    daily: [...daily].reverse(),
     summary: {
       revenue,
       occupiedRoomNights,

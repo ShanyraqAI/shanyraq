@@ -38,6 +38,8 @@ import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
 import type { ReservationStatus } from "@/lib/constants";
 import { formatMoney } from "@/lib/utils";
 import { t, channelLabel } from "@/lib/i18n";
+import { formatISOCompactDate } from "@/lib/dates";
+import { reservationDisplayId } from "@/lib/types";
 
 interface Props {
   reservations: ReservationVM[];
@@ -45,15 +47,16 @@ interface Props {
   ratePlans: RatePlanVM[];
   guests: GuestVM[];
   hotelCurrency: string;
+  initialSelectedId?: string | null;
 }
 
 const STATUSES: ReservationStatus[] = ["PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"];
 
-export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency }: Props) {
+export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency, initialSelectedId = null }: Props) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [channel, setChannel] = useState("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [createOpen, setCreateOpen] = useState(false);
   const selected = findSelectedReservation(reservations, selectedId);
 
@@ -68,6 +71,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
       return (
         r.guestName.toLowerCase().includes(q) ||
         r.roomNumber.includes(q) ||
+        reservationDisplayId(r.sequenceNumber).toLowerCase().includes(q) ||
         r.id.toLowerCase().includes(q.toLowerCase())
       );
     });
@@ -168,11 +172,11 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
             <TableBody>
               {filtered.slice(0, 100).map((r) => (
                 <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelectedId(r.id)}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">#{r.id.slice(-8).toUpperCase()}</TableCell>
+                  <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">{reservationDisplayId(r.sequenceNumber)}</TableCell>
                   <TableCell className="font-medium">{r.guestName}</TableCell>
                   <TableCell>{r.roomNumber}</TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {r.checkIn.slice(5)} → {r.checkOut.slice(5)}
+                    {formatISOCompactDate(r.checkIn)} → {formatISOCompactDate(r.checkOut)}
                   </TableCell>
                   <TableCell>
                     <ChannelLabel channel={r.channel} />

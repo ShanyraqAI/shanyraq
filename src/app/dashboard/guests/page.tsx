@@ -8,11 +8,13 @@ import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
 
-export default async function GuestsPage() {
+export default async function GuestsPage({ searchParams }: { searchParams: Promise<{ guest?: string | string[] }> }) {
   await requireSectionAccess("GUESTS");
   const hotelId = await getCurrentHotelId();
+  const params = await searchParams;
+  const initialSelectedId = typeof params.guest === "string" ? params.guest : null;
   const [guestsRaw, reservationsRaw] = await Promise.all([
-    db.guest.findMany({ where: { hotelId }, orderBy: { fullName: "asc" } }),
+    db.guest.findMany({ where: { hotelId }, orderBy: { sequenceNumber: "desc" } }),
     getAllReservations(hotelId),
   ]);
 
@@ -23,6 +25,7 @@ export default async function GuestsPage() {
     const last = mine.sort((a, b) => (a.checkIn < b.checkIn ? 1 : -1))[0];
     return {
       id: g.id,
+      sequenceNumber: g.sequenceNumber,
       fullName: g.fullName,
       email: g.email,
       phone: g.phone,
@@ -40,7 +43,7 @@ export default async function GuestsPage() {
         title={t.guests.title}
         description={t.guests.description}
       />
-      <GuestsTable guests={rows} reservations={reservations} />
+      <GuestsTable guests={rows} reservations={reservations} initialSelectedId={initialSelectedId} />
     </div>
   );
 }

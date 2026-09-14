@@ -6,6 +6,7 @@ import type { ReservationVM } from "@/lib/types";
 function reservation(id: string, guestName: string): ReservationVM {
   return {
     id,
+    sequenceNumber: 1,
     guestId: `guest-${id}`,
     guestName,
     guestEmail: null,

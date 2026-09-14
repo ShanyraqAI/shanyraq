@@ -193,13 +193,25 @@ model Hotel {
   channelSyncJobs    ChannelSyncJob[]
   notifications      Notification[]
   invitations        HotelInvitation[]
-  organization       Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  organization       Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
   analyticsEvents    AnalyticsEvent[]
   productExperiences ProductExperience[]
   supportRequests    SupportRequest[]
   betaProfile        BetaHotelProfile?
+  entitySequence     HotelEntitySequence?
 
   @@unique([id, orgId])
+}
+
+// Tenant-local counters back the human-readable numbers shown in the product.
+// Internal cuid primary keys stay private and continue to power relations.
+model HotelEntitySequence {
+  hotelId               String @id
+  nextGuestNumber       Int    @default(1)
+  nextReservationNumber Int    @default(1)
+  nextRatePlanNumber    Int    @default(1)
+
+  hotel Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 }
 
 // Internal operating record for each hotel participating in the closed beta.
@@ -385,18 +397,20 @@ model Room {
 // ---------------------------------------------------------------------------
 
 model Guest {
-  id       String  @id @default(cuid())
-  hotelId  String
-  fullName String
-  email    String?
-  phone    String?
-  country  String?
-  notes    String?
+  id             String  @id @default(cuid())
+  hotelId        String
+  sequenceNumber Int?
+  fullName       String
+  email          String?
+  phone          String?
+  country        String?
+  notes          String?
 
   hotel        Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
   reservations Reservation[]
 
   @@unique([id, hotelId])
+  @@unique([hotelId, sequenceNumber])
   @@index([hotelId, fullName])
 }
 
@@ -407,6 +421,7 @@ model Reservation {
   roomId                String
   roomTypeId            String
   ratePlanId            String?
+  sequenceNumber        Int?
   sourceChannel         String // booking | ostrovok | krisha | direct
   externalReservationId String? // channel-side id, when imported via a channel
   checkIn               DateTime // UTC midnight (hotel date-only semantics)
@@ -427,6 +442,7 @@ model Reservation {
   ratePlan RatePlan? @relation(fields: [ratePlanId, hotelId], references: [id, hotelId], onDelete: Restrict)
 
   @@unique([hotelId, sourceChannel, externalReservationId])
+  @@unique([hotelId, sequenceNumber])
   @@index([hotelId, checkIn])
   @@index([hotelId, status])
   @@index([roomId, checkIn, checkOut])
@@ -440,6 +456,7 @@ model RatePlan {
   id                String  @id @default(cuid())
   hotelId           String
   roomTypeId        String
+  sequenceNumber    Int?
   name              String
   refundable        Boolean @default(true)
   breakfastIncluded Boolean @default(false)
@@ -454,6 +471,7 @@ model RatePlan {
 
   @@unique([hotelId, name])
   @@unique([id, hotelId])
+  @@unique([hotelId, sequenceNumber])
 }
 
 model Rate {

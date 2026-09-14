@@ -8,9 +8,11 @@ import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReservationsPage() {
+export default async function ReservationsPage({ searchParams }: { searchParams: Promise<{ reservation?: string | string[] }> }) {
   await requireSectionAccess("RESERVATIONS");
   const hotelId = await getCurrentHotelId();
+  const params = await searchParams;
+  const initialSelectedId = typeof params.reservation === "string" ? params.reservation : null;
   const [hotel, roomsRaw, roomTypes, ratePlansRaw, guestsRaw, reservations] = await Promise.all([
     db.hotel.findUniqueOrThrow({ where: { id: hotelId } }),
     db.room.findMany({
@@ -35,6 +37,7 @@ export default async function ReservationsPage() {
   }));
   const ratePlans: RatePlanVM[] = ratePlansRaw.map((p) => ({
     id: p.id,
+    sequenceNumber: p.sequenceNumber,
     name: p.name,
     roomTypeId: p.roomTypeId,
     roomTypeName: roomTypes.find((t) => t.id === p.roomTypeId)?.name ?? "",
@@ -45,6 +48,7 @@ export default async function ReservationsPage() {
   }));
   const guests: GuestVM[] = guestsRaw.map((g) => ({
     id: g.id,
+    sequenceNumber: g.sequenceNumber,
     fullName: g.fullName,
     email: g.email,
     phone: g.phone,
@@ -64,6 +68,7 @@ export default async function ReservationsPage() {
         ratePlans={ratePlans}
         guests={guests}
         hotelCurrency={hotel.currency}
+        initialSelectedId={initialSelectedId}
       />
     </div>
   );

@@ -24,6 +24,8 @@ import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
 import type { ReservationStatus } from "@/lib/constants";
 import { formatMoney } from "@/lib/utils";
 import { t, channelLabel } from "@/lib/i18n";
+import { formatISOCompactDate } from "@/lib/dates";
+import { reservationDisplayId } from "@/lib/types";
 
 interface Props {
   reservations: ReservationVM[];
@@ -108,13 +110,13 @@ export function RecentReservationsTable({ reservations, rooms, ratePlans, guests
                 className="cursor-pointer"
                 onClick={() => setSelected(r)}
               >
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  #{r.id.slice(-8).toUpperCase()}
+                <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+                  {reservationDisplayId(r.sequenceNumber)}
                 </TableCell>
                 <TableCell className="font-medium">{r.guestName}</TableCell>
                 <TableCell>{r.roomNumber}</TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">
-                  {r.checkIn.slice(5)} → {r.checkOut.slice(5)}
+                  {formatISOCompactDate(r.checkIn)} → {formatISOCompactDate(r.checkOut)}
                 </TableCell>
                 <TableCell>
                   <ChannelLabel channel={r.channel} />

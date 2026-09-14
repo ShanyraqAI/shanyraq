@@ -19,6 +19,8 @@ import { shouldShowFirstReservationFeedback } from "@/lib/support/feedback";
 import { getNotificationCenter } from "@/lib/notifications/service";
 import { NotificationCenter } from "@/components/notifications/notification-center";
 import { GlobalSearch, type GlobalSearchItem } from "@/components/layout/global-search";
+import { formatISODate, toISODate } from "@/lib/dates";
+import { formatSequenceNumber, reservationDisplayId } from "@/lib/types";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireOnboardingComplete();
@@ -45,17 +47,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
     db.reservation.count({ where: { hotelId: hotel.id } }),
     getNotificationCenter(hotel.id, user.id),
     Promise.all([
-      db.guest.findMany({ where: { hotelId: hotel.id }, orderBy: { fullName: "asc" }, take: 120, select: { id: true, fullName: true, email: true, phone: true } }),
+      db.guest.findMany({ where: { hotelId: hotel.id }, orderBy: { sequenceNumber: "desc" }, take: 120, select: { id: true, sequenceNumber: true, fullName: true, email: true, phone: true } }),
       db.room.findMany({ where: { hotelId: hotel.id }, orderBy: { number: "asc" }, take: 120, select: { id: true, number: true, floor: true, roomType: { select: { name: true } } } }),
-      db.reservation.findMany({ where: { hotelId: hotel.id }, orderBy: { createdAt: "desc" }, take: 120, select: { id: true, guest: { select: { fullName: true } }, room: { select: { number: true } }, checkIn: true, checkOut: true } }),
+      db.reservation.findMany({ where: { hotelId: hotel.id }, orderBy: { createdAt: "desc" }, take: 120, select: { id: true, sequenceNumber: true, guest: { select: { fullName: true } }, room: { select: { number: true } }, checkIn: true, checkOut: true } }),
     ]),
   ]);
   const hotelOptions = hotels.map((item) => item.hotel);
   const [searchGuests, searchRooms, searchReservations] = searchableData;
   const searchItems: GlobalSearchItem[] = [
-    ...(permissions.includes("GUESTS") ? searchGuests.map((guest) => ({ id: `guest-${guest.id}`, type: "guest" as const, title: guest.fullName, subtitle: guest.email ?? guest.phone ?? "Карточка гостя", href: "/dashboard/guests" })) : []),
+    ...(permissions.includes("GUESTS") ? searchGuests.map((guest) => ({ id: `guest-${guest.id}`, type: "guest" as const, title: guest.fullName, subtitle: `Гость ${formatSequenceNumber(guest.sequenceNumber)} · ${guest.email ?? guest.phone ?? "карточка гостя"}`, href: `/dashboard/guests?guest=${guest.id}` })) : []),
     ...(permissions.includes("ROOMS") ? searchRooms.map((room) => ({ id: `room-${room.id}`, type: "room" as const, title: `Номер ${room.number}`, subtitle: `${room.roomType.name} · ${room.floor} этаж`, href: "/dashboard/rooms" })) : []),
-    ...(permissions.includes("RESERVATIONS") ? searchReservations.map((reservation) => ({ id: `reservation-${reservation.id}`, type: "reservation" as const, title: reservation.guest.fullName, subtitle: `№ ${reservation.room.number} · ${reservation.checkIn.toISOString().slice(0, 10)} — ${reservation.checkOut.toISOString().slice(0, 10)} · #${reservation.id.slice(-8).toUpperCase()}`, href: "/dashboard/reservations" })) : []),
+    ...(permissions.includes("RESERVATIONS") ? searchReservations.map((reservation) => ({ id: `reservation-${reservation.id}`, type: "reservation" as const, title: `${reservationDisplayId(reservation.sequenceNumber)} · ${reservation.guest.fullName}`, subtitle: `Номер ${reservation.room.number} · ${formatISODate(toISODate(reservation.checkIn))} — ${formatISODate(toISODate(reservation.checkOut))}`, href: `/dashboard/reservations?reservation=${reservation.id}` })) : []),
   ];
 
   return (

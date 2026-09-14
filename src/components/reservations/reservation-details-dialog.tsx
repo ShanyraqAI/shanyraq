@@ -27,7 +27,7 @@ import { Separator } from "@/components/ui/separator";
 import { ReservationStatusBadge, ChannelLabel } from "@/components/shared/status-badge";
 import { ReservationFormDialog } from "./reservation-form-dialog";
 import { setReservationStatusAction, cancelReservationAction } from "@/server/actions/reservations";
-import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
+import { reservationDisplayId, type GuestVM, type RatePlanVM, type ReservationVM, type RoomVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
 import { t, channelLabel } from "@/lib/i18n";
@@ -103,7 +103,7 @@ export function ReservationDetailsDialog({
             <div className="flex items-center justify-between gap-3 pr-6">
               <DialogTitle className="text-base">
                 {t.reservations.details.title}{" "}
-                <span className="font-mono text-muted-foreground">#{r.id.slice(-8).toUpperCase()}</span>
+                <span className="font-mono text-muted-foreground">{reservationDisplayId(r.sequenceNumber)}</span>
               </DialogTitle>
               <ReservationStatusBadge status={r.status} />
             </div>

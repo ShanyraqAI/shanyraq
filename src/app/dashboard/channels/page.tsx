@@ -29,6 +29,7 @@ export default async function ChannelsPage() {
 
   const internalRatePlans: (RatePlanVM & { roomTypeName: string })[] = ratePlansRaw.map((p) => ({
     id: p.id,
+    sequenceNumber: p.sequenceNumber,
     name: p.name,
     roomTypeId: p.roomTypeId,
     roomTypeName: p.roomType.name,

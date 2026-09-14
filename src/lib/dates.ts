@@ -110,6 +110,18 @@ export function formatMediumDate(date: Date): string {
   return `${WEEKDAYS_SHORT[(date.getUTCDay() + 6) % 7]}, ${date.getUTCDate()} ${MONTHS_SHORT[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
 }
 
+/** Display an ISO hotel date as DD.MM.YYYY. */
+export function formatISODate(iso: string): string {
+  if (!isISODate(iso)) return iso;
+  return `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
+}
+
+/** Display an ISO hotel date as DD.MM when the year is already clear. */
+export function formatISOCompactDate(iso: string): string {
+  if (!isISODate(iso)) return iso;
+  return `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
+}
+
 export function formatDayRange(checkIn: Date, checkOut: Date): string {
   if (checkIn.getUTCMonth() === checkOut.getUTCMonth()) {
     return `${checkIn.getUTCDate()} ${MONTHS_SHORT[checkIn.getUTCMonth()]} – ${checkOut.getUTCDate()}`;

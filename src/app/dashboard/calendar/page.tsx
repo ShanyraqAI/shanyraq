@@ -61,6 +61,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
   }));
   const ratePlans: RatePlanVM[] = ratePlansRaw.map((p) => ({
     id: p.id,
+    sequenceNumber: p.sequenceNumber,
     name: p.name,
     roomTypeId: p.roomTypeId,
     roomTypeName: roomTypeNames.get(p.roomTypeId) ?? "",
@@ -71,6 +72,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
   }));
   const guests: GuestVM[] = guestsRaw.map((g) => ({
     id: g.id,
+    sequenceNumber: g.sequenceNumber,
     fullName: g.fullName,
     email: g.email,
     phone: g.phone,

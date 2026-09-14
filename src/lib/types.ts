@@ -8,6 +8,7 @@ import type { ReservationWithRelations } from "@/lib/stats";
 
 export interface GuestVM {
   id: string;
+  sequenceNumber: number | null;
   fullName: string;
   email: string | null;
   phone: string | null;
@@ -37,6 +38,7 @@ export interface RoomVM {
 
 export interface RatePlanVM {
   id: string;
+  sequenceNumber: number | null;
   name: string;
   roomTypeId: string;
   roomTypeName: string;
@@ -48,6 +50,7 @@ export interface RatePlanVM {
 
 export interface ReservationVM {
   id: string;
+  sequenceNumber: number | null;
   guestId: string;
   guestName: string;
   guestEmail: string | null;
@@ -73,6 +76,7 @@ export interface ReservationVM {
 export function toReservationVM(r: ReservationWithRelations): ReservationVM {
   return {
     id: r.id,
+    sequenceNumber: r.sequenceNumber,
     guestId: r.guest.id,
     guestName: r.guest.fullName,
     guestEmail: r.guest.email,
@@ -94,4 +98,12 @@ export function toReservationVM(r: ReservationWithRelations): ReservationVM {
     notes: r.notes,
     createdAt: r.createdAt.toISOString(),
   };
+}
+
+export function formatSequenceNumber(value: number | null | undefined): string {
+  return value == null ? "—" : String(value).padStart(3, "0");
+}
+
+export function reservationDisplayId(value: number | null | undefined): string {
+  return value == null ? "Бронирование" : `Бронирование ${formatSequenceNumber(value)}`;
 }
