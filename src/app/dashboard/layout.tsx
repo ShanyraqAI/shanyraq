@@ -16,6 +16,9 @@ import { resolveHotelPermissions } from "@/lib/access";
 import { SupportChatWidget } from "@/components/support/support-chat-widget";
 import { ContextualFeedbackPrompt } from "@/components/feedback/contextual-feedback-prompt";
 import { shouldShowFirstReservationFeedback } from "@/lib/support/feedback";
+import { getNotificationCenter } from "@/lib/notifications/service";
+import { NotificationCenter } from "@/components/notifications/notification-center";
+import { GlobalSearch, type GlobalSearchItem } from "@/components/layout/global-search";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireOnboardingComplete();
@@ -28,7 +31,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const hotelName = hotel.name;
   const userName = user.fullName;
   const permissions = resolveHotelPermissions(user);
-  const [subscription, hotels, productExperience, reservationCount] = await Promise.all([
+  const [subscription, hotels, productExperience, reservationCount, notificationCenter, searchableData] = await Promise.all([
     PRODUCT_AVAILABILITY.billing && user.organizationId ? getSubscription(user.organizationId) : Promise.resolve(null),
     db.membership.findMany({
       where: { userId: user.id },
@@ -40,8 +43,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
       select: { tourCompletedAt: true, tourSkippedAt: true, feedbackSubmittedAt: true, feedbackDismissedAt: true },
     }),
     db.reservation.count({ where: { hotelId: hotel.id } }),
+    getNotificationCenter(hotel.id, user.id),
+    Promise.all([
+      db.guest.findMany({ where: { hotelId: hotel.id }, orderBy: { fullName: "asc" }, take: 120, select: { id: true, fullName: true, email: true, phone: true } }),
+      db.room.findMany({ where: { hotelId: hotel.id }, orderBy: { number: "asc" }, take: 120, select: { id: true, number: true, floor: true, roomType: { select: { name: true } } } }),
+      db.reservation.findMany({ where: { hotelId: hotel.id }, orderBy: { createdAt: "desc" }, take: 120, select: { id: true, guest: { select: { fullName: true } }, room: { select: { number: true } }, checkIn: true, checkOut: true } }),
+    ]),
   ]);
   const hotelOptions = hotels.map((item) => item.hotel);
+  const [searchGuests, searchRooms, searchReservations] = searchableData;
+  const searchItems: GlobalSearchItem[] = [
+    ...(permissions.includes("GUESTS") ? searchGuests.map((guest) => ({ id: `guest-${guest.id}`, type: "guest" as const, title: guest.fullName, subtitle: guest.email ?? guest.phone ?? "Карточка гостя", href: "/dashboard/guests" })) : []),
+    ...(permissions.includes("ROOMS") ? searchRooms.map((room) => ({ id: `room-${room.id}`, type: "room" as const, title: `Номер ${room.number}`, subtitle: `${room.roomType.name} · ${room.floor} этаж`, href: "/dashboard/rooms" })) : []),
+    ...(permissions.includes("RESERVATIONS") ? searchReservations.map((reservation) => ({ id: `reservation-${reservation.id}`, type: "reservation" as const, title: reservation.guest.fullName, subtitle: `№ ${reservation.room.number} · ${reservation.checkIn.toISOString().slice(0, 10)} — ${reservation.checkOut.toISOString().slice(0, 10)} · #${reservation.id.slice(-8).toUpperCase()}`, href: "/dashboard/reservations" })) : []),
+  ];
 
   return (
     <div data-dashboard-theme className="min-h-screen bg-background">
@@ -69,6 +84,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
             canManageHotels={user.role === "OWNER"}
           />
           <BrandLogo className="h-6 w-auto" />
+          <div className="ml-auto flex items-center gap-1"><GlobalSearch items={searchItems} /><NotificationCenter initialUnreadCount={notificationCenter.unreadCount} initialItems={notificationCenter.items.map((item) => ({ ...item, readAt: item.readAt?.toISOString() ?? null, createdAt: item.createdAt.toISOString() }))} /></div>
+        </header>
+        <header className="sticky top-0 z-30 hidden h-16 items-center border-b bg-background/95 px-8 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:flex">
+          <div className="mx-auto flex w-full max-w-[1400px] items-center justify-end gap-2"><GlobalSearch items={searchItems} /><NotificationCenter initialUnreadCount={notificationCenter.unreadCount} initialItems={notificationCenter.items.map((item) => ({ ...item, readAt: item.readAt?.toISOString() ?? null, createdAt: item.createdAt.toISOString() }))} /></div>
         </header>
         <main className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-8 md:py-8">
           {user.platformRole === "SUPER_ADMIN" && (

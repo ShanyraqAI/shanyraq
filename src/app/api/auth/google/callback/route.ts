@@ -89,6 +89,11 @@ export async function GET(request: Request) {
       if (invitations.length > 0) {
         await tx.membership.createMany({ data: invitations.map((item) => ({ organizationId: item.organizationId, hotelId: item.hotelId, userId: accountUser.id, role: "STAFF", accessLevel: item.accessLevel, permissions: item.permissions })), skipDuplicates: true });
         await tx.hotelInvitation.updateMany({ where: { id: { in: invitations.map((item) => item.id) } }, data: { status: "ACCEPTED", acceptedAt: new Date() } });
+        for (const invitation of invitations) {
+          await tx.auditLog.create({ data: { hotelId: invitation.hotelId, actor: "user", actorUserId: accountUser.id, action: "staff.invitation_accepted", entity: "User", entityId: accountUser.id, metaJson: JSON.stringify({ name: displayName, email }), newValueJson: JSON.stringify({ email, permissions: invitation.permissions }) } });
+          const owners = await tx.membership.findMany({ where: { hotelId: invitation.hotelId, role: "OWNER" }, select: { userId: true } });
+          await tx.notification.createMany({ data: owners.map((owner) => ({ hotelId: invitation.hotelId, recipientUserId: owner.userId, type: "STAFF", title: `${displayName} принял(а) приглашение`, body: email, href: "/dashboard/settings", dedupeKey: `invitation-accepted:${invitation.id}` })), skipDuplicates: true });
+        }
       }
       if (wasCreated) {
         const membership = await tx.membership.findFirst({

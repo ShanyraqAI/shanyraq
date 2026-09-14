@@ -10,6 +10,7 @@ import {
   FileDown,
   Settings,
   CreditCard,
+  History,
   type LucideIcon,
 } from "lucide-react";
 import { t } from "@/lib/i18n";
@@ -22,6 +23,7 @@ export interface NavItem {
   icon: LucideIcon;
   tourId?: string;
   permission: HotelPermission | "FULL" | HotelPermission[];
+  ownerOnly?: boolean;
 }
 
 const ALL_NAV_MAIN: (NavItem & { visible: boolean })[] = [
@@ -41,6 +43,7 @@ const ALL_NAV_SECONDARY: (NavItem & { visible: boolean })[] = [
   { title: t.nav.reports, href: "/dashboard/reports", icon: BarChart3, permission: "REPORTS", visible: true },
   { title: t.nav.exports, href: "/dashboard/exports", icon: FileDown, permission: ["REPORTS", "CALENDAR", "RESERVATIONS", "GUESTS"], visible: true },
   { title: t.nav.settings, href: "/dashboard/settings", icon: Settings, permission: "FULL", visible: true },
+  { title: "Журнал действий", href: "/dashboard/activity", icon: History, permission: "FULL", ownerOnly: true, visible: true },
 ];
 
 export const NAV_SECONDARY: NavItem[] = ALL_NAV_SECONDARY.filter((item) => item.visible);

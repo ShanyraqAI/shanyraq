@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireSectionAccess } from "@/server/guards";
 import { isManagedAvatar } from "@/lib/avatar";
 import { resolveHotelPermissions } from "@/lib/access";
+import { NotificationPreferences } from "@/components/settings/notification-preferences";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export default async function SettingsPage() {
   const user = await requireUser();
   const hotelId = await getCurrentHotelId();
   const hotel = await db.hotel.findUniqueOrThrow({ where: { id: hotelId } });
-  const [memberships, invitations] = await Promise.all([
+  const [memberships, invitations, notificationMembership] = await Promise.all([
     db.membership.findMany({
       where: { hotelId },
       orderBy: [{ role: "asc" }, { createdAt: "asc" }],
@@ -27,6 +28,10 @@ export default async function SettingsPage() {
       where: { hotelId, status: "PENDING", expiresAt: { gt: new Date() } },
       orderBy: { createdAt: "desc" },
       select: { id: true, email: true, accessLevel: true, permissions: true, expiresAt: true },
+    }),
+    db.membership.findUniqueOrThrow({
+      where: { id: user.membershipId! },
+      select: { newReservationEmail: true, dailyDigestEmail: true, digestHour: true },
     }),
   ]);
 
@@ -42,6 +47,7 @@ export default async function SettingsPage() {
           <TabsTrigger value="hotel" className="h-9 px-5">Отель</TabsTrigger>
           <TabsTrigger value="profile" className="h-9 px-5">Профиль</TabsTrigger>
           <TabsTrigger value="access" className="h-9 px-5">Доступ</TabsTrigger>
+          <TabsTrigger value="notifications" className="h-9 px-5">Уведомления</TabsTrigger>
         </TabsList>
         <TabsContent value="hotel">
           <SettingsForm initial={{ name: hotel.name, address: hotel.address, city: hotel.city, country: hotel.country, timezone: hotel.timezone, currency: hotel.currency }} />
@@ -50,6 +56,7 @@ export default async function SettingsPage() {
           <AccountForm initial={{ firstName: user.firstName, lastName: user.lastName, avatarUrl: isManagedAvatar(user.avatarUrl) ? "" : user.avatarUrl ?? "", email: user.email, phone: user.phone }} />
         </TabsContent>
         <TabsContent value="access"><AccessManagement initialMembers={memberships.map((membership) => ({ id: membership.id, name: membership.user.fullName, email: membership.user.email ?? "—", permissions: resolveHotelPermissions(membership), role: membership.role }))} pendingInvitations={invitations.map((invitation) => ({ id: invitation.id, email: invitation.email, permissions: resolveHotelPermissions(invitation), expiresAt: invitation.expiresAt.toISOString() }))} canManage={user.role === "OWNER"} /></TabsContent>
+        <TabsContent value="notifications"><NotificationPreferences initial={notificationMembership} emailAvailable={Boolean(user.email)} /></TabsContent>
       </Tabs>
     </div>
   );

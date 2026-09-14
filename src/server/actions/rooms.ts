@@ -22,7 +22,7 @@ export async function setRoomStatusAction(input: unknown): Promise<ActionResult>
     const room = await db.$transaction(async (tx) => {
       const owned = await tx.room.findFirst({
         where: { id: parsed.data.roomId, hotelId },
-        select: { id: true, number: true, roomTypeId: true },
+        select: { id: true, number: true, roomTypeId: true, status: true },
       });
       if (!owned) throw new Error(t.rooms.errors.roomNotFound);
       const updated = await tx.room.updateMany({
@@ -34,7 +34,7 @@ export async function setRoomStatusAction(input: unknown): Promise<ActionResult>
       await enqueueHotelChannelSyncs(tx, hotelId);
       return owned;
     }, { timeout: 30_000 });
-    await writeAudit(hotelId, "room.status_changed", "Room", room.id, { status: parsed.data.status });
+    await writeAudit(hotelId, "room.status_changed", "Room", room.id, { number: room.number }, { status: room.status }, { status: parsed.data.status });
     revalidateRoomConsumers();
     return ok(
       undefined,
@@ -83,7 +83,7 @@ export async function upsertRoomAction(input: unknown): Promise<ActionResult<{ i
       if (data.id) {
         const previous = await tx.room.findFirstOrThrow({
           where: { id: data.id, hotelId },
-          select: { roomTypeId: true },
+          select: { roomTypeId: true, number: true, floor: true, status: true, roomType: { select: { name: true } } },
         });
         const result = await tx.room.updateMany({
           where: { id: data.id, hotelId },
@@ -92,7 +92,13 @@ export async function upsertRoomAction(input: unknown): Promise<ActionResult<{ i
         if (result.count !== 1) throw new Error(t.rooms.errors.roomNotFound);
         await recomputeExistingAvailability(hotelId, [previous.roomTypeId, roomType.id], tx);
         await enqueueHotelChannelSyncs(tx, hotelId);
-        return { id: data.id, number: data.number, action: "room.updated" };
+        return {
+          id: data.id,
+          number: data.number,
+          action: "room.updated",
+          oldValue: { number: previous.number, floor: previous.floor, status: previous.status, roomType: previous.roomType.name },
+          newValue: { number: data.number, floor: data.floor, status: data.status, roomType: data.roomTypeName },
+        };
       }
 
       const created = await tx.room.create({
@@ -101,10 +107,16 @@ export async function upsertRoomAction(input: unknown): Promise<ActionResult<{ i
       });
       await recomputeExistingAvailability(hotelId, [roomType.id], tx);
       await enqueueHotelChannelSyncs(tx, hotelId);
-      return { id: created.id, number: data.number, action: "room.created" };
+      return {
+        id: created.id,
+        number: data.number,
+        action: "room.created",
+        oldValue: undefined,
+        newValue: { number: data.number, floor: data.floor, status: data.status, roomType: data.roomTypeName },
+      };
     }, { timeout: 30_000 });
 
-    await writeAudit(hotelId, room.action, "Room", room.id, { number: room.number });
+    await writeAudit(hotelId, room.action, "Room", room.id, { number: room.number }, room.oldValue, room.newValue);
     await recordCurrentUserEvent(data.id ? "room_updated" : "room_created", { type: "Room", id: room.id });
     revalidateRoomConsumers();
     return ok({ id: room.id }, data.id ? "Номер сохранен" : "Номер добавлен");
@@ -121,7 +133,7 @@ export async function deleteRoomAction(input: unknown): Promise<ActionResult> {
     const room = await db.$transaction(async (tx) => {
       const owned = await tx.room.findFirst({
         where: { id: parsed.data.roomId, hotelId },
-        select: { id: true, number: true, roomTypeId: true, _count: { select: { reservations: true } } },
+        select: { id: true, number: true, floor: true, status: true, roomTypeId: true, roomType: { select: { name: true } }, _count: { select: { reservations: true } } },
       });
       if (!owned) throw new Error(t.rooms.errors.roomNotFound);
       if (owned._count.reservations > 0) {
@@ -133,7 +145,7 @@ export async function deleteRoomAction(input: unknown): Promise<ActionResult> {
       await enqueueHotelChannelSyncs(tx, hotelId);
       return owned;
     }, { timeout: 30_000 });
-    await writeAudit(hotelId, "room.deleted", "Room", room.id, { number: room.number });
+    await writeAudit(hotelId, "room.deleted", "Room", room.id, { number: room.number }, { number: room.number, floor: room.floor, status: room.status, roomType: room.roomType.name }, {});
     revalidateRoomConsumers();
     return ok(undefined, `Номер ${room.number} удален`);
   } catch (error) {

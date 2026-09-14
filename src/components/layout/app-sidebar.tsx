@@ -20,7 +20,7 @@ import { NAV_MAIN, NAV_SECONDARY } from "./nav-config";
 import { SupportDialog } from "@/components/support/support-dialog";
 import type { HotelPermission } from "@/lib/access";
 
-function NavLinks({ onNavigate, accessLevel = "FULL", permissions = [] }: { onNavigate?: () => void; accessLevel?: string; permissions?: HotelPermission[] }) {
+function NavLinks({ onNavigate, accessLevel = "FULL", permissions = [], isOwner = false }: { onNavigate?: () => void; accessLevel?: string; permissions?: HotelPermission[]; isOwner?: boolean }) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
@@ -30,8 +30,8 @@ function NavLinks({ onNavigate, accessLevel = "FULL", permissions = [] }: { onNa
       : permission === "FULL"
         ? accessLevel === "FULL"
         : permissions.includes(permission);
-  const mainItems = NAV_MAIN.filter((item) => canOpen(item.permission));
-  const secondaryItems = NAV_SECONDARY.filter((item) => canOpen(item.permission));
+  const mainItems = NAV_MAIN.filter((item) => canOpen(item.permission) && (!item.ownerOnly || isOwner));
+  const secondaryItems = NAV_SECONDARY.filter((item) => canOpen(item.permission) && (!item.ownerOnly || isOwner));
 
   return (
     <nav className="flex flex-col gap-1 px-3">
@@ -195,7 +195,7 @@ export function SidebarContent({
       </DropdownMenu>
 
       <div className="mt-4 flex-1 overflow-y-auto">
-        <NavLinks accessLevel={accessLevel} permissions={permissions} />
+        <NavLinks accessLevel={accessLevel} permissions={permissions} isOwner={canManageHotels} />
       </div>
 
       {/* Footer */}

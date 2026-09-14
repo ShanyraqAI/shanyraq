@@ -19,6 +19,7 @@ import { importReservationRows } from "@/lib/reservations/import-service";
 import { allowedGoogleSheetRedirect, googleSheetExportUrl } from "@/lib/reservations/google-sheets";
 import { wakeChannelSyncWorker } from "@/server/channel-sync";
 import { recordCurrentUserEvent } from "@/lib/analytics/service";
+import { createHotelNotification } from "@/lib/notifications/service";
 
 function revalidateAll() {
   revalidatePath("/dashboard");
@@ -305,6 +306,16 @@ export async function confirmReservationImportAction(input: unknown): Promise<Ac
     const hotelId = await requireSessionHotelId({ permission: "RESERVATIONS" });
     const rows = validateImportRows(input);
     const { imported, errors } = await importReservationRows(hotelId, rows);
+    if (errors.length) {
+      await createHotelNotification({
+        hotelId,
+        type: "IMPORT_CONFLICT",
+        title: `Импорт требует проверки: ${errors.length}`,
+        body: `Импортировано ${imported} броней. Строки с конфликтами сохранены в отчёте импорта.`,
+        href: "/dashboard/calendar",
+        dedupeKey: `import-conflict:${crypto.randomUUID()}`,
+      });
+    }
     revalidateAll();
     return ok({ imported, errors }, errors.length ? `Импортировано: ${imported}. Требуют проверки: ${errors.length}.` : `Импортировано бронирований: ${imported}.`);
   } catch (error) {

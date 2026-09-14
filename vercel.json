@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/cron/billing", "schedule": "0 5 * * *" },
-    { "path": "/api/cron/channel-sync", "schedule": "15 5 * * *" }
+    { "path": "/api/cron/channel-sync", "schedule": "15 5 * * *" },
+    { "path": "/api/cron/notifications", "schedule": "0 * * * *" }
   ]
 }

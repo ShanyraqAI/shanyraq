@@ -203,6 +203,25 @@ export async function verifyRegistrationCodeAction(input: unknown): Promise<Acti
           where: { id: { in: invitations.map((invitation) => invitation.id) } },
           data: { status: "ACCEPTED", acceptedAt: new Date() },
         });
+        for (const invitationItem of invitations) {
+          await tx.auditLog.create({
+            data: {
+              hotelId: invitationItem.hotelId,
+              actor: "user",
+              actorUserId: created.id,
+              action: "staff.invitation_accepted",
+              entity: "User",
+              entityId: created.id,
+              metaJson: JSON.stringify({ name: pending.fullName, email }),
+              newValueJson: JSON.stringify({ email, permissions: invitationItem.permissions }),
+            },
+          });
+          const owners = await tx.membership.findMany({ where: { hotelId: invitationItem.hotelId, role: "OWNER" }, select: { userId: true } });
+          await tx.notification.createMany({
+            data: owners.map((owner) => ({ hotelId: invitationItem.hotelId, recipientUserId: owner.userId, type: "STAFF", title: `${pending.fullName} принял(а) приглашение`, body: email, href: "/dashboard/settings", dedupeKey: `invitation-accepted:${invitationItem.id}` })),
+            skipDuplicates: true,
+          });
+        }
         const invitation = invitations[0];
         await recordAnalyticsEvent({
           eventType: "signup_completed",

@@ -47,7 +47,12 @@ export async function createRatePlanAction(input: unknown): Promise<ActionResult
         breakfastIncluded: data.breakfastIncluded,
       },
     });
-    await writeAudit(hotelId, "ratePlan.created", "RatePlan", plan.id, { name: data.name });
+    await writeAudit(hotelId, "ratePlan.created", "RatePlan", plan.id, { name: data.name }, undefined, {
+      name: data.name,
+      price: data.basePrice,
+      refundable: data.refundable,
+      breakfastIncluded: data.breakfastIncluded,
+    });
     revalidatePath("/dashboard/rates");
     revalidatePath("/dashboard/reservations");
     return ok({ id: plan.id }, "Тариф создан");
@@ -77,6 +82,12 @@ export async function bulkUpdateRatesAction(input: unknown): Promise<ActionResul
       if (data.weekendsOnly && !isWeekend(d)) continue;
       dates.push(d);
     }
+    const previousRates = dates.length ? await db.rate.findMany({
+      where: { ratePlanId: plan.id, date: { in: dates } },
+      select: { price: true },
+    }) : [];
+    const previousPrices = [...new Set(previousRates.map((rate) => Number(rate.price)))];
+    if (previousRates.length < dates.length) previousPrices.push(Number(plan.basePrice));
     await db.$transaction(async (tx) => {
       for (const date of dates) {
         await tx.rate.upsert({
@@ -89,11 +100,11 @@ export async function bulkUpdateRatesAction(input: unknown): Promise<ActionResul
     }, { timeout: 15_000 });
     const updated = dates.length;
     await writeAudit(hotelId, "rates.bulk_updated", "RatePlan", plan.id, {
+      name: plan.name,
       from: data.from,
       to: data.to,
-      price: data.price,
       days: updated,
-    });
+    }, { price: previousPrices.length === 1 ? previousPrices[0] : previousPrices.sort((a, b) => a - b).join("–") }, { price: data.price });
     await recordCurrentUserEvent("rate_updated", { type: "RatePlan", id: plan.id });
     revalidatePath("/dashboard/rates");
     revalidatePath("/dashboard/channels");

@@ -74,3 +74,45 @@ export async function sendSupportRequestNotification(input: SupportEmailInput): 
     `support-${input.reference}`,
   );
 }
+
+export async function sendNewReservationNotification(input: {
+  to: string;
+  recipientName: string;
+  hotelName: string;
+  reference: string;
+  guestName: string;
+  roomNumber: string;
+  checkIn: string;
+  checkOut: string;
+  sourceChannel: string;
+  totalAmount: number;
+  currency: string;
+  idempotencyKey: string;
+}): Promise<void> {
+  await sendEmail(
+    input.to,
+    `Новая бронь №${input.reference} — ${input.hotelName}`,
+    `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#172033"><h2>Новая бронь №${escapeHtml(input.reference)}</h2><p>Здравствуйте, ${escapeHtml(input.recipientName)}.</p><p>В отеле «${escapeHtml(input.hotelName)}» создано новое бронирование.</p><table style="border-collapse:collapse;width:100%"><tr><td style="padding:7px 0;color:#64748b">Гость</td><td style="padding:7px 0;font-weight:600">${escapeHtml(input.guestName)}</td></tr><tr><td style="padding:7px 0;color:#64748b">Номер</td><td style="padding:7px 0;font-weight:600">${escapeHtml(input.roomNumber)}</td></tr><tr><td style="padding:7px 0;color:#64748b">Даты</td><td style="padding:7px 0">${escapeHtml(input.checkIn)} — ${escapeHtml(input.checkOut)}</td></tr><tr><td style="padding:7px 0;color:#64748b">Источник</td><td style="padding:7px 0">${escapeHtml(input.sourceChannel)}</td></tr><tr><td style="padding:7px 0;color:#64748b">Сумма</td><td style="padding:7px 0">${escapeHtml(new Intl.NumberFormat("ru-RU").format(input.totalAmount))} ${escapeHtml(input.currency)}</td></tr></table></div>`,
+    input.idempotencyKey,
+  );
+}
+
+export async function sendDailyOperationsDigest(input: {
+  to: string;
+  recipientName: string;
+  hotelName: string;
+  date: string;
+  arrivals: string[];
+  departures: string[];
+  idempotencyKey: string;
+}): Promise<void> {
+  const arrivals = input.arrivals.length ? `Номера: ${input.arrivals.join(", ")}` : "Нет";
+  const departures = input.departures.length ? `Номера: ${input.departures.join(", ")}` : "Нет";
+  const appUrl = process.env.APP_URL ?? "https://shanyraq-ten.vercel.app";
+  await sendEmail(
+    input.to,
+    `План отеля на сегодня — ${input.hotelName}`,
+    `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;color:#172033"><h2>Доброе утро, ${escapeHtml(input.recipientName)}</h2><p>Короткая сводка по отелю «${escapeHtml(input.hotelName)}» на ${escapeHtml(input.date)}.</p><div style="display:flex;gap:12px"><div style="flex:1;padding:16px;border:1px solid #e2e8f0;border-radius:12px"><strong>Заезды: ${input.arrivals.length}</strong><p>${escapeHtml(arrivals)}</p></div><div style="flex:1;padding:16px;border:1px solid #e2e8f0;border-radius:12px"><strong>Выезды: ${input.departures.length}</strong><p>${escapeHtml(departures)}</p></div></div><p style="margin-top:22px"><a href="${escapeHtml(appUrl)}/dashboard">Открыть панель отеля</a></p></div>`,
+    input.idempotencyKey,
+  );
+}

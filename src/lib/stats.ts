@@ -38,13 +38,27 @@ export interface DashboardStats {
   departuresToday: ReservationWithRelations[];
   revenueMonthToDate: number;
   revenueByChannel: Record<string, number>;
+  occupancyTrend: DashboardDayPoint[];
+  bookingTrend: DashboardDayPoint[];
+  occupancyForecast: DashboardDayPoint[];
+  roomsCleaning: number;
+  roomsUnavailable: number;
 }
 
-export async function getDashboardStats(hotelId: string, date: Date): Promise<DashboardStats> {
+export interface DashboardDayPoint {
+  date: Date;
+  value: number;
+  count: number;
+  total: number;
+}
+
+export async function getDashboardStats(hotelId: string, date: Date, timeZone = "UTC"): Promise<DashboardStats> {
   const monthStart = startOfMonth(date);
   const nextDay = addDays(date, 1);
+  const trendStart = addDays(date, -13);
+  const forecastEnd = addDays(date, 7);
 
-  const [totalRooms, tonightReservations, arrivals, departures, monthReservations] = await Promise.all([
+  const [totalRooms, tonightReservations, arrivals, departures, monthReservations, activeCount, trendReservations, recentBookings, roomsCleaning, roomsUnavailable] = await Promise.all([
     db.room.count({ where: { hotelId, status: { not: "OUT_OF_ORDER" } } }),
     // Reservations whose stay covers "tonight" (date → date+1).
     db.reservation.findMany({
@@ -74,6 +88,24 @@ export async function getDashboardStats(hotelId: string, date: Date): Promise<Da
       },
       select: { totalAmount: true, sourceChannel: true },
     }),
+    db.reservation.count({
+      where: { hotelId, status: { in: [...ACTIVE_RESERVATION_STATUSES] } },
+    }),
+    db.reservation.findMany({
+      where: {
+        hotelId,
+        status: { in: [...ACTIVE_RESERVATION_STATUSES] },
+        checkIn: { lt: forecastEnd },
+        checkOut: { gt: trendStart },
+      },
+      select: { checkIn: true, checkOut: true },
+    }),
+    db.reservation.findMany({
+      where: { hotelId, createdAt: { gte: addDays(trendStart, -1), lt: addDays(nextDay, 1) } },
+      select: { createdAt: true },
+    }),
+    db.room.count({ where: { hotelId, status: "CLEANING" } }),
+    db.room.count({ where: { hotelId, status: { in: ["MAINTENANCE", "OUT_OF_ORDER"] } } }),
   ]);
 
   const occupiedTonight = tonightReservations.length;
@@ -85,9 +117,25 @@ export async function getDashboardStats(hotelId: string, date: Date): Promise<Da
     revenueByChannel[r.sourceChannel] = (revenueByChannel[r.sourceChannel] ?? 0) + amount;
   }
 
-  const activeCount = await db.reservation.count({
-    where: { hotelId, status: { in: [...ACTIVE_RESERVATION_STATUSES] } },
+  const occupancyPoint = (pointDate: Date): DashboardDayPoint => {
+    const pointEnd = addDays(pointDate, 1);
+    const occupied = trendReservations.filter((reservation) => reservation.checkIn < pointEnd && reservation.checkOut > pointDate).length;
+    return {
+      date: pointDate,
+      value: totalRooms === 0 ? 0 : Math.min(1, occupied / totalRooms),
+      count: occupied,
+      total: totalRooms,
+    };
+  };
+
+  const occupancyTrend = Array.from({ length: 14 }, (_, index) => occupancyPoint(addDays(trendStart, index)));
+  const bookingTrend = Array.from({ length: 14 }, (_, index) => {
+    const pointDate = addDays(trendStart, index);
+    const pointKey = pointDate.toISOString().slice(0, 10);
+    const count = recentBookings.filter((reservation) => dateKeyInTimeZone(reservation.createdAt, timeZone) === pointKey).length;
+    return { date: pointDate, value: count, count, total: 0 };
   });
+  const occupancyForecast = Array.from({ length: 7 }, (_, index) => occupancyPoint(addDays(date, index)));
 
   return {
     date,
@@ -101,7 +149,16 @@ export async function getDashboardStats(hotelId: string, date: Date): Promise<Da
     departuresToday: departures as ReservationWithRelations[],
     revenueMonthToDate,
     revenueByChannel,
+    occupancyTrend,
+    bookingTrend,
+    occupancyForecast,
+    roomsCleaning,
+    roomsUnavailable,
   };
+}
+
+function dateKeyInTimeZone(value: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(value);
 }
 
 export const RESERVATION_INCLUDE = {

@@ -454,6 +454,7 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
   await db.notification.create({
     data: {
       hotelId: hotel.id,
+      recipientUserId: demoUser.id,
       type: "SYNC",
       title: "Booking.com синхронизирован",
       body: "Во время последней синхронизации импортированы 2 новые брони.",

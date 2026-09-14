@@ -42,18 +42,23 @@ export async function saveHotelSettingsAction(input: unknown): Promise<ActionRes
     const currentHotelId = await requireSessionHotelId();
     const data = parsed.data;
 
+    const previous = await db.hotel.findUniqueOrThrow({
+      where: { id: currentHotelId },
+      select: { name: true, address: true, city: true, country: true, timezone: true, currency: true },
+    });
+    const next = {
+      name: data.name,
+      address: data.address || null,
+      city: data.city || null,
+      country: data.country || null,
+      timezone: data.timezone,
+      currency: data.currency,
+    };
     await db.hotel.update({
       where: { id: currentHotelId },
-      data: {
-        name: data.name,
-        address: data.address || null,
-        city: data.city || null,
-        country: data.country || null,
-        timezone: data.timezone,
-        currency: data.currency,
-      },
+      data: next,
     });
-    await writeAudit(currentHotelId, "hotel.settings_updated", "Hotel", currentHotelId);
+    await writeAudit(currentHotelId, "hotel.settings_updated", "Hotel", currentHotelId, undefined, previous, next);
     revalidatePath("/dashboard/settings");
     revalidatePath("/dashboard");
     return ok(undefined, t.settings.toastSaved);
@@ -150,6 +155,10 @@ export async function addHotelMemberAction(input: unknown): Promise<ActionResult
       ]);
       await sendHotelInvitation(parsed.data.email, hotel.name, inviter.fullName, `${invitation.id}-${expiresAt.getTime()}`);
     }
+    await writeAudit(owner.hotelId, "staff.access_saved", "User", user?.id, { email: parsed.data.email }, undefined, {
+      email: parsed.data.email,
+      permissions: parsed.data.permissions,
+    });
     revalidatePath("/dashboard/settings");
     return ok(undefined, user?.emailVerifiedAt ? "Доступ пользователя сохранён" : "Приглашение отправлено на email");
   } catch (error) {
@@ -162,11 +171,17 @@ export async function updateHotelMemberAccessAction(input: unknown): Promise<Act
     const parsed = z.object({ membershipId: z.string().min(1), permissions: permissionsSchema }).safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
     const owner = await requireHotelOwner();
+    const previous = await db.membership.findFirst({
+      where: { id: parsed.data.membershipId, hotelId: owner.hotelId, role: { not: "OWNER" } },
+      select: { permissions: true, user: { select: { fullName: true, email: true } } },
+    });
+    if (!previous) return fail("Пользователь не найден или его права нельзя изменить");
     const updated = await db.membership.updateMany({
       where: { id: parsed.data.membershipId, hotelId: owner.hotelId, role: { not: "OWNER" } },
       data: { accessLevel: accessLevelForPermissions(parsed.data.permissions), permissions: parsed.data.permissions },
     });
     if (!updated.count) return fail("Пользователь не найден или его права нельзя изменить");
+    await writeAudit(owner.hotelId, "staff.permissions_updated", "Membership", parsed.data.membershipId, { name: previous.user.fullName, email: previous.user.email }, { permissions: previous.permissions }, { permissions: parsed.data.permissions });
     revalidatePath("/dashboard/settings");
     return ok(undefined, "Права обновлены");
   } catch (error) {
@@ -177,8 +192,14 @@ export async function updateHotelMemberAccessAction(input: unknown): Promise<Act
 export async function removeHotelMemberAction(membershipId: string): Promise<ActionResult> {
   try {
     const owner = await requireHotelOwner();
+    const member = await db.membership.findFirst({
+      where: { id: membershipId, hotelId: owner.hotelId, role: { not: "OWNER" } },
+      select: { id: true, permissions: true, user: { select: { fullName: true, email: true } } },
+    });
+    if (!member) return fail("Пользователь не найден или его нельзя удалить");
     const removed = await db.membership.deleteMany({ where: { id: membershipId, hotelId: owner.hotelId, role: { not: "OWNER" } } });
     if (!removed.count) return fail("Пользователь не найден или его нельзя удалить");
+    await writeAudit(owner.hotelId, "staff.access_removed", "Membership", member.id, { name: member.user.fullName, email: member.user.email }, { permissions: member.permissions }, {});
     revalidatePath("/dashboard/settings");
     return ok(undefined, "Доступ удалён");
   } catch (error) {

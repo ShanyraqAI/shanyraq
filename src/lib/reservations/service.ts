@@ -145,7 +145,7 @@ export async function createReservation(params: CreateReservationParams) {
     await lockBusinessKeys(tx, [`room:${params.roomId}`]);
     const [room, guest] = await Promise.all([
       tx.room.findFirst({ where: { id: params.roomId, hotelId: params.hotelId, status: { notIn: ["OUT_OF_ORDER", "MAINTENANCE"] } } }),
-      tx.guest.findFirst({ where: { id: params.guestId, hotelId: params.hotelId }, select: { id: true } }),
+      tx.guest.findFirst({ where: { id: params.guestId, hotelId: params.hotelId }, select: { id: true, fullName: true } }),
     ]);
     if (!room) throw new PublicError("Номер не найден или временно недоступен");
     if (!guest) throw new PublicError("Гость не найден в текущем отеле");
@@ -163,12 +163,34 @@ export async function createReservation(params: CreateReservationParams) {
     });
     await recomputeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, tx);
     await enqueueHotelChannelSyncs(tx, params.hotelId);
-    return { reservation, roomTypeId: room.roomTypeId };
+    return { reservation, roomTypeId: room.roomTypeId, room, guest };
   }, { timeout: 15_000 });
 
   await writeAudit(params.hotelId, "reservation.created", "Reservation", result.reservation.id, {
     channel: params.sourceChannel,
     externalId: params.externalReservationId ?? undefined,
+    reference: reservationReference(result.reservation.id, params.externalReservationId),
+  }, undefined, {
+    guest: result.guest.fullName,
+    room: result.room.number,
+    checkIn: params.checkIn,
+    checkOut: params.checkOut,
+    totalAmount: Number(result.reservation.totalAmount),
+    currency: result.reservation.currency,
+    status: result.reservation.status,
+  });
+  await notifyNewReservation(params.hotelId, {
+    id: result.reservation.id,
+    reference: reservationReference(result.reservation.id, params.externalReservationId),
+    guestName: result.guest.fullName,
+    roomNumber: result.room.number,
+    checkIn: params.checkIn,
+    checkOut: params.checkOut,
+    sourceChannel: params.sourceChannel,
+    totalAmount: Number(result.reservation.totalAmount),
+    currency: result.reservation.currency,
+  }).catch((error) => {
+    console.error("New reservation notification failed", { hotelId: params.hotelId, reservationId: result.reservation.id, error });
   });
   return result.reservation;
 }
@@ -192,13 +214,16 @@ export async function updateReservationDetails(params: UpdateReservationParams) 
   if (checkOut <= checkIn) throw new PublicError("Дата выезда должна быть позже даты заезда");
   const result = await db.$transaction(async (tx) => {
     await lockBusinessKeys(tx, [`reservation:${params.id}`]);
-    const existing = await tx.reservation.findFirst({ where: { id: params.id, hotelId: params.hotelId } });
+    const existing = await tx.reservation.findFirst({
+      where: { id: params.id, hotelId: params.hotelId },
+      include: { room: { select: { number: true } }, guest: { select: { fullName: true } } },
+    });
     if (!existing) throw new PublicError("Бронирование не найдено");
     if (!ACTIVE_RESERVATION_STATUSES.includes(existing.status as ReservationStatus)) throw new PublicError("Завершённую или отменённую бронь нельзя переносить.");
     await lockBusinessKeys(tx, [`room:${existing.roomId}`, `room:${params.roomId}`]);
     const [room, guest] = await Promise.all([
       tx.room.findFirst({ where: { id: params.roomId, hotelId: params.hotelId, status: { notIn: ["OUT_OF_ORDER", "MAINTENANCE"] } } }),
-      tx.guest.findFirst({ where: { id: params.guestId, hotelId: params.hotelId }, select: { id: true } }),
+      tx.guest.findFirst({ where: { id: params.guestId, hotelId: params.hotelId }, select: { id: true, fullName: true } }),
     ]);
     if (!room) throw new PublicError("Номер не найден или временно недоступен");
     if (!guest) throw new PublicError("Гость не найден в текущем отеле");
@@ -222,10 +247,24 @@ export async function updateReservationDetails(params: UpdateReservationParams) 
       await recomputeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, tx);
     }
     await enqueueHotelChannelSyncs(tx, params.hotelId);
-    return { existing, room, updated };
+    return { existing, room, guest, updated };
   }, { timeout: 15_000 });
   const { updated } = result;
-  await writeAudit(params.hotelId, "reservation.updated", "Reservation", updated.id);
+  await writeAudit(params.hotelId, "reservation.updated", "Reservation", updated.id, {
+    reference: reservationReference(updated.id, updated.externalReservationId),
+  }, {
+    guest: result.existing.guest.fullName,
+    room: result.existing.room.number,
+    checkIn: result.existing.checkIn.toISOString().slice(0, 10),
+    checkOut: result.existing.checkOut.toISOString().slice(0, 10),
+    totalAmount: Number(result.existing.totalAmount),
+  }, {
+    guest: result.guest.fullName,
+    room: result.room.number,
+    checkIn: updated.checkIn.toISOString().slice(0, 10),
+    checkOut: updated.checkOut.toISOString().slice(0, 10),
+    totalAmount: Number(updated.totalAmount),
+  });
   return updated;
 }
 
@@ -287,7 +326,9 @@ export async function setReservationStatus(hotelId: string, reservationId: strin
     return { reservation: current, updated: next, changed: true };
   }, { timeout: 15_000 });
   if (!changed) return updated;
-  await writeAudit(hotelId, `reservation.${status.toLowerCase()}`, "Reservation", reservation.id);
+  await writeAudit(hotelId, `reservation.${status.toLowerCase()}`, "Reservation", reservation.id, {
+    reference: reservationReference(reservation.id, reservation.externalReservationId),
+  }, { status: reservation.status }, { status });
   return updated;
 }
 
@@ -338,6 +379,8 @@ export async function writeAudit(
   entity: string,
   entityId?: string,
   meta?: Record<string, unknown>,
+  oldValue?: Record<string, unknown>,
+  newValue?: Record<string, unknown>,
 ): Promise<void> {
   const session = await getSessionUser().catch(() => null);
   const actorUserId = session?.hotelId === hotelId ? session.id : null;
@@ -350,6 +393,40 @@ export async function writeAudit(
       entity,
       entityId: entityId ?? null,
       metaJson: meta ? JSON.stringify(meta) : null,
+      oldValueJson: oldValue ? JSON.stringify(oldValue) : null,
+      newValueJson: newValue ? JSON.stringify(newValue) : null,
     },
+  });
+}
+
+function reservationReference(id: string, externalId?: string | null): string {
+  return externalId || id.slice(-6).toUpperCase();
+}
+
+async function notifyNewReservation(
+  hotelId: string,
+  reservation: {
+    id: string;
+    reference: string;
+    guestName: string;
+    roomNumber: string;
+    checkIn: string;
+    checkOut: string;
+    sourceChannel: string;
+    totalAmount: number;
+    currency: string;
+  },
+): Promise<void> {
+  const { createHotelNotification, sendImmediateReservationEmails } = await import("@/lib/notifications/service");
+  await createHotelNotification({
+    hotelId,
+    type: "NEW_RESERVATION",
+    title: `Новая бронь №${reservation.reference}`,
+    body: `${reservation.guestName} · номер ${reservation.roomNumber} · ${reservation.checkIn}–${reservation.checkOut}`,
+    href: `/dashboard/reservations?reservation=${reservation.id}`,
+    dedupeKey: `new-reservation:${reservation.id}`,
+  });
+  await sendImmediateReservationEmails(hotelId, reservation).catch((error) => {
+    console.error("New reservation email notification failed", { hotelId, reservationId: reservation.id, error });
   });
 }
