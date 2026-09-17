@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { addDays, diffDays, isISODate, parseISODate, toISODate } from "@/lib/dates";
+import { addDays, diffDays, isISODate, parseISODate, todayInTimeZone, toISODate } from "@/lib/dates";
 import { buildCsv, buildXlsx, type ExportDocument } from "@/lib/exports/workbook";
 import { requireSessionHotelId } from "@/server/guards";
 import { AuthenticationError, AuthorizationError, PublicError, toErrorMessage } from "@/server/errors";
@@ -8,6 +8,7 @@ import type { HotelPermission } from "@/lib/access";
 import { parseReportFilters } from "@/lib/reports/performance";
 import { getHotelPerformanceReport } from "@/lib/reports/service";
 import { channelLabel } from "@/lib/i18n";
+import { guestDisplayId, reservationDisplayId } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +46,7 @@ function asDataset(value: string): Dataset | null {
 
 function reservationRows(reservations: Awaited<ReturnType<typeof loadReservations>>) {
   return reservations.map((reservation) => ({
-    id: reservation.id,
+    id: reservationDisplayId(reservation.sequenceNumber),
     guest: reservation.guest.fullName,
     email: reservation.guest.email,
     phone: reservation.guest.phone,
@@ -157,6 +158,7 @@ async function guestsDocument(hotelId: string): Promise<ExportDocument> {
     subtitle: `Гостевая база отеля · сформировано ${new Date().toLocaleDateString("ru-RU")}`,
     sheetName: "Гости",
     columns: [
+      { header: "ID гостя", key: "id", width: 12 },
       { header: "ФИО", key: "fullName", width: 28 },
       { header: "Email", key: "email", width: 30 },
       { header: "Телефон", key: "phone", width: 20 },
@@ -167,6 +169,7 @@ async function guestsDocument(hotelId: string): Promise<ExportDocument> {
       { header: "Комментарий", key: "notes", width: 38 },
     ],
     rows: guests.map((guest) => ({
+      id: guestDisplayId(guest.sequenceNumber),
       fullName: guest.fullName,
       email: guest.email,
       phone: guest.phone,
@@ -185,9 +188,13 @@ async function reportDocument(hotelId: string, url: URL): Promise<ExportDocument
   if (!isISODate(fromText) || !isISODate(toText)) throw new PublicError("Укажите корректный период экспорта.");
   const from = parseISODate(fromText);
   const to = parseISODate(toText);
+  const hotel = await db.hotel.findUnique({ where: { id: hotelId }, select: { timezone: true } });
+  if (!hotel) throw new PublicError("Отель не найден.");
+  const currentDate = todayInTimeZone(hotel.timezone);
   if (to < from) throw new PublicError("Конечная дата не может быть раньше начальной.");
+  if (to > currentDate || from > currentDate) throw new PublicError("Отчёт можно сформировать только по завершённым датам.");
   if (diffDays(from, to) > 366) throw new PublicError("За один раз можно экспортировать максимум 367 дней.");
-  const parsed = parseReportFilters({ from: fromText, to: toText, source: url.searchParams.get("source") ?? "all" }, parseISODate(toText));
+  const parsed = parseReportFilters({ from: fromText, to: toText, source: url.searchParams.get("source") ?? "all" }, currentDate);
   const report = await getHotelPerformanceReport(hotelId, parsed);
   return {
     title: "Показатели отеля",

@@ -128,10 +128,11 @@ export function RoomsGrid({
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {rooms.map((room) => (
-            <div key={room.id} className="rounded-xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
+            <div key={room.id} className="group relative flex min-h-48 flex-col overflow-hidden rounded-xl border border-primary/10 bg-gradient-to-br from-card via-card to-primary/[0.035] p-4 shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-primary/65 via-chart-2/35 to-transparent" />
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/10">
                     <BedDouble className="size-4" />
                   </div>
                   <div className="min-w-0 leading-tight">
@@ -156,13 +157,13 @@ export function RoomsGrid({
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              <div className="mt-4 space-y-2 text-sm">
-                <div className="flex justify-between gap-3"><span className="text-muted-foreground">Этаж</span><span>{room.floor}</span></div>
-                <div className="flex justify-between gap-3"><span className="text-muted-foreground">Вместимость</span><span>{room.capacity ?? 1}</span></div>
-                <div className="flex justify-between gap-3"><span className="text-muted-foreground">Цена</span><span>{formatMoney(room.basePrice ?? 0)}</span></div>
-                <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">Статус</span><RoomStatusBadge status={room.status} /></div>
+              <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 text-sm">
+                <span className="text-muted-foreground">Этаж</span><span className="min-w-12 text-right tabular-nums">{room.floor}</span>
+                <span className="text-muted-foreground">Вместимость</span><span className="min-w-12 text-right tabular-nums">{room.capacity ?? 1}</span>
+                <span className="text-muted-foreground">Цена</span><span className="whitespace-nowrap text-right font-medium tabular-nums">{formatMoney(room.basePrice ?? 0)}</span>
+                <span className="text-muted-foreground">Статус</span><span className="justify-self-end"><RoomStatusBadge status={room.status} /></span>
               </div>
-              {room.guestTonight ? <p className="mt-3 truncate rounded-md bg-secondary/60 px-2 py-1 text-xs">{t.rooms.tonight(room.guestTonight)}</p> : null}
+              {room.guestTonight ? <p className="mt-auto truncate rounded-md bg-secondary/60 px-2 py-1 text-xs">{t.rooms.tonight(room.guestTonight)}</p> : null}
             </div>
           ))}
         </div>

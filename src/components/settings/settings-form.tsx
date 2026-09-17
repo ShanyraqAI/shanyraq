@@ -64,7 +64,7 @@ export function SettingsForm({ initial }: { initial: HotelSettingsValues }) {
   }
 
   return (
-    <form onSubmit={save} className="max-w-2xl space-y-4 rounded-xl border bg-card p-6 shadow-sm">
+    <form onSubmit={save} className="max-w-4xl space-y-5 rounded-xl border bg-card p-5 shadow-sm sm:p-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="hotel-name">{t.settings.form.hotelName}</Label>

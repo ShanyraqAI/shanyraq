@@ -58,6 +58,34 @@ export function clipStay(checkIn: string, checkOut: string, start: Date, days: n
   return { start: Math.max(0, from), end: Math.min(days, to), clippedStart: from < 0 };
 }
 
+/**
+ * Visual PMS placement: arrivals start at the middle of the arrival date and
+ * departures end at the middle of the departure date. A small gap keeps
+ * back-to-back stays visually distinct while preserving the half-day model.
+ */
+export function calendarStayPosition(
+  checkIn: string,
+  checkOut: string,
+  start: Date,
+  days: number,
+  dayWidth: number,
+  gap = 4,
+) {
+  const from = diffDays(start, parseISODate(checkIn));
+  const to = diffDays(start, parseISODate(checkOut));
+  const timelineWidth = days * dayWidth;
+  const rawLeft = (from + 0.5) * dayWidth;
+  const rawRight = (to + 0.5) * dayWidth;
+  if (rawRight <= 0 || rawLeft >= timelineWidth || rawRight <= rawLeft) return null;
+
+  const clippedStart = rawLeft < 0;
+  const clippedEnd = rawRight > timelineWidth;
+  const halfGap = gap / 2;
+  const left = Math.max(0, rawLeft + (clippedStart ? 0 : halfGap));
+  const right = Math.min(timelineWidth, rawRight - (clippedEnd ? 0 : halfGap));
+  return { left, width: Math.max(20, right - left), clippedStart, clippedEnd };
+}
+
 export function staysOverlap(aIn: string, aOut: string, bIn: string, bOut: string) {
   return aIn < bOut && aOut > bIn;
 }

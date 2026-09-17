@@ -7,6 +7,8 @@ import { requireSectionAccess } from "@/server/guards";
 import { toISODate, todayInTimeZone } from "@/lib/dates";
 import { calendarTimelineRange, parseCalendarNavigation } from "@/lib/reservations/calendar-range";
 import { CalendarOpenTracker } from "@/components/analytics/calendar-open-tracker";
+import { getCurrentMembership } from "@/lib/tenant";
+import { DEFAULT_CALENDAR_PREFERENCES, type CalendarDensity } from "@/components/calendar/types";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +21,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
   await requireSectionAccess("CALENDAR");
   const hotel = await getCurrentHotel();
   const hotelId = hotel.id;
+  const membership = await getCurrentMembership();
   const params = await searchParams;
   const todayISO = toISODate(todayInTimeZone(hotel.timezone));
   const { anchorISO, rangeDays } = parseCalendarNavigation(params.date, params.range, todayISO);
   const range = calendarTimelineRange(anchorISO, rangeDays);
-  const [roomTypes, roomsRaw, ratePlansRaw, guestsRaw, reservationsRaw] = await Promise.all([
+  const [roomTypes, roomsRaw, ratePlansRaw, guestsRaw, reservationsRaw, savedPreferences] = await Promise.all([
     db.roomType.findMany({ where: { hotelId }, orderBy: { sortOrder: "asc" } }),
     db.room.findMany({
       where: { hotelId },
@@ -46,6 +49,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
       },
       orderBy: { checkIn: "asc" },
     }),
+    membership
+      ? db.calendarPreference.findUnique({
+          where: { userId_hotelId: { userId: membership.userId, hotelId } },
+        })
+      : null,
   ]);
 
   const roomTypeNames = new Map(roomTypes.map((roomType) => [roomType.id, roomType.name]));
@@ -96,6 +104,17 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
         todayISO={todayISO}
         rangeDays={rangeDays}
         initialAnchor={anchorISO}
+        initialPreferences={savedPreferences ? {
+          density: savedPreferences.density as CalendarDensity,
+          showGuestName: savedPreferences.showGuestName,
+          showGuestCount: savedPreferences.showGuestCount,
+          showChannel: savedPreferences.showChannel,
+          showAmount: savedPreferences.showAmount,
+          showReservationId: savedPreferences.showReservationId,
+          showNotes: savedPreferences.showNotes,
+          currencyDisplay: savedPreferences.currencyDisplay as "SYMBOL" | "CODE" | "HIDDEN",
+          collapsedRoomTypeIds: savedPreferences.collapsedRoomTypeIds,
+        } : DEFAULT_CALENDAR_PREFERENCES}
       />
     </div>
   );

@@ -6,6 +6,7 @@ import { PageHeader, EmptyState } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ACTIVITY_TYPES, USER_VISIBLE_ACTIVITY_ACTIONS, activitySummary, auditChanges, parseAuditPayload } from "@/lib/activity";
+import { reservationDisplayId } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
           {logs.map((log) => {
             const storedMeta = parseAuditPayload(log.metaJson);
             const reservationNumber = log.entityId ? reservationNumbers.get(log.entityId) : null;
-            const meta = reservationNumber == null ? storedMeta : { ...storedMeta, reference: String(reservationNumber).padStart(3, "0") };
+            const meta = reservationNumber == null ? storedMeta : { ...storedMeta, reference: reservationDisplayId(reservationNumber) };
             const changes = auditChanges(parseAuditPayload(log.oldValueJson), parseAuditPayload(log.newValueJson));
             return (
               <article key={log.id} className="grid gap-4 border-b p-5 last:border-b-0 md:grid-cols-[170px_1fr]">

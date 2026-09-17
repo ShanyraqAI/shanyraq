@@ -62,8 +62,12 @@ export interface ReservationVM {
   roomTypeName: string;
   checkIn: string;
   checkOut: string;
+  checkInTime: string;
+  checkOutTime: string;
   adults: number;
   children: number;
+  ratePlanId: string | null;
+  pricingMode: "RATE_PLAN" | "MANUAL";
   status: ReservationStatus;
   currency: string;
   totalAmount: number;
@@ -88,8 +92,12 @@ export function toReservationVM(r: ReservationWithRelations): ReservationVM {
     roomTypeName: r.roomType.name,
     checkIn: r.checkIn.toISOString().slice(0, 10),
     checkOut: r.checkOut.toISOString().slice(0, 10),
+    checkInTime: r.checkInTime,
+    checkOutTime: r.checkOutTime,
     adults: r.adults,
     children: r.children,
+    ratePlanId: r.ratePlanId,
+    pricingMode: r.pricingMode as ReservationVM["pricingMode"],
     status: r.status as ReservationStatus,
     currency: r.currency,
     totalAmount: Number(r.totalAmount),
@@ -105,5 +113,13 @@ export function formatSequenceNumber(value: number | null | undefined): string {
 }
 
 export function reservationDisplayId(value: number | null | undefined): string {
-  return value == null ? "Бронирование" : `Бронирование ${formatSequenceNumber(value)}`;
+  return `B${formatSequenceNumber(value)}`;
+}
+
+export function guestDisplayId(value: number | null | undefined): string {
+  return `G${formatSequenceNumber(value)}`;
+}
+
+export function ratePlanDisplayId(value: number | null | undefined): string {
+  return `#${formatSequenceNumber(value)}`;
 }

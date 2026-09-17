@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Banknote, Clock3, Loader2, Tags } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,7 +27,7 @@ import { Separator } from "@/components/ui/separator";
 import { createReservationAction, updateReservationAction } from "@/server/actions/reservations";
 import type { GuestVM, RatePlanVM, RoomVM } from "@/lib/types";
 import { CHANNEL_CODES } from "@/lib/constants";
-import { formatMoney } from "@/lib/utils";
+import { cn, formatMoney } from "@/lib/utils";
 import { t, channelLabel } from "@/lib/i18n";
 import { PRODUCT_AVAILABILITY } from "@/lib/product-availability";
 
@@ -39,15 +39,21 @@ export interface ReservationFormProps {
   ratePlans: RatePlanVM[];
   guests: GuestVM[];
   hotelCurrency: string;
+  compact?: boolean;
+  contextNote?: string;
   initial?: {
     id?: string;
     guestId?: string;
     roomId?: string;
     checkIn?: string;
     checkOut?: string;
+    checkInTime?: string;
+    checkOutTime?: string;
     adults?: number;
     children?: number;
     ratePlanId?: string;
+    pricingMode?: "RATE_PLAN" | "MANUAL";
+    totalAmount?: number;
     sourceChannel?: string;
     notes?: string | null;
   };
@@ -72,19 +78,25 @@ export function ReservationFormDialog({
   rooms,
   ratePlans,
   guests,
+  hotelCurrency,
+  compact = false,
+  contextNote,
   initial,
 }: ReservationFormProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(mode === "edit");
 
   const [guestChoice, setGuestChoice] = useState<string>(
-    initial?.guestId ?? (mode === "create" ? guests[0]?.id ?? NEW_GUEST : ""),
+    initial?.guestId ?? (mode === "create" ? NEW_GUEST : ""),
   );
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [roomId, setRoomId] = useState(initial?.roomId ?? rooms[0]?.id ?? "");
   const [checkIn, setCheckIn] = useState(initial?.checkIn ?? todayISO());
   const [checkOut, setCheckOut] = useState(initial?.checkOut ?? addDaysISO(todayISO(), 2));
+  const [checkInTime, setCheckInTime] = useState(initial?.checkInTime ?? "14:00");
+  const [checkOutTime, setCheckOutTime] = useState(initial?.checkOutTime ?? "12:00");
   const [adults, setAdults] = useState(String(initial?.adults ?? 2));
   const [children, setChildren] = useState(String(initial?.children ?? 0));
   const [channel, setChannel] = useState(initial?.sourceChannel ?? "direct");
@@ -115,7 +127,17 @@ export function ReservationFormDialog({
   const selectedPlan = ratePlans.find((p) => p.id === effectivePlanId);
   const estimate = (selectedPlan?.basePrice ?? selectedRoomTypeBasePrice) * nights;
   const hasPlansForType = plansForType.length > 0;
-  const canSubmit = hasPlansForType ? !!effectivePlanId : true;
+  const [pricingMode, setPricingMode] = useState<"RATE_PLAN" | "MANUAL">(
+    initial?.pricingMode ?? (hasPlansForType ? "RATE_PLAN" : "MANUAL"),
+  );
+  const [manualTotal, setManualTotal] = useState(
+    initial?.pricingMode === "MANUAL" && initial.totalAmount !== undefined ? String(initial.totalAmount) : "",
+  );
+  const manualAmount = manualTotal.trim() === "" ? Number.NaN : Number(manualTotal);
+  const total = pricingMode === "MANUAL" ? manualAmount : estimate;
+  const canSubmit = pricingMode === "MANUAL"
+    ? Number.isFinite(manualAmount) && manualAmount >= 0
+    : hasPlansForType && Boolean(effectivePlanId);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -130,9 +152,13 @@ export function ReservationFormDialog({
           roomId,
           checkIn,
           checkOut,
+          checkInTime,
+          checkOutTime,
           adults: Number(adults),
           children: Number(children),
-          ratePlanId: hasPlansForType ? effectivePlanId : undefined,
+          ratePlanId: pricingMode === "RATE_PLAN" ? effectivePlanId : undefined,
+          pricingMode,
+          manualTotalAmount: pricingMode === "MANUAL" ? manualAmount : undefined,
           sourceChannel: channel as (typeof CHANNEL_CODES)[number],
           notes: notes || undefined,
         };
@@ -151,9 +177,13 @@ export function ReservationFormDialog({
           roomId,
           checkIn,
           checkOut,
+          checkInTime,
+          checkOutTime,
           adults: Number(adults),
           children: Number(children),
-          ratePlanId: effectivePlanId,
+          ratePlanId: pricingMode === "RATE_PLAN" ? effectivePlanId : undefined,
+          pricingMode,
+          manualTotalAmount: pricingMode === "MANUAL" ? manualAmount : undefined,
           notes: notes || undefined,
         });
         if (!result.ok) {
@@ -174,17 +204,21 @@ export function ReservationFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className={cn("max-h-[92vh] overflow-y-auto", compact ? "sm:max-w-lg" : "sm:max-w-xl")}>
         <DialogHeader>
-          <DialogTitle>{mode === "create" ? t.reservations.form.createTitle : t.reservations.form.editTitle}</DialogTitle>
+          <DialogTitle>{compact && mode === "create" ? "Быстрая бронь" : mode === "create" ? t.reservations.form.createTitle : t.reservations.form.editTitle}</DialogTitle>
           <DialogDescription>
-            {mode === "create"
+            {compact && mode === "create"
+              ? "Основные данные — без перехода на отдельную страницу."
+              : mode === "create"
               ? t.reservations.form.createDescription
               : t.reservations.form.editDescription}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {compact && contextNote ? <div className="flex items-start gap-2 rounded-lg border border-primary/15 bg-primary/[0.045] px-3 py-2 text-xs text-foreground"><Clock3 className="mt-0.5 size-3.5 shrink-0 text-primary" /><span>{contextNote}</span></div> : null}
+
+        <form onSubmit={handleSubmit} className={compact ? "space-y-3" : "space-y-4"}>
           {/* Guest */}
           <div className="space-y-1.5">
             <Label>{t.reservations.form.guest}</Label>
@@ -229,6 +263,8 @@ export function ReservationFormDialog({
               onValueChange={(v) => {
                 setRoomId(v);
                 setPlanId("");
+                const room = rooms.find((item) => item.id === v);
+                if (!ratePlans.some((plan) => plan.roomTypeId === room?.roomTypeId)) setPricingMode("MANUAL");
               }}
             >
               <SelectTrigger className="w-full">
@@ -244,126 +280,104 @@ export function ReservationFormDialog({
             </Select>
           </div>
 
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5 rounded-lg border bg-secondary/20 p-3">
               <Label htmlFor="checkin">{t.reservations.form.checkIn}</Label>
-              <Input
-                id="checkin"
-                type="date"
-                value={checkIn}
-                onChange={(e) => setCheckIn(e.target.value)}
-                required
-              />
+              <div className="grid grid-cols-[minmax(0,1fr)_104px] gap-2">
+                <Input id="checkin" type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} required />
+                <Input aria-label="Время заезда" type="time" value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} required />
+              </div>
+              {!compact ? <p className="text-[11px] text-muted-foreground">Гость занимает вторую половину дня заезда.</p> : null}
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 rounded-lg border bg-secondary/20 p-3">
               <Label htmlFor="checkout">{t.reservations.form.checkOut}</Label>
-              <Input
-                id="checkout"
-                type="date"
-                value={checkOut}
-                min={addDaysISO(checkIn, 1)}
-                onChange={(e) => setCheckOut(e.target.value)}
-                required
-              />
+              <div className="grid grid-cols-[minmax(0,1fr)_104px] gap-2">
+                <Input id="checkout" type="date" value={checkOut} min={addDaysISO(checkIn, 1)} onChange={(e) => setCheckOut(e.target.value)} required />
+                <Input aria-label="Время выезда" type="time" value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} required />
+              </div>
+              {!compact ? <p className="text-[11px] text-muted-foreground">Первая половина дня остаётся за выезжающим гостем.</p> : null}
             </div>
           </div>
 
-          {/* Occupancy + plan */}
-          <div className={PRODUCT_AVAILABILITY.channels ? "grid grid-cols-3 gap-3" : "grid grid-cols-2 gap-3"}>
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t.reservations.form.adults}</Label>
               <Select value={adults} onValueChange={setAdults}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[1, 2, 3, 4].map((n) => (
-                    <SelectItem key={n} value={String(n)}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{[1, 2, 3, 4, 5, 6].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
               <Label>{t.reservations.form.children}</Label>
               <Select value={children} onValueChange={setChildren}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[0, 1, 2, 3].map((n) => (
-                    <SelectItem key={n} value={String(n)}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{[0, 1, 2, 3, 4, 5, 6].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            {PRODUCT_AVAILABILITY.channels ? <div className="col-span-1 space-y-1.5">
-              <Label>{t.reservations.form.source}</Label>
-              {mode === "create" ? (
-                <Select value={channel} onValueChange={setChannel}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CHANNEL_CODES.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {channelLabel(c)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="pt-2 text-sm text-muted-foreground">{t.reservations.form.unchanged}</div>
-              )}
-            </div> : null}
           </div>
 
-          <div className="space-y-1.5">
-            <Label>{t.reservations.form.ratePlan} <span className="font-normal text-muted-foreground">(необязательно)</span></Label>
-            {hasPlansForType ? (
-              <Select value={effectivePlanId} onValueChange={setPlanId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t.reservations.form.selectRatePlan} />
-                </SelectTrigger>
-                <SelectContent>
-                  {plansForType.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name} — {formatMoney(p.basePrice)}
-                      {t.reservations.form.perNight}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <section className="space-y-3 rounded-xl border p-3.5" aria-labelledby="reservation-pricing-title">
+            <div>
+              <Label id="reservation-pricing-title">Как рассчитать стоимость</Label>
+              <p className="text-xs text-muted-foreground">Выберите готовый тариф или укажите итоговую цену вручную.</p>
+            </div>
+            <div className="grid h-10 grid-cols-2 gap-1 rounded-lg bg-secondary p-1">
+              <button type="button" aria-pressed={pricingMode === "RATE_PLAN"} disabled={!hasPlansForType} onClick={() => setPricingMode("RATE_PLAN")} className="flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors active:scale-100 disabled:cursor-not-allowed disabled:opacity-45 aria-pressed:bg-background aria-pressed:shadow-sm"><Tags className="size-3.5" />Из тарифа</button>
+              <button type="button" aria-pressed={pricingMode === "MANUAL"} onClick={() => setPricingMode("MANUAL")} className="flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors active:scale-100 aria-pressed:bg-background aria-pressed:shadow-sm"><Banknote className="size-3.5" />Вручную</button>
+            </div>
+
+            {pricingMode === "RATE_PLAN" ? (
+              <div className="space-y-1.5">
+                <Label>{t.reservations.form.ratePlan}</Label>
+                <Select value={effectivePlanId} onValueChange={setPlanId}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder={t.reservations.form.selectRatePlan} /></SelectTrigger>
+                  <SelectContent>{plansForType.map((plan) => <SelectItem key={plan.id} value={plan.id}>{plan.name} — {formatMoney(plan.basePrice)}{t.reservations.form.perNight}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             ) : (
-              <div className="rounded-lg border border-dashed bg-muted/30 px-3 py-2.5 text-sm">
-                <div className="font-medium">Базовая цена номера — {formatMoney(selectedRoomTypeBasePrice)}{t.reservations.form.perNight}</div>
-                <div className="text-xs text-muted-foreground">Для этой категории пока нет тарифов. При создании брони будет использована базовая цена типа номера. Создайте тариф на странице «Тарифы».</div>
+              <div className="space-y-1.5">
+                <Label htmlFor="manual-total">Итоговая стоимость</Label>
+                <div className="relative">
+                  <Input id="manual-total" type="number" min="0" step="1" inputMode="decimal" value={manualTotal} onChange={(event) => setManualTotal(event.target.value)} className="pr-14 tabular-nums" placeholder="0" required />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">{hotelCurrency}</span>
+                </div>
               </div>
             )}
-          </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="res-notes">{t.reservations.form.notes}</Label>
-            <Textarea
-              id="res-notes"
-              placeholder={t.reservations.form.notesPlaceholder}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-            />
-          </div>
+            {!hasPlansForType ? <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">Для этой категории ещё нет тарифов — укажите стоимость вручную.</p> : null}
+          </section>
+
+          {mode === "create" ? (
+            <Button type="button" variant="ghost" size="sm" className="px-0 text-muted-foreground" onClick={() => setAdvancedOpen((value) => !value)}>
+              {advancedOpen ? "Скрыть дополнительные параметры" : "Дополнительные параметры"}
+            </Button>
+          ) : null}
+
+          {advancedOpen ? (
+            <div className="space-y-4 rounded-lg border bg-secondary/20 p-3">
+              {PRODUCT_AVAILABILITY.channels ? <div className="space-y-1.5">
+                  <Label>{t.reservations.form.source}</Label>
+                  {mode === "create" ? (
+                    <Select value={channel} onValueChange={setChannel}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>{CHANNEL_CODES.map((code) => <SelectItem key={code} value={code}>{channelLabel(code)}</SelectItem>)}</SelectContent>
+                    </Select>
+                  ) : <div className="pt-2 text-sm text-muted-foreground">{t.reservations.form.unchanged}</div>}
+                </div> : null}
+              <div className="space-y-1.5">
+                <Label htmlFor="res-notes">{t.reservations.form.notes}</Label>
+                <Textarea id="res-notes" placeholder={t.reservations.form.notesPlaceholder} value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+              </div>
+            </div>
+          ) : null}
 
           <Separator />
 
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
-              {t.reservations.form.nightsSummary(nights, selectedPlan?.name ?? (hasPlansForType ? "—" : "Базовая цена"))}
+              {pricingMode === "RATE_PLAN" ? t.reservations.form.nightsSummary(nights, selectedPlan?.name ?? "—") : `${nights} ноч. · цена указана вручную`}
             </span>
-            <span className="font-semibold tabular-nums">≈ {formatMoney(estimate)}</span>
+            <span className="font-semibold tabular-nums">{Number.isFinite(total) ? formatMoney(total) : "—"}</span>
           </div>
 
           <DialogFooter>

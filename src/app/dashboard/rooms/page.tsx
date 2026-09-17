@@ -1,4 +1,4 @@
-import { Users } from "lucide-react";
+import { BedDouble, Users } from "lucide-react";
 import { db, getCurrentHotelId } from "@/lib/db";
 import { formatISOCompactDate, today, toISODate } from "@/lib/dates";
 import { formatMoney, formatPercent } from "@/lib/utils";
@@ -71,35 +71,36 @@ export default async function RoomsPage() {
           const available = type.rooms.filter((room) => room.status === "AVAILABLE").length;
           const occupancy = type.rooms.length === 0 ? 0 : 1 - available / type.rooms.length;
           return (
-            <Card key={type.id} className="shadow-sm">
-              <CardContent className="p-5">
+            <Card key={type.id} className="group relative h-full overflow-hidden border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.045] shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+              <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary via-chart-2/55 to-transparent" />
+              <CardContent className="flex h-full flex-col p-5">
                 <div className="flex items-start justify-between">
-                  <h2 className="text-base font-semibold">{type.name}</h2>
-                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary tabular-nums whitespace-nowrap">
+                  <h2 className="flex min-w-0 items-center gap-2.5 text-base font-semibold"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/10"><BedDouble className="size-4" /></span><span className="truncate">{type.name}</span></h2>
+                  <span className="whitespace-nowrap rounded-full border border-primary/10 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-primary">
                     {t.rooms.fullBadge(formatPercent(occupancy))}
                   </span>
                 </div>
                 {type.description ? (
                   <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{type.description}</p>
                 ) : null}
-                <dl className="mt-4 grid grid-cols-3 gap-3 border-t pt-4 text-center">
-                  <div>
-                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t.rooms.terms.count}</dt>
-                    <dd className="mt-0.5 text-lg font-semibold tabular-nums">{type.rooms.length}</dd>
+                <dl className="mt-4 grid grid-cols-[0.8fr_1fr_1.25fr] items-start divide-x divide-primary/10 rounded-xl border border-primary/10 bg-card/70 py-3 text-center shadow-xs">
+                  <div className="min-w-0 px-1">
+                    <dt className="h-8 text-[10px] font-medium uppercase leading-4 tracking-wide text-muted-foreground">{t.rooms.terms.count}</dt>
+                    <dd className="mt-1 text-lg font-semibold tabular-nums">{type.rooms.length}</dd>
                   </div>
-                  <div>
-                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t.rooms.terms.capacity}</dt>
-                    <dd className="mt-0.5 flex items-center justify-center gap-1 text-lg font-semibold tabular-nums">
+                  <div className="min-w-0 px-1">
+                    <dt className="h-8 text-[10px] font-medium uppercase leading-4 tracking-wide text-muted-foreground">{t.rooms.terms.capacity}</dt>
+                    <dd className="mt-1 flex items-center justify-center gap-1 text-lg font-semibold tabular-nums">
                       <Users className="size-4 text-muted-foreground" />
                       {type.capacity}
                     </dd>
                   </div>
-                  <div>
-                    <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t.rooms.terms.from}</dt>
-                    <dd className="mt-0.5 text-lg font-semibold tabular-nums">{formatMoney(Number(type.basePrice))}</dd>
+                  <div className="min-w-0 px-1">
+                    <dt className="h-8 text-[10px] font-medium uppercase leading-4 tracking-wide text-muted-foreground">{t.rooms.terms.from}</dt>
+                    <dd className="mt-1 whitespace-nowrap text-base font-semibold tabular-nums">{formatMoney(Number(type.basePrice))}</dd>
                   </div>
                 </dl>
-                <p className="mt-3 text-center text-xs text-muted-foreground">
+                <p className="mt-auto pt-3 text-center text-xs text-muted-foreground">
                   {t.rooms.availableForDate(available, type.rooms.length, formatISOCompactDate(toISODate(day)))}
                 </p>
               </CardContent>

@@ -1,76 +1,92 @@
-import { BarChart3, CalendarCheck2 } from "lucide-react";
+import { Activity, CalendarCheck2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InteractiveTrendChart } from "@/components/charts/interactive-trend-chart";
 import { formatShortDate, weekdayShort } from "@/lib/dates";
 import type { DashboardDayPoint } from "@/lib/stats";
-import { cn } from "@/lib/utils";
 
 export function OccupancyChart({ points }: { points: DashboardDayPoint[] }) {
+  const values = points.map((point) => Math.round(point.value * 100));
+  const average = values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
   return (
-    <Card className="overflow-hidden shadow-sm">
-      <CardHeader className="flex-row items-center justify-between border-b pb-4">
-        <div>
-          <CardTitle className="flex items-center gap-2 text-base"><BarChart3 className="size-4 text-primary" /> Загрузка номеров</CardTitle>
-          <p className="mt-1 text-xs text-muted-foreground">Фактическая загрузка за последние 14 дней</p>
-        </div>
-        <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">14 дней</span>
-      </CardHeader>
-      <CardContent className="pt-5">
-        {points.some((point) => point.total > 0) ? (
-          <div className="flex h-44 items-end gap-1.5 sm:gap-2" aria-label="График загрузки номеров">
-            {points.map((point, index) => {
-              const percent = Math.round(point.value * 100);
-              return (
-                <div key={point.date.toISOString()} className="group flex h-full min-w-0 flex-1 flex-col justify-end">
-                  <div className="relative flex flex-1 items-end rounded-md bg-secondary/55">
-                    <div
-                      className={cn("w-full rounded-md bg-primary/30 transition-colors group-hover:bg-primary/45", index === points.length - 1 && "bg-primary/80 group-hover:bg-primary")}
-                      style={{ height: `${Math.max(percent, point.count ? 7 : 2)}%` }}
-                    />
-                    <div className="pointer-events-none absolute -top-8 left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] text-background shadow-lg group-hover:block">
-                      {percent}% · {point.count} из {point.total}
-                    </div>
-                  </div>
-                  <span className={cn("mt-2 truncate text-center text-[10px] text-muted-foreground", index === points.length - 1 && "font-semibold text-foreground")}>
-                    {point.date.getUTCDate()}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        ) : <ChartEmpty text="Добавьте номера, чтобы видеть загрузку по дням." />}
-      </CardContent>
-    </Card>
+    <TrendCard
+      icon={Activity}
+      title="Загрузка номеров"
+      description="Фактическая загрузка за последние 14 дней"
+      stat={`${average}%`}
+      statLabel="в среднем"
+      points={points}
+      values={values}
+      maxValue={Math.max(20, ...values)}
+      stroke="var(--primary)"
+      ariaLabel="Динамика загрузки номеров за последние 14 дней"
+      formatValue={(value, point) => `${value}% · ${point.count} из ${point.total}`}
+    />
   );
 }
 
 export function BookingChart({ points }: { points: DashboardDayPoint[] }) {
-  const max = Math.max(1, ...points.map((point) => point.count));
-  const total = points.reduce((sum, point) => sum + point.count, 0);
+  const values = points.map((point) => point.count);
+  const total = values.reduce((sum, value) => sum + value, 0);
   return (
-    <Card className="overflow-hidden shadow-sm">
-      <CardHeader className="flex-row items-center justify-between border-b pb-4">
+    <TrendCard
+      icon={CalendarCheck2}
+      title="Новые бронирования"
+      description="Создано за последние 14 дней"
+      stat={String(total)}
+      statLabel="за период"
+      points={points}
+      values={values}
+      maxValue={Math.max(1, ...values)}
+      stroke="var(--chart-1)"
+      ariaLabel="Динамика новых бронирований за последние 14 дней"
+      formatValue={(value) => `${value} новых броней`}
+    />
+  );
+}
+
+function TrendCard({
+  icon: Icon,
+  title,
+  description,
+  stat,
+  statLabel,
+  points,
+  values,
+  maxValue,
+  stroke,
+  ariaLabel,
+  formatValue,
+}: {
+  icon: typeof Activity;
+  title: string;
+  description: string;
+  stat: string;
+  statLabel: string;
+  points: DashboardDayPoint[];
+  values: number[];
+  maxValue: number;
+  stroke: string;
+  ariaLabel: string;
+  formatValue: (value: number, point: DashboardDayPoint) => string;
+}) {
+  const chartPoints = points.map((point, index) => ({
+    key: point.date.toISOString(),
+    label: formatShortDate(point.date),
+    value: values[index],
+    valueLabel: formatValue(values[index], point),
+  }));
+
+  return (
+    <Card className="overflow-hidden bg-gradient-to-b from-card to-secondary/10 shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
         <div>
-          <CardTitle className="flex items-center gap-2 text-base"><CalendarCheck2 className="size-4 text-primary" /> Новые бронирования</CardTitle>
-          <p className="mt-1 text-xs text-muted-foreground">Создано за последние 14 дней</p>
+          <CardTitle className="flex items-center gap-2 text-base"><Icon className="size-4 text-primary" /> {title}</CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
         </div>
-        <span className="text-2xl font-semibold tabular-nums">{total}</span>
+        <div className="text-right"><div className="text-2xl font-semibold tabular-nums">{stat}</div><div className="text-[10px] text-muted-foreground">{statLabel}</div></div>
       </CardHeader>
       <CardContent className="pt-5">
-        {total > 0 ? (
-          <div className="flex h-44 items-end gap-1.5 sm:gap-2" aria-label="График новых бронирований">
-            {points.map((point, index) => (
-              <div key={point.date.toISOString()} className="group flex h-full min-w-0 flex-1 flex-col justify-end">
-                <div className="relative flex flex-1 items-end rounded-md bg-secondary/45">
-                  <div className={cn("w-full rounded-md bg-chart-2/55 transition-colors group-hover:bg-chart-2/75", index === points.length - 1 && "bg-chart-2")} style={{ height: `${Math.max((point.count / max) * 100, point.count ? 8 : 2)}%` }} />
-                  <div className="pointer-events-none absolute -top-8 left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] text-background shadow-lg group-hover:block">
-                    {formatShortDate(point.date)} · {point.count}
-                  </div>
-                </div>
-                <span className={cn("mt-2 truncate text-center text-[10px] text-muted-foreground", index === points.length - 1 && "font-semibold text-foreground")}>{point.date.getUTCDate()}</span>
-              </div>
-            ))}
-          </div>
-        ) : <ChartEmpty text="За этот период новых бронирований пока нет." />}
+        <InteractiveTrendChart points={chartPoints} maxValue={maxValue} stroke={stroke} ariaLabel={ariaLabel} />
       </CardContent>
     </Card>
   );
@@ -97,8 +113,4 @@ export function OccupancyForecast({ points }: { points: DashboardDayPoint[] }) {
       </CardContent>
     </Card>
   );
-}
-
-function ChartEmpty({ text }: { text: string }) {
-  return <div className="flex h-44 items-center justify-center rounded-lg border border-dashed bg-secondary/25 px-6 text-center text-sm text-muted-foreground">{text}</div>;
 }

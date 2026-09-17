@@ -8,6 +8,7 @@ import {
   CalendarRange,
   CheckCheck,
   ExternalLink,
+  FileText,
   Loader2,
   LogIn,
   LogOut,
@@ -16,13 +17,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { ReservationStatusBadge, ChannelLabel } from "@/components/shared/status-badge";
 import { ReservationFormDialog } from "./reservation-form-dialog";
@@ -31,6 +32,7 @@ import { reservationDisplayId, type GuestVM, type RatePlanVM, type ReservationVM
 import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
 import { t, channelLabel } from "@/lib/i18n";
+import { ReservationDocumentsDialog } from "./reservation-documents-dialog";
 
 export interface ReservationDetailsProps {
   reservation: ReservationVM;
@@ -62,6 +64,7 @@ export function ReservationDetailsDialog({
 }: ReservationDetailsProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [documentsOpen, setDocumentsOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
   async function changeStatus(status: string) {
@@ -97,23 +100,23 @@ export function ReservationDetailsDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent className="sm:max-w-lg">
+          <SheetHeader className="border-b">
             <div className="flex items-center justify-between gap-3 pr-6">
-              <DialogTitle className="text-base">
+              <SheetTitle className="text-base">
                 {t.reservations.details.title}{" "}
                 <span className="font-mono text-muted-foreground">{reservationDisplayId(r.sequenceNumber)}</span>
-              </DialogTitle>
+              </SheetTitle>
               <ReservationStatusBadge status={r.status} />
             </div>
-            <DialogDescription>
+            <SheetDescription>
               {t.reservations.details.createdBy(formatMediumDate(new Date(r.createdAt)))}
               {r.externalReservationId ? t.reservations.details.importedFrom(channelLabel(r.channel)) : ""}
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
 
-          <div className="space-y-4">
+          <div className="flex-1 space-y-4 overflow-y-auto px-4">
             <div className="flex items-center gap-3 rounded-lg border bg-secondary/40 p-3">
               <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <User className="size-4" />
@@ -130,8 +133,8 @@ export function ReservationDetailsDialog({
               <Field label={t.dashboard.table.room} value={`${r.roomNumber} · ${r.roomTypeName}`} />
               <Field label={t.reservations.details.guestsLabel} value={t.reservations.details.guestsField(r.adults, r.children)} />
               <Field label={t.dashboard.table.channel} value={<ChannelLabel channel={r.channel} />} />
-              <Field label={t.reservations.form.checkIn} value={formatMediumDate(new Date(`${r.checkIn}T00:00:00Z`))} />
-              <Field label={t.reservations.form.checkOut} value={formatMediumDate(new Date(`${r.checkOut}T00:00:00Z`))} />
+              <Field label={t.reservations.form.checkIn} value={`${formatMediumDate(new Date(`${r.checkIn}T00:00:00Z`))}, ${r.checkInTime}`} />
+              <Field label={t.reservations.form.checkOut} value={`${formatMediumDate(new Date(`${r.checkOut}T00:00:00Z`))}, ${r.checkOutTime}`} />
               <Field label={t.dashboard.table.nights} value={Math.round((Date.parse(`${r.checkOut}T00:00:00Z`) - Date.parse(`${r.checkIn}T00:00:00Z`)) / 86_400_000)} />
             </dl>
 
@@ -141,6 +144,7 @@ export function ReservationDetailsDialog({
               <div>
                 <div className="text-xs font-medium text-muted-foreground">{t.reservations.details.total}</div>
                 <div className="text-lg font-semibold tabular-nums">{formatMoney(r.totalAmount)}</div>
+                <div className="text-[11px] text-muted-foreground">{r.pricingMode === "MANUAL" ? "Указана вручную" : "Рассчитана по тарифу"}</div>
               </div>
               {r.externalReservationId ? (
                 <div className="text-right">
@@ -157,7 +161,7 @@ export function ReservationDetailsDialog({
             ) : null}
           </div>
 
-          <DialogFooter className="flex-col gap-2 sm:flex-col">
+          <SheetFooter className="border-t bg-background/95 pt-4 backdrop-blur">
             {/* Status actions */}
             <div className="flex w-full flex-wrap gap-2">
               {r.status === "PENDING" && (
@@ -185,6 +189,10 @@ export function ReservationDetailsDialog({
               )}
             </div>
 
+            <Button size="sm" variant="outline" className="w-full" onClick={() => setDocumentsOpen(true)}>
+              <FileText className="mr-1.5 size-3.5" /> Документы
+            </Button>
+
             <div className="grid w-full grid-cols-3 gap-2">
               <Button size="sm" onClick={() => setEditing(true)}>
                 <Pencil className="mr-1.5 size-3.5" /> {t.common.edit}
@@ -203,9 +211,9 @@ export function ReservationDetailsDialog({
                 {t.common.cancel}
               </Button>
             </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       {editing && (
         <ReservationFormDialog
@@ -225,13 +233,18 @@ export function ReservationDetailsDialog({
             roomId: r.roomId,
             checkIn: r.checkIn,
             checkOut: r.checkOut,
+            checkInTime: r.checkInTime,
+            checkOutTime: r.checkOutTime,
             adults: r.adults,
             children: r.children,
-            ratePlanId: ratePlans.find((p) => p.roomTypeId === r.roomTypeId)?.id,
+            ratePlanId: r.ratePlanId ?? undefined,
+            pricingMode: r.pricingMode,
+            totalAmount: r.totalAmount,
             notes: r.notes ?? "",
           }}
         />
       )}
+      <ReservationDocumentsDialog reservationId={r.id} open={documentsOpen} onOpenChange={setDocumentsOpen} />
     </>
   );
 }

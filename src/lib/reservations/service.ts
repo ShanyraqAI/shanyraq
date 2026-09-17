@@ -8,6 +8,7 @@ import { enqueueHotelChannelSyncs } from "@/lib/channels/sync-outbox";
 import type { Prisma } from "@prisma/client";
 
 type ReservationDb = typeof db | Prisma.TransactionClient;
+type ReservationPricingMode = "RATE_PLAN" | "MANUAL";
 
 /**
  * Reservation service — all reservation mutations funnel through here so that
@@ -45,6 +46,28 @@ export async function computeStayTotal(
     total += Number(rate ? rate.price : plan.basePrice);
   }
   return { total, currency: plan.currency };
+}
+
+async function resolveStayPrice(
+  hotelId: string,
+  ratePlanId: string | null | undefined,
+  roomTypeId: string,
+  checkIn: Date,
+  checkOut: Date,
+  pricingMode: ReservationPricingMode,
+  manualTotalAmount: number | undefined,
+  client: ReservationDb,
+): Promise<{ total: number; currency: string }> {
+  if (pricingMode === "MANUAL") {
+    if (manualTotalAmount === undefined || !Number.isFinite(manualTotalAmount) || manualTotalAmount < 0) {
+      throw new PublicError("Укажите корректную итоговую стоимость бронирования");
+    }
+    const hotel = await client.hotel.findUnique({ where: { id: hotelId }, select: { currency: true } });
+    if (!hotel) throw new PublicError("Отель не найден");
+    return { total: manualTotalAmount, currency: hotel.currency };
+  }
+  if (!ratePlanId) throw new PublicError("Выберите тариф для расчёта стоимости");
+  return computeStayTotal(hotelId, ratePlanId, roomTypeId, checkIn, checkOut, client);
 }
 
 async function assertNoRoomOverlap(
@@ -125,11 +148,15 @@ export interface CreateReservationParams {
   hotelId: string;
   guestId: string;
   roomId: string;
-  ratePlanId: string;
+  ratePlanId?: string | null;
   checkIn: string;
   checkOut: string;
+  checkInTime?: string;
+  checkOutTime?: string;
   adults: number;
   children: number;
+  pricingMode?: ReservationPricingMode;
+  manualTotalAmount?: number;
   sourceChannel: string;
   externalReservationId?: string | null;
   status?: ReservationStatus;
@@ -153,13 +180,15 @@ export async function createReservation(params: CreateReservationParams) {
     if (!guest) throw new PublicError("Гость не найден в текущем отеле");
     await assertNoRoomOverlap(params.hotelId, room.id, checkIn, checkOut, undefined, tx);
     await assertTypeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, undefined, tx);
-    const price = await computeStayTotal(params.hotelId, params.ratePlanId, room.roomTypeId, checkIn, checkOut, tx);
+    const pricingMode = params.pricingMode ?? "RATE_PLAN";
+    const price = await resolveStayPrice(params.hotelId, params.ratePlanId, room.roomTypeId, checkIn, checkOut, pricingMode, params.manualTotalAmount, tx);
     const reservation = await tx.reservation.create({
       data: {
         hotelId: params.hotelId, guestId: params.guestId, roomId: room.id, roomTypeId: room.roomTypeId,
-        ratePlanId: params.ratePlanId, sourceChannel: params.sourceChannel,
+        ratePlanId: pricingMode === "MANUAL" ? null : params.ratePlanId, sourceChannel: params.sourceChannel,
         externalReservationId: params.externalReservationId ?? null, checkIn, checkOut,
-        adults: params.adults, children: params.children, status: params.status ?? "CONFIRMED",
+        checkInTime: params.checkInTime ?? "14:00", checkOutTime: params.checkOutTime ?? "12:00",
+        adults: params.adults, children: params.children, status: params.status ?? "CONFIRMED", pricingMode,
         currency: price.currency, totalAmount: price.total, notes: params.notes ?? null,
       },
     });
@@ -177,6 +206,8 @@ export async function createReservation(params: CreateReservationParams) {
     room: result.room.number,
     checkIn: params.checkIn,
     checkOut: params.checkOut,
+    checkInTime: params.checkInTime ?? "14:00",
+    checkOutTime: params.checkOutTime ?? "12:00",
     totalAmount: Number(result.reservation.totalAmount),
     currency: result.reservation.currency,
     status: result.reservation.status,
@@ -202,11 +233,15 @@ export interface UpdateReservationParams {
   hotelId: string;
   guestId: string;
   roomId: string;
-  ratePlanId: string;
+  ratePlanId?: string | null;
   checkIn: string;
   checkOut: string;
+  checkInTime?: string;
+  checkOutTime?: string;
   adults: number;
   children: number;
+  pricingMode?: ReservationPricingMode;
+  manualTotalAmount?: number;
   notes?: string | null;
 }
 
@@ -229,14 +264,17 @@ export async function updateReservationDetails(params: UpdateReservationParams) 
     ]);
     if (!room) throw new PublicError("Номер не найден или временно недоступен");
     if (!guest) throw new PublicError("Гость не найден в текущем отеле");
-    const price = await computeStayTotal(params.hotelId, params.ratePlanId, room.roomTypeId, checkIn, checkOut, tx);
+    const pricingMode = params.pricingMode ?? "RATE_PLAN";
+    const price = await resolveStayPrice(params.hotelId, params.ratePlanId, room.roomTypeId, checkIn, checkOut, pricingMode, params.manualTotalAmount, tx);
     await assertNoRoomOverlap(params.hotelId, room.id, checkIn, checkOut, existing.id, tx);
     await assertTypeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, existing.id, tx);
     const updated = await tx.reservation.update({
       where: { id: existing.id },
       data: {
-        guestId: params.guestId, roomId: room.id, roomTypeId: room.roomTypeId, ratePlanId: params.ratePlanId,
-        checkIn, checkOut, adults: params.adults, children: params.children,
+        guestId: params.guestId, roomId: room.id, roomTypeId: room.roomTypeId,
+        ratePlanId: pricingMode === "MANUAL" ? null : params.ratePlanId,
+        checkIn, checkOut, checkInTime: params.checkInTime ?? "14:00", checkOutTime: params.checkOutTime ?? "12:00",
+        adults: params.adults, children: params.children, pricingMode,
         currency: price.currency, totalAmount: price.total, notes: params.notes ?? null,
       },
     });
@@ -265,6 +303,8 @@ export async function updateReservationDetails(params: UpdateReservationParams) 
     room: result.room.number,
     checkIn: updated.checkIn.toISOString().slice(0, 10),
     checkOut: updated.checkOut.toISOString().slice(0, 10),
+    checkInTime: updated.checkInTime,
+    checkOutTime: updated.checkOutTime,
     totalAmount: Number(updated.totalAmount),
   });
   return updated;
@@ -402,7 +442,8 @@ export async function writeAudit(
 }
 
 function reservationReference(sequenceNumber: number | null, fallbackId: string): string {
-  return sequenceNumber == null ? fallbackId.slice(-6).toUpperCase() : String(sequenceNumber).padStart(3, "0");
+  void fallbackId;
+  return `B${sequenceNumber == null ? "—" : String(sequenceNumber).padStart(3, "0")}`;
 }
 
 async function notifyNewReservation(
@@ -423,7 +464,7 @@ async function notifyNewReservation(
   await createHotelNotification({
     hotelId,
     type: "NEW_RESERVATION",
-    title: `Новая бронь №${reservation.reference}`,
+    title: `Новая бронь ${reservation.reference}`,
     body: `${reservation.guestName} · номер ${reservation.roomNumber} · ${formatISODate(reservation.checkIn)}–${formatISODate(reservation.checkOut)}`,
     href: `/dashboard/reservations?reservation=${reservation.id}`,
     dedupeKey: `new-reservation:${reservation.id}`,

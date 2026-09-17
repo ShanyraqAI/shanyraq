@@ -1,14 +1,15 @@
 import Link from "next/link";
-import { BedDouble, CalendarRange, CircleDollarSign, Percent, ReceiptText } from "lucide-react";
+import { BedDouble, CalendarRange, CircleDollarSign, Percent, ReceiptText, TableProperties } from "lucide-react";
 import { DataExportDialog } from "@/components/exports/data-export-dialog";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { InteractiveTrendChart } from "@/components/charts/interactive-trend-chart";
+import { DailyMetricsTable } from "@/components/reports/daily-metrics-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatISODate, formatShortDate, todayInTimeZone } from "@/lib/dates";
+import { formatISODate, formatShortDate, todayInTimeZone, toISODate } from "@/lib/dates";
 import { channelLabel } from "@/lib/i18n";
 import { parseReportFilters } from "@/lib/reports/performance";
 import { getHotelPerformanceReport } from "@/lib/reports/service";
@@ -29,22 +30,40 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
   const hotel = await getCurrentHotel();
   if (!hotel) return null;
 
-  const filters = parseReportFilters(await searchParams, todayInTimeZone(hotel.timezone));
+  const currentDate = todayInTimeZone(hotel.timezone);
+  const currentDateText = toISODate(currentDate);
+  const filters = parseReportFilters(await searchParams, currentDate);
   const report = await getHotelPerformanceReport(hotel.id, filters);
   const selectedSource = filters.source ?? "all";
   const maxRevenue = Math.max(1, ...report.revenueBySource.map((row) => row.value));
-  const labelStep = Math.max(1, Math.ceil(report.daily.length / 12));
   const money = (amount: number, compact = false) => formatReportMoney(amount, report.currency, compact);
+  const chronologicalDaily = [...report.daily].reverse();
+  const occupancyPoints = chronologicalDaily.map((day) => ({
+    key: day.date.toISOString(),
+    label: formatShortDate(day.date),
+    value: Math.round(day.occupancy * 100),
+    valueLabel: formatPercent(day.occupancy),
+    detail: `${day.occupiedRooms} из ${day.availableRooms} занято · ${money(day.revenue)}`,
+  }));
+  const dailyRows = report.daily.map((day) => ({
+    key: day.date.toISOString(),
+    date: formatShortDate(day.date),
+    occupied: `${day.occupiedRooms} / ${day.availableRooms}`,
+    occupancy: formatPercent(day.occupancy),
+    revenue: money(day.revenue),
+    adr: money(day.adr),
+    revpar: money(day.revpar),
+  }));
 
   return (
     <div className="space-y-6">
       <PageHeader title="Отчёты" description="Загрузка, выручка и эффективность номерного фонда за выбранный период.">
-        <DataExportDialog dataset="reports" defaultFrom={report.period.from} defaultTo={report.period.to} defaultSource={selectedSource} />
+        <DataExportDialog dataset="reports" defaultFrom={report.period.from} defaultTo={report.period.to} defaultSource={selectedSource} maxTo={currentDateText} />
       </PageHeader>
 
       <form action="/dashboard/reports" method="get" className="grid gap-4 rounded-xl border bg-card p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.2fr_auto_auto] lg:items-end">
-        <div className="space-y-1.5"><Label htmlFor="report-from">Дата с</Label><Input id="report-from" name="from" type="date" defaultValue={report.period.from} required /></div>
-        <div className="space-y-1.5"><Label htmlFor="report-to">Дата по</Label><Input id="report-to" name="to" type="date" min={report.period.from} defaultValue={report.period.to} required /></div>
+        <div className="space-y-1.5"><Label htmlFor="report-from">Дата с</Label><Input id="report-from" name="from" type="date" max={currentDateText} defaultValue={report.period.from} required /></div>
+        <div className="space-y-1.5"><Label htmlFor="report-to">Дата по</Label><Input id="report-to" name="to" type="date" min={report.period.from} max={currentDateText} defaultValue={report.period.to} required /></div>
         <div className="space-y-1.5">
           <Label htmlFor="report-source">Источник бронирования</Label>
           <select id="report-source" name="source" defaultValue={selectedSource} className="flex h-10 w-full rounded-md border bg-background px-3 text-sm">
@@ -65,18 +84,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
         <Card className="min-w-0 shadow-sm">
-          <CardHeader><CardTitle className="text-base">Динамика загрузки</CardTitle><CardDescription>{formatISODate(report.period.from)} — {formatISODate(report.period.to)} · сначала последние даты</CardDescription></CardHeader>
-          <CardContent className="overflow-x-auto">
-            <div className="flex h-[220px] min-w-[720px] items-end gap-1.5">
-              {report.daily.map((day, index) => (
-                <div key={day.date.toISOString()} className="group flex min-w-2 flex-1 flex-col items-center justify-end gap-1.5" title={`${formatShortDate(day.date)} · ${formatPercent(day.occupancy)} · ${money(day.revenue)}`}>
-                  <span className="text-[10px] font-medium tabular-nums text-muted-foreground opacity-0 group-hover:opacity-100">{formatPercent(day.occupancy)}</span>
-                  <div className="w-full rounded-t-md bg-primary/70 transition-colors group-hover:bg-primary" style={{ height: `${Math.max(4, day.occupancy * 150)}px` }} />
-                  <span className="h-4 whitespace-nowrap text-[10px] text-muted-foreground">{index % labelStep === 0 || index === report.daily.length - 1 ? formatShortDate(day.date) : ""}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
+          <CardHeader><CardTitle className="text-base">Динамика загрузки</CardTitle><CardDescription>{formatISODate(report.period.from)} — {formatISODate(report.period.to)} · наведите на линию, чтобы увидеть день</CardDescription></CardHeader>
+          <CardContent><InteractiveTrendChart points={occupancyPoints} maxValue={100} ariaLabel="Интерактивная динамика загрузки по дням" /></CardContent>
         </Card>
 
         <Card className="shadow-sm">
@@ -92,16 +101,18 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
         </Card>
       </div>
 
-      <Card className="shadow-sm">
-        <CardHeader><CardTitle className="text-base">Показатели по дням</CardTitle><CardDescription>Выручка распределяется по ночам проживания пропорционально полной стоимости бронирования.</CardDescription></CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader><TableRow><TableHead>Дата</TableHead><TableHead className="text-right">Занято</TableHead><TableHead className="text-right">Загрузка</TableHead><TableHead className="text-right">Выручка</TableHead><TableHead className="text-right">ADR</TableHead><TableHead className="text-right">RevPAR</TableHead></TableRow></TableHeader>
-            <TableBody>{report.daily.map((day) => (
-              <TableRow key={day.date.toISOString()}><TableCell className="font-medium">{formatShortDate(day.date)}</TableCell><TableCell className="text-right tabular-nums">{day.occupiedRooms} / {day.availableRooms}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(day.occupancy)}</TableCell><TableCell className="text-right tabular-nums">{money(day.revenue)}</TableCell><TableCell className="text-right tabular-nums">{money(day.adr)}</TableCell><TableCell className="text-right tabular-nums">{money(day.revpar)}</TableCell></TableRow>
-            ))}</TableBody>
-          </Table>
-        </CardContent>
+      <Card className="relative overflow-hidden border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.035] shadow-sm">
+        <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary via-chart-2/65 to-transparent" />
+        <CardHeader className="border-b border-primary/10 bg-primary/[0.025] pb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/10"><TableProperties className="size-5" /></span>
+              <div><CardTitle className="text-base">Показатели по дням</CardTitle><CardDescription className="mt-1">Выручка распределяется по ночам проживания пропорционально полной стоимости бронирования.</CardDescription></div>
+            </div>
+            <span className="hidden rounded-full border border-primary/15 bg-card px-3 py-1 text-[11px] font-medium text-primary sm:inline-flex">Детализация периода</span>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-5"><DailyMetricsTable rows={dailyRows} /></CardContent>
       </Card>
     </div>
   );

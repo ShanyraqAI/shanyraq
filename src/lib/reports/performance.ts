@@ -35,7 +35,7 @@ export function parseReportFilters(
   const toText = typeof input.to === "string" ? input.to : "";
   const parsedFrom = isISODate(fromText) ? parseISODate(fromText) : defaultFrom;
   const parsedTo = isISODate(toText) ? parseISODate(toText) : today;
-  const validRange = parsedTo >= parsedFrom && diffDays(parsedFrom, parsedTo) < MAX_REPORT_DAYS;
+  const validRange = parsedTo >= parsedFrom && parsedTo <= today && parsedFrom <= today && diffDays(parsedFrom, parsedTo) < MAX_REPORT_DAYS;
   const sourceText = typeof input.source === "string" ? input.source.trim() : "";
   const source = sourceText && sourceText !== "all" && /^[a-zA-Z0-9_-]{1,50}$/.test(sourceText) ? sourceText : null;
 

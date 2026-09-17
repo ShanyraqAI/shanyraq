@@ -3,6 +3,7 @@ import test from "node:test";
 import { parseISODate, todayInTimeZone } from "@/lib/dates";
 import {
   calendarTimelineRange,
+  calendarStayPosition,
   clipStay,
   formatCalendarRange,
   parseCalendarNavigation,
@@ -76,4 +77,29 @@ test("calendar hides old/future stays and respects checkout at the visible bound
 test("checkout/arrival on the same day are allowed; containment overlaps", () => {
   assert.equal(staysOverlap("2026-08-31", "2026-09-02", "2026-09-02", "2026-09-04"), false);
   assert.equal(staysOverlap("2026-08-31", "2026-09-05", "2026-09-02", "2026-09-04"), true);
+});
+
+test("PMS bars keep back-to-back stays visually separate", () => {
+  const start = parseISODate("2026-09-14");
+  const departing = calendarStayPosition("2026-09-14", "2026-09-15", start, 7, 100);
+  const arriving = calendarStayPosition("2026-09-15", "2026-09-17", start, 7, 100);
+  assert.deepEqual(departing, { left: 52, width: 96, clippedStart: false, clippedEnd: false });
+  assert.deepEqual(arriving, { left: 152, width: 196, clippedStart: false, clippedEnd: false });
+  assert.equal((arriving?.left ?? 0) - ((departing?.left ?? 0) + (departing?.width ?? 0)), 4);
+});
+
+test("PMS bars keep square edges only when the stay continues outside the visible range", () => {
+  const start = parseISODate("2026-09-14");
+  assert.deepEqual(calendarStayPosition("2026-09-01", "2026-09-14", start, 7, 100), {
+    left: 0,
+    width: 48,
+    clippedStart: true,
+    clippedEnd: false,
+  });
+  assert.deepEqual(calendarStayPosition("2026-09-20", "2026-09-30", start, 7, 100), {
+    left: 652,
+    width: 48,
+    clippedStart: false,
+    clippedEnd: true,
+  });
 });

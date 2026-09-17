@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/page-header";
 import { ChannelLabel, ReservationStatusBadge } from "@/components/shared/status-badge";
 import { upsertGuestAction } from "@/server/actions/guests";
-import { formatSequenceNumber, reservationDisplayId, type ReservationVM } from "@/lib/types";
+import { guestDisplayId, reservationDisplayId, type ReservationVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
 import { t } from "@/lib/i18n";
@@ -69,7 +69,7 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
     return guests.filter(
       (g) =>
         g.fullName.toLowerCase().includes(q) ||
-        `гость ${formatSequenceNumber(g.sequenceNumber)}`.includes(q) ||
+        guestDisplayId(g.sequenceNumber).toLowerCase().includes(q) ||
         (g.email ?? "").toLowerCase().includes(q) ||
         (g.phone ?? "").includes(q),
     );
@@ -127,7 +127,7 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
             <TableBody>
               {filtered.map((g) => (
                 <TableRow key={g.id} className="cursor-pointer" onClick={() => setSelectedId(g.id)}>
-                  <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">Гость {formatSequenceNumber(g.sequenceNumber)}</TableCell>
+                  <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">{guestDisplayId(g.sequenceNumber)}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2.5">
                       <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
@@ -170,26 +170,26 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
                   {selected.fullName}
                 </DialogTitle>
                 <DialogDescription>
-                  Гость {formatSequenceNumber(selected.sequenceNumber)} · {t.guests.profile.subtitle}
+                  {guestDisplayId(selected.sequenceNumber)} · {t.guests.profile.subtitle}
                 </DialogDescription>
               </DialogHeader>
 
-              <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="flex items-center gap-2 rounded-lg border p-3 text-sm">
-                  <Mail className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{selected.email ?? "—"}</span>
+              <dl className="grid overflow-hidden rounded-xl border bg-secondary/15 sm:grid-cols-2">
+                <div className="min-w-0 border-b p-3.5 sm:border-r">
+                  <dt className="flex items-center gap-2 text-xs text-muted-foreground"><Mail className="size-3.5" /> Email</dt>
+                  <dd className="mt-1 truncate text-sm font-medium">{selected.email ?? "—"}</dd>
                 </div>
-                <div className="flex items-center gap-2 rounded-lg border p-3 text-sm">
-                  <Phone className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{selected.phone ?? "—"}</span>
+                <div className="min-w-0 border-b p-3.5">
+                  <dt className="flex items-center gap-2 text-xs text-muted-foreground"><Phone className="size-3.5" /> Телефон</dt>
+                  <dd className="mt-1 truncate text-sm font-medium">{selected.phone ?? "—"}</dd>
                 </div>
-                <div className="rounded-lg border p-3 text-sm">
+                <div className="p-3.5 sm:border-r">
                   <dt className="text-xs text-muted-foreground">{t.guests.profile.country}</dt>
-                  <dd className="mt-0.5 font-medium">{selected.country ?? "—"}</dd>
+                  <dd className="mt-1 text-sm font-medium">{selected.country ?? "—"}</dd>
                 </div>
-                <div className="rounded-lg border p-3 text-sm">
+                <div className="p-3.5">
                   <dt className="text-xs text-muted-foreground">{t.guests.profile.totalStays}</dt>
-                  <dd className="mt-0.5 font-medium tabular-nums">{history.length}</dd>
+                  <dd className="mt-1 text-sm font-medium tabular-nums">{history.length}</dd>
                 </div>
               </dl>
 
@@ -206,19 +206,21 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
                     {t.guests.profile.historyEmpty}
                   </p>
                 ) : (
-                  <ul className="divide-y rounded-lg border">
+                  <ul className="divide-y overflow-hidden rounded-xl border">
                     {history.map((r) => (
-                      <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2.5 text-sm">
-                        <span className="font-mono text-xs text-muted-foreground">{reservationDisplayId(r.sequenceNumber)}</span>
-                        <span className="font-medium">
-                          {t.guests.profile.roomLabel(r.roomNumber)}
-                        </span>
-                        <span className="whitespace-nowrap text-muted-foreground">
-                          {formatMediumDate(new Date(`${r.checkIn}T00:00:00Z`))} → {formatMediumDate(new Date(`${r.checkOut}T00:00:00Z`))}
-                        </span>
-                        <ChannelLabel channel={r.channel} className="ml-auto" />
-                        <span className="tabular-nums">{formatMoney(r.totalAmount)}</span>
-                        <ReservationStatusBadge status={r.status} />
+                      <li key={r.id} className="space-y-2 px-3.5 py-3 text-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                          <span className="font-medium">{t.guests.profile.roomLabel(r.roomNumber)}</span>
+                          <span className="whitespace-nowrap text-xs text-muted-foreground">
+                            {formatMediumDate(new Date(`${r.checkIn}T00:00:00Z`))} → {formatMediumDate(new Date(`${r.checkOut}T00:00:00Z`))}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="font-mono text-muted-foreground">{reservationDisplayId(r.sequenceNumber)}</span>
+                          <ChannelLabel channel={r.channel} />
+                          <span className="ml-auto font-medium tabular-nums">{formatMoney(r.totalAmount)}</span>
+                          <ReservationStatusBadge status={r.status} />
+                        </div>
                       </li>
                     ))}
                   </ul>

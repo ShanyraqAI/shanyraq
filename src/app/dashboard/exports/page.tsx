@@ -19,8 +19,9 @@ export default async function ExportsPage() {
   const available = EXPORT_PERMISSIONS.filter((permission) => permissions.includes(permission));
   if (available.length === 0) redirect(firstAllowedDashboardPath(permissions));
 
-  const from = toISODate(todayInTimeZone(hotel.timezone));
-  const to = toISODate(addDays(todayInTimeZone(hotel.timezone), 29));
+  const currentDate = todayInTimeZone(hotel.timezone);
+  const from = toISODate(addDays(currentDate, -29));
+  const to = toISODate(currentDate);
 
   return (
     <div className="space-y-6">
@@ -36,7 +37,7 @@ export default async function ExportsPage() {
             title="Отчёт по показателям"
             description="Загрузка, выручка, ADR и RevPAR по дням за выбранный период."
           >
-            <DataExportDialog dataset="reports" defaultFrom={from} defaultTo={to} />
+            <DataExportDialog dataset="reports" defaultFrom={from} defaultTo={to} maxTo={to} />
           </ExportCard>
         ) : null}
 

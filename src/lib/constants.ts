@@ -61,6 +61,16 @@ const isoDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Дата должна быть в формате ГГГГ-ММ-ДД")
   .refine(isISODate, "Укажите существующую календарную дату");
 
+const hotelTime = z
+  .string()
+  .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "Время должно быть в формате ЧЧ:ММ");
+
+const pricingFields = {
+  ratePlanId: z.string().min(1).optional(),
+  pricingMode: z.enum(["RATE_PLAN", "MANUAL"]).default("RATE_PLAN"),
+  manualTotalAmount: z.coerce.number().min(0, "Стоимость не может быть отрицательной").max(1_000_000_000).optional(),
+};
+
 export const createReservationSchema = z
   .object({
     guestId: z.string().optional(),
@@ -70,9 +80,11 @@ export const createReservationSchema = z
     roomId: z.string().min(1),
     checkIn: isoDate,
     checkOut: isoDate,
+    checkInTime: hotelTime.default("14:00"),
+    checkOutTime: hotelTime.default("12:00"),
     adults: z.coerce.number().int().min(1).max(10),
     children: z.coerce.number().int().min(0).max(10).default(0),
-    ratePlanId: z.string().min(1).optional(),
+    ...pricingFields,
     sourceChannel: z.enum(CHANNEL_CODES).default("direct"),
     notes: z.string().max(2000).optional(),
   })
@@ -83,6 +95,10 @@ export const createReservationSchema = z
   .refine((v) => Boolean(v.guestId || v.guestName), {
     message: "Выберите гостя из списка или введите имя",
     path: ["guestName"],
+  })
+  .refine((v) => v.pricingMode !== "MANUAL" || v.manualTotalAmount !== undefined, {
+    message: "Укажите итоговую стоимость бронирования",
+    path: ["manualTotalAmount"],
   });
 export type CreateReservationInput = z.infer<typeof createReservationSchema>;
 
@@ -96,9 +112,11 @@ export const updateReservationSchema = z
     roomId: z.string().min(1),
     checkIn: isoDate,
     checkOut: isoDate,
+    checkInTime: hotelTime.default("14:00"),
+    checkOutTime: hotelTime.default("12:00"),
     adults: z.coerce.number().int().min(1).max(10),
     children: z.coerce.number().int().min(0).max(10).default(0),
-    ratePlanId: z.string().min(1),
+    ...pricingFields,
     notes: z.string().max(2000).optional(),
   })
   .refine((v) => v.checkOut > v.checkIn, {
@@ -108,6 +126,10 @@ export const updateReservationSchema = z
   .refine((v) => Boolean(v.guestId || v.guestName), {
     message: "Выберите гостя из списка или введите имя",
     path: ["guestName"],
+  })
+  .refine((v) => v.pricingMode !== "MANUAL" || v.manualTotalAmount !== undefined, {
+    message: "Укажите итоговую стоимость бронирования",
+    path: ["manualTotalAmount"],
   });
 
 export const reservationStatusSchema = z.object({

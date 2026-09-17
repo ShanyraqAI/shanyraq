@@ -43,3 +43,11 @@ test("invalid or oversized report periods fall back to the latest 30 days", () =
   assert.equal(invalid.to.toISOString(), today.toISOString());
   assert.equal(invalid.source, null);
 });
+
+test("future report periods fall back to the latest completed range", () => {
+  const today = parseISODate("2026-09-16");
+  const future = parseReportFilters({ from: "2026-09-16", to: "2026-10-16", source: "direct" }, today);
+  assert.equal(future.from.toISOString(), parseISODate("2026-08-18").toISOString());
+  assert.equal(future.to.toISOString(), today.toISOString());
+  assert.equal(future.source, "direct");
+});

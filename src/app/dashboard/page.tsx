@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { AlertCircle, BedDouble, CalendarCheck2, CalendarX2, CheckCircle2, CircleDollarSign, Sparkles } from "lucide-react";
+import { AlertCircle, BedDouble, CalendarCheck2, CalendarX2, CheckCircle2, Sparkles, WalletCards } from "lucide-react";
+import type { ReactNode } from "react";
 import { db, getCurrentHotelId } from "@/lib/db";
 import { getChannelHealth, getDashboardStats, getRecentReservations } from "@/lib/stats";
 import { toReservationVM, type GuestVM, type RatePlanVM, type RoomVM } from "@/lib/types";
@@ -51,15 +52,30 @@ export default async function DashboardPage() {
     </PageHeader>
 
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Основные показатели">
-      <Card className="shadow-sm"><CardContent className="flex items-center gap-4 p-5">
-        <div className="relative grid size-16 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(var(--primary) ${Math.round(stats.occupancyTonight * 360)}deg, var(--secondary) 0deg)` }}>
-          <div className="grid size-12 place-items-center rounded-full bg-card text-sm font-semibold tabular-nums">{formatPercent(stats.occupancyTonight)}</div>
-        </div>
-        <Metric label="Загрузка сегодня" value={`${stats.occupiedTonight} из ${stats.totalRooms}`} sub="занятых номеров" />
-      </CardContent></Card>
-      <MetricCard icon={CalendarCheck2} label="Активные брони" value={String(stats.activeReservations)} sub={`${stats.arrivalsToday.length} заездов сегодня`} />
-      <MetricCard icon={CircleDollarSign} label="Выручка с начала месяца" value={formatMoney(stats.revenueMonthToDate)} sub="по действующим и завершённым броням" />
-      <MetricCard icon={BedDouble} label="Свободно сегодня" value={String(stats.availableRoomsTonight)} sub={`${stats.inHouseGuests} гостей проживают`} />
+      <MetricCard
+        label="Загрузка сегодня"
+        value={`${stats.occupiedTonight} из ${stats.totalRooms}`}
+        sub="занятых номеров"
+        visual={<OccupancyRing value={stats.occupancyTonight} />}
+      />
+      <MetricCard
+        label="Активные брони"
+        value={String(stats.activeReservations)}
+        sub={`${stats.arrivalsToday.length} заездов сегодня`}
+        visual={<MetricVisual icon={CalendarCheck2} caption={`${stats.activeReservationsByStatus.CONFIRMED} подтвержд.`} />}
+      />
+      <MetricCard
+        label="Выручка с начала месяца"
+        value={formatMoney(stats.revenueMonthToDate)}
+        sub="по действующим и завершённым броням"
+        visual={<MetricVisual icon={WalletCards} caption="за месяц" />}
+      />
+      <MetricCard
+        label="Свободно сегодня"
+        value={`${stats.availableRoomsTonight} из ${stats.totalRooms}`}
+        sub={`${stats.inHouseGuests} гостей проживают`}
+        visual={<MetricVisual icon={BedDouble} caption={`${stats.totalRooms ? Math.round(stats.availableRoomsTonight / stats.totalRooms * 100) : 0}% свободно`} />}
+      />
     </section>
 
     <section className="grid gap-4 xl:grid-cols-[1.25fr_1fr_0.72fr]">
@@ -84,11 +100,30 @@ export default async function DashboardPage() {
   </div>;
 }
 
-function MetricCard({ icon: Icon, label, value, sub }: { icon: typeof BedDouble; label: string; value: string; sub: string }) {
-  return <Card className="shadow-sm"><CardContent className="flex items-start justify-between gap-3 p-5"><Metric label={label} value={value} sub={sub} /><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-primary"><Icon className="size-4" /></span></CardContent></Card>;
+function MetricCard({ label, value, sub, visual }: { label: string; value: string; sub: string; visual: ReactNode }) {
+  return <Card className="group relative overflow-hidden border-border/70 bg-gradient-to-br from-card via-card to-secondary/25 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md">
+    <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary/75 via-chart-2/55 to-transparent" />
+    <CardContent className="flex min-h-36 items-center justify-between gap-3 p-5">
+      <Metric label={label} value={value} sub={sub} />
+      <div className="flex min-w-[76px] shrink-0 justify-center">{visual}</div>
+    </CardContent>
+  </Card>;
 }
 function Metric({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return <div className="min-w-0"><p className="text-xs font-medium text-muted-foreground">{label}</p><p className="mt-1 truncate text-2xl font-semibold tracking-tight tabular-nums">{value}</p><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{sub}</p></div>;
+  return <div className="min-w-0 flex-1"><p className="text-xs font-medium text-muted-foreground">{label}</p><p className="mt-1.5 whitespace-nowrap text-xl font-semibold tracking-tight tabular-nums">{value}</p><p className="mt-1.5 line-clamp-2 text-xs leading-4 text-muted-foreground">{sub}</p></div>;
+}
+function OccupancyRing({ value }: { value: number }) {
+  const percent = Math.round(value * 100);
+  return <div className="relative grid size-[76px] place-items-center" aria-label={`Загрузка ${percent}%`}>
+    <svg viewBox="0 0 42 42" className="size-full -rotate-90" aria-hidden="true">
+      <circle cx="21" cy="21" r="17" pathLength="100" fill="none" stroke="var(--secondary)" strokeWidth="4" />
+      <circle cx="21" cy="21" r="17" pathLength="100" fill="none" stroke="var(--primary)" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${percent} ${100 - percent}`} />
+    </svg>
+    <span className="absolute text-sm font-semibold tabular-nums text-foreground">{formatPercent(value)}</span>
+  </div>;
+}
+function MetricVisual({ icon: Icon, caption }: { icon: typeof CalendarCheck2; caption: string }) {
+  return <span className="grid size-12 place-items-center rounded-2xl bg-primary/[0.08] text-primary ring-1 ring-primary/10" aria-label={caption} title={caption}><Icon className="size-5" aria-hidden="true" /></span>;
 }
 function TodayList({ title, href, icon: Icon, rows, empty }: { title: string; href: string; icon: typeof CalendarCheck2; rows: Awaited<ReturnType<typeof getDashboardStats>>["arrivalsToday"]; empty: string }) {
   return <Card className="overflow-hidden shadow-sm"><div className="flex items-center justify-between border-b px-5 py-4"><h2 className="flex items-center gap-2 font-semibold"><Icon className="size-4 text-primary" /> {title}</h2><Link href={href} className="text-xs font-medium text-primary hover:underline">Все →</Link></div>{rows.length ? <Table><TableBody>{rows.slice(0, 4).map((reservation) => <TableRow key={reservation.id}><TableCell className="font-medium">{reservation.guest.fullName}<span className="mt-0.5 block text-xs font-normal text-muted-foreground">№ {reservation.room.number} · {reservation.roomType.name}</span></TableCell><TableCell className="hidden sm:table-cell"><ChannelLabel channel={reservation.sourceChannel} /></TableCell><TableCell className="text-right"><ReservationStatusBadge status={reservation.status as never} /></TableCell></TableRow>)}</TableBody></Table> : <div className="flex min-h-36 items-center justify-center px-5 text-sm text-muted-foreground">{empty}</div>}</Card>;

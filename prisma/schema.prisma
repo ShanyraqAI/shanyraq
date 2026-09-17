@@ -36,12 +36,15 @@ model Organization {
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
-  users           User[]
-  memberships     Membership[]
-  hotels          Hotel[]
-  invitations     HotelInvitation[]
-  analyticsEvents AnalyticsEvent[]
-  supportRequests SupportRequest[]
+  users              User[]
+  memberships        Membership[]
+  hotels             Hotel[]
+  invitations        HotelInvitation[]
+  analyticsEvents    AnalyticsEvent[]
+  supportRequests    SupportRequest[]
+  documentProfile    DocumentProfile?
+  documentSequences  DocumentSequence[]
+  generatedDocuments GeneratedDocument[]
 }
 
 model User {
@@ -73,6 +76,8 @@ model User {
   assignedSupportRequests  SupportRequest[]         @relation("SupportAssignee")
   supportRequestActivities SupportRequestActivity[] @relation("SupportActivityActor")
   assignedBetaHotels       BetaHotelProfile[]       @relation("BetaAssignedAdmin")
+  calendarPreferences      CalendarPreference[]
+  generatedDocuments       GeneratedDocument[]      @relation("DocumentCreator")
 }
 
 model OAuthAccount {
@@ -183,24 +188,51 @@ model Hotel {
   updatedAt    DateTime     @updatedAt
   memberships  Membership[]
 
-  roomTypes          RoomType[]
-  rooms              Room[]
-  guests             Guest[]
-  reservations       Reservation[]
-  ratePlans          RatePlan[]
-  availability       Availability[]
-  connections        ChannelConnection[]
-  channelSyncJobs    ChannelSyncJob[]
-  notifications      Notification[]
-  invitations        HotelInvitation[]
-  organization       Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  analyticsEvents    AnalyticsEvent[]
-  productExperiences ProductExperience[]
-  supportRequests    SupportRequest[]
-  betaProfile        BetaHotelProfile?
-  entitySequence     HotelEntitySequence?
+  roomTypes           RoomType[]
+  rooms               Room[]
+  guests              Guest[]
+  reservations        Reservation[]
+  ratePlans           RatePlan[]
+  availability        Availability[]
+  connections         ChannelConnection[]
+  channelSyncJobs     ChannelSyncJob[]
+  notifications       Notification[]
+  invitations         HotelInvitation[]
+  organization        Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  analyticsEvents     AnalyticsEvent[]
+  productExperiences  ProductExperience[]
+  supportRequests     SupportRequest[]
+  betaProfile         BetaHotelProfile?
+  entitySequence      HotelEntitySequence?
+  calendarPreferences CalendarPreference[]
+  generatedDocuments  GeneratedDocument[]
 
   @@unique([id, orgId])
+}
+
+// Personal calendar layout preferences. They are scoped to both the employee
+// and the hotel, so the same user can keep a different workspace in each property.
+model CalendarPreference {
+  id                   String   @id @default(cuid())
+  userId               String
+  hotelId              String
+  density              String   @default("STANDARD") // COMFORTABLE | STANDARD | COMPACT
+  showGuestName        Boolean  @default(true)
+  showGuestCount       Boolean  @default(true)
+  showChannel          Boolean  @default(true)
+  showAmount           Boolean  @default(false)
+  showReservationId    Boolean  @default(false)
+  showNotes            Boolean  @default(false)
+  currencyDisplay      String   @default("SYMBOL") // SYMBOL | CODE | HIDDEN
+  collapsedRoomTypeIds String[] @default([])
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hotel Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, hotelId])
+  @@index([hotelId])
 }
 
 // Tenant-local counters back the human-readable numbers shown in the product.
@@ -212,6 +244,70 @@ model HotelEntitySequence {
   nextRatePlanNumber    Int    @default(1)
 
   hotel Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+}
+
+// Legal and banking details entered once and reused in reservation documents.
+model DocumentProfile {
+  id                    String   @id @default(cuid())
+  organizationId        String   @unique
+  entityType            String   @default("INDIVIDUAL_ENTREPRENEUR")
+  legalName             String
+  iinBin                String
+  identityDocument      String?
+  postalCode            String?
+  legalAddress          String
+  phone                 String?
+  email                 String?
+  bankName              String?
+  iban                  String?
+  bic                   String?
+  kbe                   String?
+  signerName            String
+  signerTitle           String   @default("Руководитель")
+  signerAuthority       String?
+  accountantName        String?
+  vatMode               String   @default("WITHOUT_VAT")
+  vatRegistrationNumber String?
+  defaultPaymentTerms   String   @default("Оплата наличными или переводом")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// Independent counters keep document numbers unique inside each organization.
+model DocumentSequence {
+  organizationId String
+  type           String
+  nextNumber     Int    @default(1)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, type])
+}
+
+// The snapshot is immutable: later profile or reservation changes do not alter issued PDFs.
+model GeneratedDocument {
+  id             String   @id @default(cuid())
+  organizationId String
+  hotelId        String
+  reservationId  String
+  createdById    String
+  type           String
+  sequenceNumber Int
+  documentNumber String
+  documentDate   DateTime
+  snapshot       Json
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  hotel        Hotel        @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  reservation  Reservation  @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  createdBy    User         @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, type, sequenceNumber])
+  @@index([hotelId, createdAt])
+  @@index([reservationId, createdAt])
 }
 
 // Internal operating record for each hotel participating in the closed beta.
@@ -426,20 +522,24 @@ model Reservation {
   externalReservationId String? // channel-side id, when imported via a channel
   checkIn               DateTime // UTC midnight (hotel date-only semantics)
   checkOut              DateTime
+  checkInTime           String   @default("14:00") // hotel-local HH:mm
+  checkOutTime          String   @default("12:00") // hotel-local HH:mm
   adults                Int      @default(1)
   children              Int      @default(0)
   status                String   @default("CONFIRMED") // PENDING | CONFIRMED | CANCELLED | CHECKED_IN | CHECKED_OUT | NO_SHOW
+  pricingMode           String   @default("RATE_PLAN") // RATE_PLAN | MANUAL
   currency              String   @default("KZT")
   totalAmount           Decimal  @db.Decimal(14, 2)
   notes                 String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  hotel    Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  guest    Guest     @relation(fields: [guestId, hotelId], references: [id, hotelId], onDelete: Restrict)
-  room     Room      @relation(fields: [roomId, hotelId], references: [id, hotelId], onDelete: Restrict)
-  roomType RoomType  @relation(fields: [roomTypeId, hotelId], references: [id, hotelId], onDelete: Restrict)
-  ratePlan RatePlan? @relation(fields: [ratePlanId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  hotel              Hotel               @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  guest              Guest               @relation(fields: [guestId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  room               Room                @relation(fields: [roomId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  roomType           RoomType            @relation(fields: [roomTypeId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  ratePlan           RatePlan?           @relation(fields: [ratePlanId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  generatedDocuments GeneratedDocument[]
 
   @@unique([hotelId, sourceChannel, externalReservationId])
   @@unique([hotelId, sequenceNumber])

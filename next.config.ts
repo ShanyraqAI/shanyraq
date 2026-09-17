@@ -24,7 +24,10 @@ const nextConfig: NextConfig = {
   experimental: { serverActions: { bodySizeLimit: "4mb" } },
   // Keep heavy native/server-only packages out of the bundler — faster builds
   // and no engine-resolution issues in serverless environments.
-  serverExternalPackages: ["@prisma/client", "bcryptjs"],
+  serverExternalPackages: ["@prisma/client", "bcryptjs", "pdfkit"],
+  outputFileTracingIncludes: {
+    "/api/documents/*/pdf": ["./src/assets/fonts/manrope-variable.ttf"],
+  },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

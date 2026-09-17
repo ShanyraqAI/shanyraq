@@ -67,9 +67,11 @@ export async function createReservationAction(input: unknown): Promise<ActionRes
     const room = await db.room.findFirst({ where: { id: data.roomId, hotelId }, include: { roomType: true } });
     if (!room) return fail(t.reservations.errors.roomNotFound);
 
-    // Тариф теперь необязателен: если не выбран — используем базовую цену типа номера
+    // При тарифном расчёте тариф обязателен; для ручной цены связь с тарифом не сохраняется.
     let ratePlanId = data.ratePlanId;
-    if (ratePlanId) {
+    if (data.pricingMode === "MANUAL") {
+      ratePlanId = undefined;
+    } else if (ratePlanId) {
       const plan = await db.ratePlan.findFirst({ where: { id: ratePlanId, hotelId } });
       if (!plan) return fail(t.reservations.errors.ratePlanNotFound);
       if (plan.roomTypeId !== room.roomTypeId) {
@@ -100,11 +102,15 @@ export async function createReservationAction(input: unknown): Promise<ActionRes
       hotelId,
       guestId: guest.id,
       roomId: data.roomId,
-      ratePlanId: ratePlanId!,
+      ratePlanId,
       checkIn: data.checkIn,
       checkOut: data.checkOut,
+      checkInTime: data.checkInTime,
+      checkOutTime: data.checkOutTime,
       adults: data.adults,
       children: data.children,
+      pricingMode: data.pricingMode,
+      manualTotalAmount: data.manualTotalAmount,
       sourceChannel: data.sourceChannel,
       notes: data.notes ?? null,
       status: "CONFIRMED",
@@ -133,8 +139,12 @@ export async function updateReservationAction(input: unknown): Promise<ActionRes
       ratePlanId: data.ratePlanId,
       checkIn: data.checkIn,
       checkOut: data.checkOut,
+      checkInTime: data.checkInTime,
+      checkOutTime: data.checkOutTime,
       adults: data.adults,
       children: data.children,
+      pricingMode: data.pricingMode,
+      manualTotalAmount: data.manualTotalAmount,
       notes: data.notes ?? null,
     });
     await recordCurrentUserEvent("reservation_updated", { type: "Reservation", id: data.id });
@@ -193,19 +203,24 @@ export async function moveReservationAction(
 
     const room = await db.room.findFirst({ where: { id: roomId, hotelId }, include: { roomType: true } });
     if (!room) return fail(t.reservations.errors.roomNotFound);
-    const plan = await db.ratePlan.findFirst({ where: { roomTypeId: room.roomTypeId, hotelId } });
-    if (!plan) return fail(t.reservations.errors.noPlanForType);
+    const manualPricing = res.pricingMode === "MANUAL";
+    const plan = manualPricing ? null : await db.ratePlan.findFirst({ where: { roomTypeId: room.roomTypeId, hotelId } });
+    if (!manualPricing && !plan) return fail(t.reservations.errors.noPlanForType);
 
     await updateReservationDetails({
       id: res.id,
       hotelId,
       guestId: res.guestId,
       roomId,
-      ratePlanId: plan.id,
+      ratePlanId: plan?.id,
       checkIn,
       checkOut,
+      checkInTime: res.checkInTime,
+      checkOutTime: res.checkOutTime,
       adults: res.adults,
       children: res.children,
+      pricingMode: manualPricing ? "MANUAL" : "RATE_PLAN",
+      manualTotalAmount: manualPricing ? Number(res.totalAmount) : undefined,
       notes: res.notes,
     });
     await recordCurrentUserEvent("reservation_updated", { type: "Reservation", id: res.id });

@@ -56,7 +56,12 @@ export default async function RatesPage() {
         title={t.rates.title}
         description={t.rates.description(HORIZON)}
       />
-      <RatesBoard plans={planVMs} dates={dates} prices={prices} roomTypes={roomTypes} />
+      <RatesBoard
+        plans={planVMs}
+        dates={dates}
+        prices={prices}
+        roomTypes={roomTypes.map((roomType) => ({ id: roomType.id, name: roomType.name }))}
+      />
     </div>
   );
 }

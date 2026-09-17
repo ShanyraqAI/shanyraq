@@ -22,7 +22,7 @@ export function NotificationPreferences({ initial, emailAvailable }: {
   });
 
   return (
-    <div className="max-w-2xl space-y-5 rounded-xl border bg-card p-6 shadow-sm">
+    <div className="max-w-4xl space-y-5 rounded-xl border bg-card p-5 shadow-sm sm:p-6">
       <div className="flex gap-3"><span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary"><BellRing className="size-5" /></span><div><h2 className="font-semibold">Как вас уведомлять</h2><p className="text-sm text-muted-foreground">Уведомления в приложении включены всегда. Email удобно получать прямо на телефоне.</p></div></div>
       {!emailAvailable ? <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Добавьте email в профиле, чтобы включить сообщения вне приложения.</div> : null}
       <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-4">

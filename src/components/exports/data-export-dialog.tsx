@@ -18,7 +18,7 @@ const DATASET_TITLES: Record<Dataset, string> = {
   reports: "Экспорт отчёта",
 };
 
-export function DataExportDialog({ dataset, defaultFrom = "", defaultTo = "", defaultSource = "all" }: { dataset: Dataset; defaultFrom?: string; defaultTo?: string; defaultSource?: string }) {
+export function DataExportDialog({ dataset, defaultFrom = "", defaultTo = "", defaultSource = "all", maxTo }: { dataset: Dataset; defaultFrom?: string; defaultTo?: string; defaultSource?: string; maxTo?: string }) {
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
@@ -28,6 +28,10 @@ export function DataExportDialog({ dataset, defaultFrom = "", defaultTo = "", de
   async function download(format: Format) {
     if (needsRange && (!from || !to || to < from)) {
       toast.error("Укажите корректный период экспорта.");
+      return;
+    }
+    if (dataset === "reports" && maxTo && to > maxTo) {
+      toast.error("Отчёт можно сформировать только по завершённым датам.");
       return;
     }
     setDownloading(format);
@@ -75,8 +79,8 @@ export function DataExportDialog({ dataset, defaultFrom = "", defaultTo = "", de
         </DialogHeader>
         {needsRange ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5"><Label htmlFor="export-from">Дата с</Label><Input id="export-from" type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></div>
-            <div className="space-y-1.5"><Label htmlFor="export-to">Дата по</Label><Input id="export-to" type="date" min={from} value={to} onChange={(event) => setTo(event.target.value)} /></div>
+            <div className="space-y-1.5"><Label htmlFor={`export-${dataset}-from`}>Дата с</Label><Input id={`export-${dataset}-from`} type="date" max={dataset === "reports" ? maxTo : undefined} value={from} onChange={(event) => setFrom(event.target.value)} /></div>
+            <div className="space-y-1.5"><Label htmlFor={`export-${dataset}-to`}>Дата по</Label><Input id={`export-${dataset}-to`} type="date" min={from} max={dataset === "reports" ? maxTo : undefined} value={to} onChange={(event) => setTo(event.target.value)} /></div>
           </div>
         ) : null}
         <div className="grid gap-3 sm:grid-cols-2">

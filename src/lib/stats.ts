@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { ACTIVE_RESERVATION_STATUSES, type ChannelCode } from "@/lib/constants";
+import { ACTIVE_RESERVATION_STATUSES, type ChannelCode, type ReservationStatus } from "@/lib/constants";
 import { addDays, startOfMonth } from "./dates";
 
 /**
@@ -14,8 +14,12 @@ export interface ReservationWithRelations {
   status: string;
   checkIn: Date;
   checkOut: Date;
+  checkInTime: string;
+  checkOutTime: string;
   adults: number;
   children: number;
+  ratePlanId: string | null;
+  pricingMode: string;
   totalAmount: number | { toString(): string };
   currency: string;
   sourceChannel: string;
@@ -34,10 +38,12 @@ export interface DashboardStats {
   occupancyTonight: number; // 0..1
   availableRoomsTonight: number;
   activeReservations: number;
+  activeReservationsByStatus: Record<Extract<ReservationStatus, "PENDING" | "CONFIRMED" | "CHECKED_IN">, number>;
   inHouseGuests: number;
   arrivalsToday: ReservationWithRelations[];
   departuresToday: ReservationWithRelations[];
   revenueMonthToDate: number;
+  revenueByDay: Array<{ date: Date; value: number }>;
   revenueByChannel: Record<string, number>;
   occupancyTrend: DashboardDayPoint[];
   bookingTrend: DashboardDayPoint[];
@@ -59,7 +65,7 @@ export async function getDashboardStats(hotelId: string, date: Date, timeZone = 
   const trendStart = addDays(date, -13);
   const forecastEnd = addDays(date, 7);
 
-  const [totalRooms, tonightReservations, arrivals, departures, monthReservations, activeCount, trendReservations, recentBookings, roomsCleaning, roomsUnavailable] = await Promise.all([
+  const [totalRooms, tonightReservations, arrivals, departures, monthReservations, activeReservations, trendReservations, recentBookings, roomsCleaning, roomsUnavailable] = await Promise.all([
     db.room.count({ where: { hotelId, status: { not: "OUT_OF_ORDER" } } }),
     // Reservations whose stay covers "tonight" (date → date+1).
     db.reservation.findMany({
@@ -87,10 +93,11 @@ export async function getDashboardStats(hotelId: string, date: Date, timeZone = 
         checkIn: { gte: monthStart, lt: nextDay },
         status: { notIn: ["CANCELLED", "NO_SHOW"] },
       },
-      select: { totalAmount: true, sourceChannel: true },
+      select: { totalAmount: true, sourceChannel: true, checkIn: true },
     }),
-    db.reservation.count({
+    db.reservation.findMany({
       where: { hotelId, status: { in: [...ACTIVE_RESERVATION_STATUSES] } },
+      select: { status: true },
     }),
     db.reservation.findMany({
       where: {
@@ -111,11 +118,29 @@ export async function getDashboardStats(hotelId: string, date: Date, timeZone = 
 
   const occupiedTonight = tonightReservations.length;
   const revenueByChannel: Record<string, number> = {};
+  const revenueByDate = new Map<string, number>();
   let revenueMonthToDate = 0;
   for (const r of monthReservations) {
     const amount = Number(r.totalAmount);
     revenueMonthToDate += amount;
     revenueByChannel[r.sourceChannel] = (revenueByChannel[r.sourceChannel] ?? 0) + amount;
+    const dateKey = r.checkIn.toISOString().slice(0, 10);
+    revenueByDate.set(dateKey, (revenueByDate.get(dateKey) ?? 0) + amount);
+  }
+
+  const revenueByDay = Array.from({ length: date.getUTCDate() }, (_, index) => {
+    const pointDate = addDays(monthStart, index);
+    return { date: pointDate, value: revenueByDate.get(pointDate.toISOString().slice(0, 10)) ?? 0 };
+  });
+  const activeReservationsByStatus = {
+    PENDING: 0,
+    CONFIRMED: 0,
+    CHECKED_IN: 0,
+  } satisfies DashboardStats["activeReservationsByStatus"];
+  for (const reservation of activeReservations) {
+    if (reservation.status in activeReservationsByStatus) {
+      activeReservationsByStatus[reservation.status as keyof typeof activeReservationsByStatus] += 1;
+    }
   }
 
   const occupancyPoint = (pointDate: Date): DashboardDayPoint => {
@@ -144,11 +169,13 @@ export async function getDashboardStats(hotelId: string, date: Date, timeZone = 
     occupiedTonight,
     occupancyTonight: totalRooms === 0 ? 0 : Math.min(1, occupiedTonight / totalRooms),
     availableRoomsTonight: Math.max(0, totalRooms - occupiedTonight),
-    activeReservations: activeCount,
+    activeReservations: activeReservations.length,
+    activeReservationsByStatus,
     inHouseGuests: tonightReservations.reduce((sum, r) => sum + r.adults + r.children, 0),
     arrivalsToday: arrivals as ReservationWithRelations[],
     departuresToday: departures as ReservationWithRelations[],
     revenueMonthToDate,
+    revenueByDay,
     revenueByChannel,
     occupancyTrend,
     bookingTrend,

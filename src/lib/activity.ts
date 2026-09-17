@@ -106,9 +106,9 @@ export function parseAuditPayload(value: string | null): AuditPayload {
 
 export function activitySummary(action: string, entityId: string | null, meta: AuditPayload): string {
   const label = ACTION_LABELS[action as keyof typeof ACTION_LABELS] ?? "изменены данные";
-  const reference = typeof meta.reference === "string" ? meta.reference : entityId?.slice(-6).toUpperCase();
+  const reference = typeof meta.reference === "string" ? meta.reference : null;
   const number = typeof meta.number === "string" ? meta.number : null;
-  if (action.startsWith("reservation.")) return `${label}${reference ? ` №${reference}` : ""}`;
+  if (action.startsWith("reservation.")) return `${label}${reference ? ` ${reference}` : ""}`;
   if (action.startsWith("room.")) return `${label}${number ? ` ${number}` : ""}`;
   return label;
 }
