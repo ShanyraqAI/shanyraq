@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { CalendarDays, ChevronLeft, ChevronRight, ListFilter, Plus, Search, Settings2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,6 +14,8 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import type { CalendarFilters, CalendarPreferences } from "./types";
 import { CALENDAR_RANGE_OPTIONS, formatCalendarRange, type CalendarRangeDays } from "@/lib/reservations/calendar-range";
 import { channelLabel, t } from "@/lib/i18n";
+import type { RoomVM } from "@/lib/types";
+import { saveRoomOrderAction } from "@/server/actions/rooms";
 
 interface CalendarToolbarProps {
   anchorISO: string;
@@ -20,6 +24,8 @@ interface CalendarToolbarProps {
   filters: CalendarFilters;
   preferences: CalendarPreferences;
   roomTypeOptions: Array<[string, string]>;
+  rooms: RoomVM[];
+  canReorderRooms: boolean;
   navigating: boolean;
   savingPreferences: boolean;
   searchQuery: string;
@@ -28,13 +34,13 @@ interface CalendarToolbarProps {
   onNavigate: (anchorISO: string, rangeDays?: CalendarRangeDays) => void;
   onShift: (direction: 1 | -1) => void;
   onFiltersChange: (filters: CalendarFilters) => void;
-  onPreferencesChange: (preferences: CalendarPreferences) => void;
+  onPreferencesChange: (preferences: CalendarPreferences) => Promise<boolean>;
   onCreate: () => void;
 }
 
 const EMPTY_FILTERS: CalendarFilters = { roomTypeId: "all", channelId: "all", statusId: "all" };
 const CHANNEL_OPTIONS = ["booking", "ostrovok", "krisha", "direct"];
-const STATUS_OPTIONS = ["PENDING", "CONFIRMED", "CHECKED_IN"] as const;
+const STATUS_OPTIONS = ["PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"] as const;
 const DENSITY_OPTIONS = [["COMFORTABLE", "Комфортный"], ["STANDARD", "Стандартный"], ["COMPACT", "Компактный"]] as const;
 const CURRENCY_OPTIONS = [["SYMBOL", "Символ"], ["CODE", "Код"], ["HIDDEN", "Скрыть"]] as const;
 const VIEW_FIELDS = [
@@ -47,6 +53,7 @@ const VIEW_FIELDS = [
 ] as const;
 
 export function CalendarToolbar(props: CalendarToolbarProps) {
+  const dateInputId = useId();
   const rangeLabel = formatCalendarRange(props.anchorISO, props.rangeDays);
   const activeFilterCount = Object.values(props.filters).filter((value) => value !== "all").length;
 
@@ -55,7 +62,7 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
       <Button variant="outline" size="sm" onClick={() => props.onNavigate(props.todayISO)} disabled={props.navigating}>{t.common.today}</Button>
       <div className="flex items-center">
         <Button variant="ghost" size="icon-sm" onClick={() => props.onShift(-1)} disabled={props.navigating} aria-label="Предыдущий диапазон"><ChevronLeft className="size-4" /></Button>
-        <DateJumpButton {...props} label={rangeLabel} id="calendar-date" />
+        <DateJumpButton {...props} label={rangeLabel} id={dateInputId} />
         <Button variant="ghost" size="icon-sm" onClick={() => props.onShift(1)} disabled={props.navigating} aria-label="Следующий диапазон"><ChevronRight className="size-4" /></Button>
       </div>
       <RangeSelector {...props} />
@@ -124,19 +131,25 @@ function FilterPopover({ filters, roomTypeOptions, onFiltersChange, activeCount 
   );
 }
 
-function ViewSettings({ preferences, onPreferencesChange, savingPreferences }: CalendarToolbarProps) {
+function ViewSettings({ preferences, onPreferencesChange, savingPreferences, rooms, canReorderRooms }: CalendarToolbarProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(preferences);
   return (
     <Sheet open={open} onOpenChange={(next) => { if (next) setDraft(preferences); setOpen(next); }}>
       <SheetTrigger asChild><Button variant="outline" size="sm"><Settings2 className="mr-1.5 size-4" /><span className="hidden xl:inline">Настроить вид</span><span className="xl:hidden">Вид</span></Button></SheetTrigger>
-      <SheetContent className="sm:max-w-md">
+      <SheetContent className="flex h-full flex-col sm:max-w-md">
         <SheetHeader><SheetTitle>Настроить шахматку</SheetTitle><SheetDescription>Настройки сохраняются только для вашего профиля в этом отеле.</SheetDescription></SheetHeader>
-        <div className="space-y-6 overflow-y-auto px-4">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4">
           <div className="space-y-2">
             <Label>Плотность строк</Label>
             <div className="grid h-9 grid-cols-3 gap-1 rounded-lg bg-secondary p-1">{DENSITY_OPTIONS.map(([value, label]) => <button key={value} type="button" aria-pressed={draft.density === value} className="h-7 rounded-md px-2 text-xs font-medium transition-colors active:scale-100 aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm" onClick={() => setDraft({ ...draft, density: value })}>{label}</button>)}</div>
+            <p className="text-xs text-muted-foreground">На телефоне при обзоре 30 дней строки сжаты. Выбранная плотность видна после увеличения.</p>
           </div>
+          <div className="space-y-2">
+            <Label>Цвета бронирований</Label>
+            <div className="grid h-9 grid-cols-2 gap-1 rounded-lg bg-secondary p-1">{([["BRIGHT", "Яркие"], ["CALM", "Спокойные"]] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={draft.reservationColors === value} className="h-7 rounded-md px-2 text-xs font-medium aria-pressed:bg-background aria-pressed:shadow-sm" onClick={() => setDraft({ ...draft, reservationColors: value })}>{label}</button>)}</div>
+          </div>
+          {canReorderRooms ? <RoomOrderSettings rooms={rooms} /> : null}
           <div className="space-y-2">
             <div><Label>Отображение валюты</Label><p className="text-xs text-muted-foreground">Для суммы на полосе бронирования.</p></div>
             <div className="grid h-9 grid-cols-3 gap-1 rounded-lg bg-secondary p-1">{CURRENCY_OPTIONS.map(([value, label]) => <button key={value} type="button" aria-pressed={draft.currencyDisplay === value} className="h-7 rounded-md px-2 text-xs font-medium transition-colors active:scale-100 aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm" onClick={() => setDraft({ ...draft, currencyDisplay: value })}>{label}</button>)}</div>
@@ -151,10 +164,52 @@ function ViewSettings({ preferences, onPreferencesChange, savingPreferences }: C
             ))}
           </div>
         </div>
-        <SheetFooter><Button disabled={savingPreferences} onClick={() => { onPreferencesChange(draft); setOpen(false); }}>Сохранить вид</Button></SheetFooter>
+        <SheetFooter className="shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]"><Button disabled={savingPreferences} onClick={async () => { if (await onPreferencesChange(draft)) setOpen(false); }}>{savingPreferences ? "Сохраняем…" : "Сохранить вид"}</Button></SheetFooter>
       </SheetContent>
     </Sheet>
   );
+}
+
+function RoomOrderSettings({ rooms }: { rooms: RoomVM[] }) {
+  const router = useRouter();
+  const [expanded, setExpanded] = useState(false);
+  const [order, setOrder] = useState(rooms.map((room) => room.id));
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const byId = new Map(rooms.map((room) => [room.id, room]));
+  const categoryIds = Array.from(new Set(rooms.map((room) => room.roomTypeId)));
+
+  function move(fromId: string, toId: string) {
+    if (fromId === toId || byId.get(fromId)?.roomTypeId !== byId.get(toId)?.roomTypeId) return;
+    setOrder((current) => {
+      const next = current.filter((id) => id !== fromId);
+      next.splice(next.indexOf(toId), 0, fromId);
+      return next;
+    });
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const result = await saveRoomOrderAction(order);
+      if (!result.ok) return toast.error(result.error);
+      toast.success(result.message);
+      router.refresh();
+      setExpanded(false);
+    } finally { setSaving(false); }
+  }
+
+  return <div className="space-y-2 border-t pt-4">
+    <button type="button" className="text-sm font-semibold text-primary hover:underline" onClick={() => { setExpanded(!expanded); setOrder(rooms.map((room) => room.id)); }}>Порядок номеров {expanded ? "−" : "+"}</button>
+    {expanded ? <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">Перетащите номер внутри категории или используйте стрелки.</p>
+      {categoryIds.map((categoryId) => {
+        const categoryRooms = order.map((id) => byId.get(id)).filter((room): room is RoomVM => room?.roomTypeId === categoryId);
+        return <div key={categoryId}><div className="mb-1 text-xs font-semibold">{categoryRooms[0]?.roomTypeName}</div><div className="space-y-1">{categoryRooms.map((room, index) => <div key={room.id} draggable onDragStart={(event) => { setDragging(room.id); event.dataTransfer.setData("text/plain", room.id); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); move(dragging ?? event.dataTransfer.getData("text/plain"), room.id); setDragging(null); }} onDragEnd={() => setDragging(null)} className="flex items-center gap-2 rounded-md border bg-card px-2 py-1 text-sm"><span className="cursor-grab text-muted-foreground">⋮⋮</span><span className="flex-1">{room.number}</span><button type="button" disabled={index === 0} aria-label={`Поднять номер ${room.number}`} onClick={() => move(room.id, categoryRooms[index - 1].id)} className="px-2 disabled:opacity-30">↑</button><button type="button" disabled={index === categoryRooms.length - 1} aria-label={`Опустить номер ${room.number}`} onClick={() => move(categoryRooms[index + 1].id, room.id)} className="px-2 disabled:opacity-30">↓</button></div>)}</div></div>;
+      })}
+      <Button size="sm" onClick={save} disabled={saving || order.every((id, index) => id === rooms[index]?.id)}>Сохранить порядок</Button>
+    </div> : null}
+  </div>;
 }
 
 function FilterField({ label, children }: { label: string; children: ReactNode }) {

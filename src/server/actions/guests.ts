@@ -7,6 +7,23 @@ import { upsertGuestSchema, firstZodError } from "@/lib/constants";
 import { ok, fail, type ActionResult } from "@/server/types";
 import { toErrorMessage } from "@/server/errors";
 import { t } from "@/lib/i18n";
+import { getCurrentMembership } from "@/lib/tenant";
+import { z } from "zod";
+
+export async function addGuestNoteAction(input: unknown): Promise<ActionResult> {
+  try {
+    const parsed = z.object({ guestId: z.string().min(1), content: z.string().trim().min(1, "Введите заметку").max(2000) }).safeParse(input);
+    if (!parsed.success) return fail(firstZodError(parsed.error));
+    const hotelId = await requireSessionHotelId({ permission: "GUESTS" });
+    const membership = await getCurrentMembership();
+    if (!membership || membership.hotelId !== hotelId) return fail("Доступ запрещён");
+    const guest = await db.guest.findFirst({ where: { id: parsed.data.guestId, hotelId }, select: { id: true } });
+    if (!guest) return fail(t.guests.errors.guestNotFound);
+    await db.guestNote.create({ data: { hotelId, guestId: guest.id, authorId: membership.userId, content: parsed.data.content } });
+    revalidatePath("/dashboard/guests");
+    return ok(undefined, "Заметка добавлена");
+  } catch (error) { return fail(toErrorMessage(error)); }
+}
 
 export async function upsertGuestAction(input: unknown): Promise<ActionResult<{ id: string }>> {
   try {

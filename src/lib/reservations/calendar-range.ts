@@ -83,7 +83,7 @@ export function calendarStayPosition(
   const halfGap = gap / 2;
   const left = Math.max(0, rawLeft + (clippedStart ? 0 : halfGap));
   const right = Math.min(timelineWidth, rawRight - (clippedEnd ? 0 : halfGap));
-  return { left, width: Math.max(20, right - left), clippedStart, clippedEnd };
+  return { left, width: Math.max(Math.min(20, dayWidth * 0.7), right - left), clippedStart, clippedEnd };
 }
 
 export function staysOverlap(aIn: string, aOut: string, bIn: string, bOut: string) {

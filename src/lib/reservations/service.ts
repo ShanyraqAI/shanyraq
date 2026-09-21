@@ -161,6 +161,7 @@ export interface CreateReservationParams {
   externalReservationId?: string | null;
   status?: ReservationStatus;
   notes?: string | null;
+  paymentMethod?: "ONLINE" | "CASH" | null;
   /** Channel-originated imports must not recursively trigger another pull. */
   enqueueChannelSync?: boolean;
 }
@@ -189,7 +190,7 @@ export async function createReservation(params: CreateReservationParams) {
         externalReservationId: params.externalReservationId ?? null, checkIn, checkOut,
         checkInTime: params.checkInTime ?? "14:00", checkOutTime: params.checkOutTime ?? "12:00",
         adults: params.adults, children: params.children, status: params.status ?? "CONFIRMED", pricingMode,
-        currency: price.currency, totalAmount: price.total, notes: params.notes ?? null,
+        currency: price.currency, totalAmount: price.total, notes: params.notes ?? null, paymentMethod: params.paymentMethod ?? null,
       },
     });
     await recomputeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, tx);
@@ -243,6 +244,7 @@ export interface UpdateReservationParams {
   pricingMode?: ReservationPricingMode;
   manualTotalAmount?: number;
   notes?: string | null;
+  paymentMethod?: "ONLINE" | "CASH" | null;
 }
 
 export async function updateReservationDetails(params: UpdateReservationParams) {
@@ -275,7 +277,7 @@ export async function updateReservationDetails(params: UpdateReservationParams) 
         ratePlanId: pricingMode === "MANUAL" ? null : params.ratePlanId,
         checkIn, checkOut, checkInTime: params.checkInTime ?? "14:00", checkOutTime: params.checkOutTime ?? "12:00",
         adults: params.adults, children: params.children, pricingMode,
-        currency: price.currency, totalAmount: price.total, notes: params.notes ?? null,
+        currency: price.currency, totalAmount: price.total, notes: params.notes ?? null, paymentMethod: params.paymentMethod === undefined ? existing.paymentMethod : params.paymentMethod,
       },
     });
     await recomputeAvailability(params.hotelId, existing.roomTypeId, existing.checkIn, existing.checkOut, tx);

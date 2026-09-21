@@ -77,6 +77,7 @@ model User {
   supportRequestActivities SupportRequestActivity[] @relation("SupportActivityActor")
   assignedBetaHotels       BetaHotelProfile[]       @relation("BetaAssignedAdmin")
   calendarPreferences      CalendarPreference[]
+  guestNotes               GuestNote[]
   generatedDocuments       GeneratedDocument[]      @relation("DocumentCreator")
 }
 
@@ -205,6 +206,7 @@ model Hotel {
   betaProfile         BetaHotelProfile?
   entitySequence      HotelEntitySequence?
   calendarPreferences CalendarPreference[]
+  guestNotes          GuestNote[]
   generatedDocuments  GeneratedDocument[]
 
   @@unique([id, orgId])
@@ -224,6 +226,7 @@ model CalendarPreference {
   showReservationId    Boolean  @default(false)
   showNotes            Boolean  @default(false)
   currencyDisplay      String   @default("SYMBOL") // SYMBOL | CODE | HIDDEN
+  reservationColors    String   @default("BRIGHT") // BRIGHT | CALM
   collapsedRoomTypeIds String[] @default([])
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -478,6 +481,7 @@ model Room {
   roomTypeId String
   number     String
   floor      Int    @default(1)
+  sortOrder  Int    @default(0)
   status     String @default("AVAILABLE") // AVAILABLE | OCCUPIED | CLEANING | MAINTENANCE | OUT_OF_ORDER
 
   hotel        Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
@@ -504,10 +508,26 @@ model Guest {
 
   hotel        Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
   reservations Reservation[]
+  internalNotes GuestNote[]
 
   @@unique([id, hotelId])
   @@unique([hotelId, sequenceNumber])
   @@index([hotelId, fullName])
+}
+
+model GuestNote {
+  id        String   @id @default(cuid())
+  hotelId   String
+  guestId   String
+  authorId  String
+  content   String   @db.VarChar(2000)
+  createdAt DateTime @default(now())
+
+  hotel  Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  guest  Guest @relation(fields: [guestId, hotelId], references: [id, hotelId], onDelete: Cascade)
+  author User  @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([hotelId, guestId, createdAt])
 }
 
 model Reservation {
@@ -531,6 +551,7 @@ model Reservation {
   currency              String   @default("KZT")
   totalAmount           Decimal  @db.Decimal(14, 2)
   notes                 String?
+  paymentMethod         String?  // ONLINE | CASH; nullable for older reservations
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 

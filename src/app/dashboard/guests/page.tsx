@@ -14,7 +14,7 @@ export default async function GuestsPage({ searchParams }: { searchParams: Promi
   const params = await searchParams;
   const initialSelectedId = typeof params.guest === "string" ? params.guest : null;
   const [guestsRaw, reservationsRaw] = await Promise.all([
-    db.guest.findMany({ where: { hotelId }, orderBy: { sequenceNumber: "desc" } }),
+    db.guest.findMany({ where: { hotelId }, orderBy: { sequenceNumber: "desc" }, include: { internalNotes: { orderBy: { createdAt: "desc" }, include: { author: { select: { fullName: true } } } } } }),
     getAllReservations(hotelId),
   ]);
 
@@ -31,6 +31,7 @@ export default async function GuestsPage({ searchParams }: { searchParams: Promi
       phone: g.phone,
       country: g.country,
       notes: g.notes,
+      internalNotes: g.internalNotes.map((note) => ({ id: note.id, content: note.content, createdAt: note.createdAt.toISOString(), authorName: note.author.fullName })),
       reservationCount: mine.length,
       lastStay: last?.checkIn ?? null,
       lastChannel: last?.channel ?? null,

@@ -9,6 +9,7 @@ import { calendarTimelineRange, parseCalendarNavigation } from "@/lib/reservatio
 import { CalendarOpenTracker } from "@/components/analytics/calendar-open-tracker";
 import { getCurrentMembership } from "@/lib/tenant";
 import { DEFAULT_CALENDAR_PREFERENCES, type CalendarDensity } from "@/components/calendar/types";
+import { hasHotelPermission } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -31,14 +32,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
     db.room.findMany({
       where: { hotelId },
       include: { roomType: { select: { name: true } } },
-      orderBy: { number: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { number: "asc" }],
     }),
     db.ratePlan.findMany({ where: { hotelId }, orderBy: { name: "asc" } }),
     db.guest.findMany({ where: { hotelId }, orderBy: { fullName: "asc" } }),
     db.reservation.findMany({
       where: {
         hotelId,
-        status: { not: "CANCELLED" },
         checkIn: { lt: range.endExclusive },
         checkOut: { gt: range.start },
       },
@@ -58,15 +58,17 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
 
   const roomTypeNames = new Map(roomTypes.map((roomType) => [roomType.id, roomType.name]));
 
+  const roomTypeOrder = new Map(roomTypes.map((roomType, index) => [roomType.id, index]));
   const rooms: RoomVM[] = roomsRaw.map((r) => ({
     id: r.id,
     number: r.number,
     floor: r.floor,
     status: r.status as RoomVM["status"],
+    sortOrder: r.sortOrder,
     roomTypeId: r.roomTypeId,
     roomTypeName: r.roomType.name,
     guestTonight: null,
-  }));
+  })).sort((a, b) => (roomTypeOrder.get(a.roomTypeId) ?? 0) - (roomTypeOrder.get(b.roomTypeId) ?? 0) || (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.number.localeCompare(b.number, "ru", { numeric: true }));
   const ratePlans: RatePlanVM[] = ratePlansRaw.map((p) => ({
     id: p.id,
     sequenceNumber: p.sequenceNumber,
@@ -100,6 +102,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
         reservations={reservationsRaw.map(toReservationVM)}
         ratePlans={ratePlans}
         guests={guests}
+        canReorderRooms={Boolean(membership && hasHotelPermission(membership, "ROOMS"))}
         hotelCurrency={hotel.currency}
         todayISO={todayISO}
         rangeDays={rangeDays}
@@ -113,6 +116,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
           showReservationId: savedPreferences.showReservationId,
           showNotes: savedPreferences.showNotes,
           currencyDisplay: savedPreferences.currencyDisplay as "SYMBOL" | "CODE" | "HIDDEN",
+          reservationColors: savedPreferences.reservationColors as "BRIGHT" | "CALM",
           collapsedRoomTypeIds: savedPreferences.collapsedRoomTypeIds,
         } : DEFAULT_CALENDAR_PREFERENCES}
       />

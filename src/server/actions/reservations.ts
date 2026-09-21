@@ -113,6 +113,7 @@ export async function createReservationAction(input: unknown): Promise<ActionRes
       manualTotalAmount: data.manualTotalAmount,
       sourceChannel: data.sourceChannel,
       notes: data.notes ?? null,
+      paymentMethod: data.paymentMethod,
       status: "CONFIRMED",
     });
     await recordCurrentUserEvent("reservation_created", { type: "Reservation", id: reservation.id }, { source: data.sourceChannel });
@@ -146,6 +147,7 @@ export async function updateReservationAction(input: unknown): Promise<ActionRes
       pricingMode: data.pricingMode,
       manualTotalAmount: data.manualTotalAmount,
       notes: data.notes ?? null,
+      paymentMethod: data.paymentMethod,
     });
     await recordCurrentUserEvent("reservation_updated", { type: "Reservation", id: data.id });
     if (guest.created) await recordCurrentUserEvent("guest_created", { type: "Guest", id: guest.id });

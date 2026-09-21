@@ -28,6 +28,7 @@ export interface RoomVM {
   id: string;
   number: string;
   floor: number;
+  sortOrder?: number;
   status: RoomStatus;
   roomTypeId: string;
   roomTypeName: string;
@@ -75,6 +76,7 @@ export interface ReservationVM {
   externalReservationId: string | null;
   notes: string | null;
   createdAt: string; // full ISO instant
+  paymentMethod?: string | null;
 }
 
 export function toReservationVM(r: ReservationWithRelations): ReservationVM {
@@ -105,6 +107,7 @@ export function toReservationVM(r: ReservationWithRelations): ReservationVM {
     externalReservationId: r.externalReservationId,
     notes: r.notes,
     createdAt: r.createdAt.toISOString(),
+    paymentMethod: r.paymentMethod ?? null,
   };
 }
 

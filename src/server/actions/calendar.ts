@@ -17,6 +17,7 @@ const calendarPreferencesSchema = z.object({
   showReservationId: z.boolean(),
   showNotes: z.boolean(),
   currencyDisplay: z.enum(["SYMBOL", "CODE", "HIDDEN"]),
+  reservationColors: z.enum(["BRIGHT", "CALM"]).default("BRIGHT"),
   collapsedRoomTypeIds: z.array(z.string().min(1).max(128)).max(100),
 });
 

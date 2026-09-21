@@ -264,13 +264,27 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
     { guest: "Hans Müller", room: "201", roomTypeId: deluxe.id, planId: deluxeRate.id, planBase: dlxPlanBase, in_: 3, out: 6, status: "CONFIRMED", channel: "booking", adults: 2, children: 0, external: true },
     { guest: "Daniyar Abenov", room: "301", roomTypeId: suite.id, planId: suiteRate.id, planBase: suitPlanBase, in_: 2, out: 4, status: "CONFIRMED", channel: "ostrovok", adults: 2, children: 2, external: true },
     { guest: "Maria Gonzalez", room: "103", roomTypeId: standard.id, planId: standardRate.id, planBase: stdPlanBase, in_: 3, out: 6, status: "CONFIRMED", channel: "booking", adults: 2, children: 0, external: true },
-    { guest: "Elena Kim", room: "302", roomTypeId: suite.id, planId: suiteRate.id, planBase: suitPlanBase, in_: 2, out: 3, status: "CONFIRMED", channel: "direct", adults: 2, children: 0 },
+    { guest: "Elena Kim", room: "302", roomTypeId: suite.id, planId: suiteRate.id, planBase: suitPlanBase, in_: 5, out: 7, status: "CONFIRMED", channel: "direct", adults: 2, children: 0 },
     { guest: "Almas Dzhenissov", room: "101", roomTypeId: standard.id, planId: standardNonRefundable.id, planBase: 22000, in_: 2, out: 6, status: "CONFIRMED", channel: "ostrovok", adults: 1, children: 0, external: true },
     { guest: "Sofia Rossi", room: "103", roomTypeId: standard.id, planId: standardRate.id, planBase: stdPlanBase, in_: 7, out: 10, status: "PENDING", channel: "direct", adults: 2, children: 1, notes: "Ожидает подтверждения авиабилетов." },
     { guest: "Viktor Petrov", room: "102", roomTypeId: standard.id, planId: standardRate.id, planBase: stdPlanBase, in_: 5, out: 7, status: "CANCELLED", channel: "booking", adults: 2, children: 0, external: true },
     { guest: "Chen Wei", room: "301", roomTypeId: suite.id, planId: suiteRate.id, planBase: suitPlanBase, in_: 9, out: 13, status: "CONFIRMED", channel: "booking", adults: 2, children: 0, external: true },
     { guest: "Madina Ospanova", room: "202", roomTypeId: deluxe.id, planId: deluxeRate.id, planBase: dlxPlanBase, in_: 12, out: 15, status: "CONFIRMED", channel: "krisha", adults: 2, children: 1, external: true },
   ];
+
+  // Mirror of the DB exclusion constraint (Reservation_no_room_overlap):
+  // catch template mistakes with a readable message before hitting Postgres.
+  const activeByRoom = new Map<string, ResTemplate[]>();
+  for (const tplt of templates) {
+    if (!["PENDING", "CONFIRMED", "CHECKED_IN"].includes(tplt.status)) continue;
+    const sameRoom = activeByRoom.get(tplt.room) ?? [];
+    const clash = sameRoom.find((other) => other.in_ < tplt.out && tplt.in_ < other.out);
+    if (clash) {
+      throw new Error(`Demo seed: overlapping stays in room ${tplt.room} — ${tplt.guest} (${tplt.in_}..${tplt.out}) vs ${clash.guest} (${clash.in_}..${clash.out})`);
+    }
+    sameRoom.push(tplt);
+    activeByRoom.set(tplt.room, sameRoom);
+  }
 
   let externalSeq = 0;
   let createdCount = 0;

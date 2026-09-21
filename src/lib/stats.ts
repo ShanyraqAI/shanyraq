@@ -24,6 +24,7 @@ export interface ReservationWithRelations {
   currency: string;
   sourceChannel: string;
   notes: string | null;
+  paymentMethod?: string | null;
   externalReservationId: string | null;
   createdAt: Date;
   guest: { id: string; fullName: string; email: string | null; phone: string | null; country: string | null };

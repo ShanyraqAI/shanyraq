@@ -56,6 +56,7 @@ export interface ReservationFormProps {
     totalAmount?: number;
     sourceChannel?: string;
     notes?: string | null;
+    paymentMethod?: string | null;
   };
 }
 
@@ -101,6 +102,7 @@ export function ReservationFormDialog({
   const [children, setChildren] = useState(String(initial?.children ?? 0));
   const [channel, setChannel] = useState(initial?.sourceChannel ?? "direct");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [paymentMethod, setPaymentMethod] = useState<"ONLINE" | "CASH" | "UNSPECIFIED">(initial?.paymentMethod === "ONLINE" || initial?.paymentMethod === "CASH" ? initial.paymentMethod : "UNSPECIFIED");
 
   const selectedRoom = rooms.find((r) => r.id === roomId);
   // Для персонализации: берем базовую цену типа номера как fallback, если тарифов нет
@@ -161,6 +163,7 @@ export function ReservationFormDialog({
           manualTotalAmount: pricingMode === "MANUAL" ? manualAmount : undefined,
           sourceChannel: channel as (typeof CHANNEL_CODES)[number],
           notes: notes || undefined,
+          paymentMethod: paymentMethod === "UNSPECIFIED" ? null : paymentMethod,
         };
         const result = await createReservationAction(payload);
         if (!result.ok) {
@@ -185,6 +188,7 @@ export function ReservationFormDialog({
           pricingMode,
           manualTotalAmount: pricingMode === "MANUAL" ? manualAmount : undefined,
           notes: notes || undefined,
+          paymentMethod: paymentMethod === "UNSPECIFIED" ? null : paymentMethod,
         });
         if (!result.ok) {
           toast.error(result.error ?? t.reservations.toasts.updateFailed);
@@ -355,6 +359,13 @@ export function ReservationFormDialog({
 
           {advancedOpen ? (
             <div className="space-y-4 rounded-lg border bg-secondary/20 p-3">
+              <div className="space-y-1.5">
+                <Label>Способ оплаты</Label>
+                <Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as typeof paymentMethod)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="UNSPECIFIED">Не указан</SelectItem><SelectItem value="ONLINE">Онлайн</SelectItem><SelectItem value="CASH">Наличные</SelectItem></SelectContent>
+                </Select>
+              </div>
               {PRODUCT_AVAILABILITY.channels ? <div className="space-y-1.5">
                   <Label>{t.reservations.form.source}</Label>
                   {mode === "create" ? (

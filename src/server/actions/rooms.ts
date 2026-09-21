@@ -13,6 +13,30 @@ import { recomputeExistingAvailability } from "@/lib/availability/service";
 import { enqueueHotelChannelSyncs } from "@/lib/channels/sync-outbox";
 import { wakeChannelSyncWorker } from "@/server/channel-sync";
 import { recordCurrentUserEvent } from "@/lib/analytics/service";
+import { z } from "zod";
+
+export async function saveRoomOrderAction(input: unknown): Promise<ActionResult> {
+  try {
+    const parsed = z.array(z.string().min(1)).min(1).max(1000).safeParse(input);
+    if (!parsed.success || new Set(parsed.data).size !== parsed.data.length) return fail("Некорректный порядок номеров");
+    const hotelId = await requireSessionHotelId({ permission: "ROOMS" });
+    await db.$transaction(async (tx) => {
+      const rooms = await tx.room.findMany({ where: { hotelId }, select: { id: true, roomTypeId: true } });
+      if (rooms.length !== parsed.data.length || rooms.some((room) => !parsed.data.includes(room.id))) throw new Error("Список номеров изменился. Обновите страницу.");
+      const categoryOrder = new Map<string, number>();
+      for (const id of parsed.data) {
+        const room = rooms.find((item) => item.id === id)!;
+        const position = categoryOrder.get(room.roomTypeId) ?? 0;
+        await tx.room.update({ where: { id: room.id }, data: { sortOrder: position } });
+        categoryOrder.set(room.roomTypeId, position + 1);
+      }
+    });
+    revalidatePath("/dashboard/calendar");
+    return ok(undefined, "Порядок номеров сохранён");
+  } catch (error) {
+    return fail(toErrorMessage(error));
+  }
+}
 
 export async function setRoomStatusAction(input: unknown): Promise<ActionResult> {
   try {
@@ -85,9 +109,10 @@ export async function upsertRoomAction(input: unknown): Promise<ActionResult<{ i
           where: { id: data.id, hotelId },
           select: { roomTypeId: true, number: true, floor: true, status: true, roomType: { select: { name: true } } },
         });
+        const nextOrder = previous.roomTypeId === roomType.id ? undefined : ((await tx.room.aggregate({ where: { hotelId, roomTypeId: roomType.id }, _max: { sortOrder: true } }))._max.sortOrder ?? -1);
         const result = await tx.room.updateMany({
           where: { id: data.id, hotelId },
-          data: { number: data.number, floor: data.floor, status: data.status, roomTypeId: roomType.id },
+          data: { number: data.number, floor: data.floor, status: data.status, roomTypeId: roomType.id, ...(nextOrder === undefined ? {} : { sortOrder: nextOrder + 1 }) },
         });
         if (result.count !== 1) throw new Error(t.rooms.errors.roomNotFound);
         await recomputeExistingAvailability(hotelId, [previous.roomTypeId, roomType.id], tx);
@@ -101,8 +126,9 @@ export async function upsertRoomAction(input: unknown): Promise<ActionResult<{ i
         };
       }
 
+      const maxOrder = (await tx.room.aggregate({ where: { hotelId, roomTypeId: roomType.id }, _max: { sortOrder: true } }))._max.sortOrder ?? -1;
       const created = await tx.room.create({
-        data: { hotelId, roomTypeId: roomType.id, number: data.number, floor: data.floor, status: data.status },
+        data: { hotelId, roomTypeId: roomType.id, number: data.number, floor: data.floor, status: data.status, sortOrder: maxOrder + 1 },
         select: { id: true },
       });
       await recomputeExistingAvailability(hotelId, [roomType.id], tx);

@@ -40,11 +40,19 @@ export default async function DashboardPage() {
   const guests: GuestVM[] = guestsRaw.map((guest) => ({ id: guest.id, sequenceNumber: guest.sequenceNumber, fullName: guest.fullName, email: guest.email, phone: guest.phone, country: guest.country, notes: guest.notes }));
   const permissions = resolveHotelPermissions(user ?? {});
   const waitingArrivals = stats.arrivalsToday.filter((reservation) => !["CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"].includes(reservation.status)).length;
+  const unusualArrivals = stats.arrivalsToday
+    .filter((reservation) => !["CANCELLED", "NO_SHOW", "CHECKED_OUT"].includes(reservation.status) && (reservation.checkInTime < "14:00" || reservation.checkInTime > "20:00"))
+    .map((reservation) => ({ label: `Номер ${reservation.room.number} — ${reservation.checkInTime < "14:00" ? "ранний" : "поздний"} заезд в ${reservation.checkInTime} · ${reservation.guest.fullName}`, href: "/dashboard/reservations" }));
+  const unusualDepartures = stats.departuresToday
+    .filter((reservation) => !["CANCELLED", "NO_SHOW"].includes(reservation.status) && reservation.checkOutTime !== "12:00")
+    .map((reservation) => ({ label: `Номер ${reservation.room.number} — ${reservation.checkOutTime < "12:00" ? "ранний" : "поздний"} выезд в ${reservation.checkOutTime} · ${reservation.guest.fullName}`, href: "/dashboard/reservations" }));
   const attentionItems = [
-    waitingArrivals ? { label: `${waitingArrivals} гостей ожидают заселения сегодня`, href: "/dashboard/reservations" } : null,
-    stats.roomsCleaning ? { label: `${stats.roomsCleaning} ${roomWord(stats.roomsCleaning)} сейчас на уборке`, href: "/dashboard/rooms" } : null,
-    stats.roomsUnavailable ? { label: `${stats.roomsUnavailable} ${roomWord(stats.roomsUnavailable)} недоступно из-за обслуживания`, href: "/dashboard/rooms" } : null,
-  ].filter((item): item is { label: string; href: string } => Boolean(item));
+    ...unusualDepartures,
+    ...unusualArrivals,
+    ...(stats.roomsUnavailable ? [{ label: `${stats.roomsUnavailable} ${roomWord(stats.roomsUnavailable)} недоступно из-за обслуживания`, href: "/dashboard/rooms" }] : []),
+    ...(stats.roomsCleaning ? [{ label: `${stats.roomsCleaning} ${roomWord(stats.roomsCleaning)} сейчас на уборке`, href: "/dashboard/rooms" }] : []),
+    ...(waitingArrivals ? [{ label: `${waitingArrivals} гостей ожидают заселения сегодня`, href: "/dashboard/reservations" }] : []),
+  ].slice(0, 5);
 
   return <div className="space-y-5">
     <PageHeader title={user?.firstName ? `${greeting(hotel.timezone)}, ${user.firstName}` : greeting(hotel.timezone)} description={`${hotel.name} · ${formatMediumDate(day)}`}>

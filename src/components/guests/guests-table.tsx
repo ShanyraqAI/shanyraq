@@ -32,7 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/page-header";
 import { ChannelLabel, ReservationStatusBadge } from "@/components/shared/status-badge";
-import { upsertGuestAction } from "@/server/actions/guests";
+import { addGuestNoteAction, upsertGuestAction } from "@/server/actions/guests";
 import { guestDisplayId, reservationDisplayId, type ReservationVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
@@ -46,6 +46,7 @@ export interface GuestRow {
   phone: string | null;
   country: string | null;
   notes: string | null;
+  internalNotes: Array<{ id: string; content: string; createdAt: string; authorName: string }>;
   reservationCount: number;
   lastStay: string | null; // ISO date of most recent check-in
   lastChannel: string | null;
@@ -62,6 +63,23 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [editOpen, setEditOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
+  const router = useRouter();
+
+  async function addNote() {
+    if (!selectedId) return;
+    setSavingNote(true);
+    try {
+      const result = await addGuestNoteAction({ guestId: selectedId, content: noteText });
+      if (!result.ok) return toast.error(result.error);
+      setNoteText("");
+      setNoteOpen(false);
+      toast.success(result.message);
+      router.refresh();
+    } finally { setSavingNote(false); }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -198,6 +216,12 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
                   “{selected.notes}”
                 </div>
               ) : null}
+
+              <section className="space-y-2 border-t pt-3">
+                <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">Внутренние заметки</h3><Button type="button" size="sm" variant="outline" onClick={() => setNoteOpen((value) => !value)}><Plus className="size-3.5" /> Добавить заметку</Button></div>
+                {noteOpen ? <div className="space-y-2"><Textarea aria-label="Новая заметка о госте" value={noteText} onChange={(event) => setNoteText(event.target.value)} maxLength={2000} rows={2} placeholder="Видно только сотрудникам отеля" /><Button type="button" size="sm" disabled={savingNote || !noteText.trim()} onClick={addNote}>Сохранить заметку</Button></div> : null}
+                {selected.internalNotes.length ? <ul className="max-h-40 space-y-2 overflow-y-auto">{selected.internalNotes.map((note) => <li key={note.id} className="rounded-lg bg-secondary/40 p-2.5 text-sm"><p className="whitespace-pre-wrap">{note.content}</p><p className="mt-1 text-xs text-muted-foreground">{note.authorName} · {new Date(note.createdAt).toLocaleDateString("ru-RU")}</p></li>)}</ul> : <p className="text-xs text-muted-foreground">Заметок пока нет.</p>}
+              </section>
 
               <div>
                 <h3 className="mb-2 text-sm font-semibold">{t.guests.profile.historyTitle}</h3>

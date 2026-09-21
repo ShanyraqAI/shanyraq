@@ -135,6 +135,7 @@ export function ReservationDetailsDialog({
               <Field label={t.dashboard.table.channel} value={<ChannelLabel channel={r.channel} />} />
               <Field label={t.reservations.form.checkIn} value={`${formatMediumDate(new Date(`${r.checkIn}T00:00:00Z`))}, ${r.checkInTime}`} />
               <Field label={t.reservations.form.checkOut} value={`${formatMediumDate(new Date(`${r.checkOut}T00:00:00Z`))}, ${r.checkOutTime}`} />
+              <Field label="Способ оплаты" value={r.paymentMethod === "CASH" ? "Наличные" : r.paymentMethod === "ONLINE" ? "Онлайн" : "Не указан"} />
               <Field label={t.dashboard.table.nights} value={Math.round((Date.parse(`${r.checkOut}T00:00:00Z`) - Date.parse(`${r.checkIn}T00:00:00Z`)) / 86_400_000)} />
             </dl>
 
@@ -241,6 +242,7 @@ export function ReservationDetailsDialog({
             pricingMode: r.pricingMode,
             totalAmount: r.totalAmount,
             notes: r.notes ?? "",
+            paymentMethod: r.paymentMethod,
           }}
         />
       )}

@@ -3,6 +3,7 @@ import type { ReservationVM, RoomVM, RatePlanVM, GuestVM } from "@/lib/types";
 /** Everything the calendar board needs, fully serialized. */
 export interface CalendarBoardData {
   rooms: RoomVM[];
+  canReorderRooms: boolean;
   reservations: ReservationVM[];
   ratePlans: RatePlanVM[];
   guests: GuestVM[];
@@ -23,6 +24,7 @@ export interface CalendarPreferences {
   showReservationId: boolean;
   showNotes: boolean;
   currencyDisplay: CalendarCurrencyDisplay;
+  reservationColors: "BRIGHT" | "CALM";
   collapsedRoomTypeIds: string[];
 }
 
@@ -35,6 +37,7 @@ export const DEFAULT_CALENDAR_PREFERENCES: CalendarPreferences = {
   showReservationId: false,
   showNotes: false,
   currencyDisplay: "SYMBOL",
+  reservationColors: "BRIGHT",
   collapsedRoomTypeIds: [],
 };
 
