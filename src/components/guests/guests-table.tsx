@@ -30,6 +30,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/page-header";
 import { ChannelLabel, ReservationStatusBadge } from "@/components/shared/status-badge";
 import { addGuestNoteAction, upsertGuestAction } from "@/server/actions/guests";
@@ -129,7 +130,8 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
           action={<Button size="sm" onClick={() => setCreateOpen(true)}><Plus className="size-4" /> Добавить гостя</Button>}
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
+        <>
+        <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-sm sm:block">
           <Table>
             <TableHeader>
               <TableRow className="bg-secondary/50 hover:bg-secondary/50">
@@ -173,11 +175,13 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
             </TableBody>
           </Table>
         </div>
+        <div className="grid gap-2 sm:hidden">{filtered.map((guest) => <button key={guest.id} type="button" onClick={() => setSelectedId(guest.id)} className="flex min-h-16 items-center gap-3 rounded-xl border bg-card p-3 text-left shadow-xs"><span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">{guest.fullName.slice(0, 1)}</span><span className="min-w-0 flex-1"><span className="block truncate font-medium">{guest.fullName}</span><span className="block truncate text-xs text-muted-foreground">{guest.phone ?? guest.email ?? guestDisplayId(guest.sequenceNumber)}</span></span><span className="text-xs tabular-nums text-muted-foreground">{guest.reservationCount} брон.</span></button>)}{filtered.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">{t.guests.searchEmpty}</p> : null}</div>
+        </>
       )}
 
       {/* Details modal — full-screen drawer on mobile via responsive Dialog */}
       <Dialog open={Boolean(selected)} onOpenChange={(o) => !o && setSelectedId(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+        <DialogContent className="flex max-h-dvh flex-col gap-3 overflow-hidden rounded-none p-4 sm:max-h-[90vh] sm:max-w-xl sm:rounded-lg sm:p-6">
           {selected && (
             <>
               <DialogHeader>
@@ -191,6 +195,18 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
                   {guestDisplayId(selected.sequenceNumber)} · {t.guests.profile.subtitle}
                 </DialogDescription>
               </DialogHeader>
+
+              <div className="space-y-2 rounded-xl bg-secondary/30 p-3 sm:hidden">
+                <a href={selected.phone ? `tel:${selected.phone}` : undefined} className="flex items-center gap-2 text-sm font-medium"><Phone className="size-4 text-primary" />{selected.phone ?? "Телефон не указан"}</a>
+                <div className="flex flex-wrap items-center gap-2 text-xs"><span className="text-muted-foreground">Последнее проживание:</span>{history[0] ? <ReservationStatusBadge status={history[0].status} /> : <span>Нет бронирований</span>}</div>
+                {selected.notes ? <p className="line-clamp-2 text-xs text-muted-foreground">{selected.notes}</p> : null}
+                <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>Редактировать гостя</Button>
+              </div>
+
+              <Tabs defaultValue="stays" className="min-h-0 flex-1 overflow-hidden" key={selected.id}>
+                <TabsList className="grid w-full shrink-0 grid-cols-3"><TabsTrigger value="stays">Проживания</TabsTrigger><TabsTrigger value="notes">Заметки</TabsTrigger><TabsTrigger value="details">Данные</TabsTrigger></TabsList>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-3">
+                <TabsContent value="details" className="space-y-3">
 
               <dl className="grid overflow-hidden rounded-xl border bg-secondary/15 sm:grid-cols-2">
                 <div className="min-w-0 border-b p-3.5 sm:border-r">
@@ -217,13 +233,14 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
                 </div>
               ) : null}
 
-              <section className="space-y-2 border-t pt-3">
+                </TabsContent>
+                <TabsContent value="notes"><section className="space-y-2">
                 <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">Внутренние заметки</h3><Button type="button" size="sm" variant="outline" onClick={() => setNoteOpen((value) => !value)}><Plus className="size-3.5" /> Добавить заметку</Button></div>
                 {noteOpen ? <div className="space-y-2"><Textarea aria-label="Новая заметка о госте" value={noteText} onChange={(event) => setNoteText(event.target.value)} maxLength={2000} rows={2} placeholder="Видно только сотрудникам отеля" /><Button type="button" size="sm" disabled={savingNote || !noteText.trim()} onClick={addNote}>Сохранить заметку</Button></div> : null}
                 {selected.internalNotes.length ? <ul className="max-h-40 space-y-2 overflow-y-auto">{selected.internalNotes.map((note) => <li key={note.id} className="rounded-lg bg-secondary/40 p-2.5 text-sm"><p className="whitespace-pre-wrap">{note.content}</p><p className="mt-1 text-xs text-muted-foreground">{note.authorName} · {new Date(note.createdAt).toLocaleDateString("ru-RU")}</p></li>)}</ul> : <p className="text-xs text-muted-foreground">Заметок пока нет.</p>}
-              </section>
+              </section></TabsContent>
 
-              <div>
+              <TabsContent value="stays"><div>
                 <h3 className="mb-2 text-sm font-semibold">{t.guests.profile.historyTitle}</h3>
                 {history.length === 0 ? (
                   <p className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
@@ -249,9 +266,11 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
                     ))}
                   </ul>
                 )}
-              </div>
+              </div></TabsContent>
+                </div>
+              </Tabs>
 
-              <DialogFooter>
+              <DialogFooter className="hidden sm:flex">
                 <Button variant="outline" onClick={() => setEditOpen(true)}>
                   {t.guests.profile.editButton}
                 </Button>

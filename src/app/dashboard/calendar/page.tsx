@@ -5,7 +5,7 @@ import { toReservationVM, type GuestVM, type RatePlanVM, type RoomVM } from "@/l
 import { t } from "@/lib/i18n";
 import { requireSectionAccess } from "@/server/guards";
 import { toISODate, todayInTimeZone } from "@/lib/dates";
-import { calendarTimelineRange, parseCalendarNavigation } from "@/lib/reservations/calendar-range";
+import { calendarTimelineRange, parseCalendarNavigation, parseCalendarRange } from "@/lib/reservations/calendar-range";
 import { CalendarOpenTracker } from "@/components/analytics/calendar-open-tracker";
 import { getCurrentMembership } from "@/lib/tenant";
 import { DEFAULT_CALENDAR_PREFERENCES, type CalendarDensity } from "@/components/calendar/types";
@@ -25,9 +25,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
   const membership = await getCurrentMembership();
   const params = await searchParams;
   const todayISO = toISODate(todayInTimeZone(hotel.timezone));
-  const { anchorISO, rangeDays } = parseCalendarNavigation(params.date, params.range, todayISO);
+  const { anchorISO } = parseCalendarNavigation(params.date, params.range, todayISO);
+  const savedPreferences = membership ? await db.calendarPreference.findUnique({
+    where: { userId_hotelId: { userId: membership.userId, hotelId } },
+  }) : null;
+  const rangeDays = params.range === undefined ? parseCalendarRange(String(savedPreferences?.rangeDays ?? 14)) : parseCalendarRange(params.range);
   const range = calendarTimelineRange(anchorISO, rangeDays);
-  const [roomTypes, roomsRaw, ratePlansRaw, guestsRaw, reservationsRaw, savedPreferences] = await Promise.all([
+  const [roomTypes, roomsRaw, ratePlansRaw, guestsRaw, reservationsRaw] = await Promise.all([
     db.roomType.findMany({ where: { hotelId }, orderBy: { sortOrder: "asc" } }),
     db.room.findMany({
       where: { hotelId },
@@ -49,11 +53,6 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
       },
       orderBy: { checkIn: "asc" },
     }),
-    membership
-      ? db.calendarPreference.findUnique({
-          where: { userId_hotelId: { userId: membership.userId, hotelId } },
-        })
-      : null,
   ]);
 
   const roomTypeNames = new Map(roomTypes.map((roomType) => [roomType.id, roomType.name]));
@@ -95,7 +94,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
       <CalendarOpenTracker rangeDays={rangeDays} />
       <PageHeader
         title={t.calendar.title}
-        description={t.calendar.description(rooms.length)}
+        description={`${rooms.length} номеров · ${rangeDays} дней · перетаскивайте брони прямо на таймлайне`}
       />
       <CalendarBoard
         rooms={rooms}
@@ -109,6 +108,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
         initialAnchor={anchorISO}
         initialPreferences={savedPreferences ? {
           density: savedPreferences.density as CalendarDensity,
+          rangeDays: parseCalendarRange(String(savedPreferences.rangeDays)),
+          roomColumnWidth: savedPreferences.roomColumnWidth as "COMPACT" | "STANDARD" | "WIDE",
           showGuestName: savedPreferences.showGuestName,
           showGuestCount: savedPreferences.showGuestCount,
           showChannel: savedPreferences.showChannel,

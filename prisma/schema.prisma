@@ -219,6 +219,8 @@ model CalendarPreference {
   userId               String
   hotelId              String
   density              String   @default("STANDARD") // COMFORTABLE | STANDARD | COMPACT
+  rangeDays            Int      @default(14)
+  roomColumnWidth      String   @default("STANDARD") // COMPACT | STANDARD | WIDE
   showGuestName        Boolean  @default(true)
   showGuestCount       Boolean  @default(true)
   showChannel          Boolean  @default(true)

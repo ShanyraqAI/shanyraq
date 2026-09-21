@@ -17,6 +17,8 @@ export type CalendarCurrencyDisplay = "SYMBOL" | "CODE" | "HIDDEN";
 
 export interface CalendarPreferences {
   density: CalendarDensity;
+  rangeDays: 7 | 14 | 30;
+  roomColumnWidth: "COMPACT" | "STANDARD" | "WIDE";
   showGuestName: boolean;
   showGuestCount: boolean;
   showChannel: boolean;
@@ -30,6 +32,8 @@ export interface CalendarPreferences {
 
 export const DEFAULT_CALENDAR_PREFERENCES: CalendarPreferences = {
   density: "STANDARD",
+  rangeDays: 14,
+  roomColumnWidth: "STANDARD",
   showGuestName: true,
   showGuestCount: true,
   showChannel: true,

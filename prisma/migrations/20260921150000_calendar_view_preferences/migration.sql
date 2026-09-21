@@ -1,0 +1,2 @@
+ALTER TABLE "CalendarPreference" ADD COLUMN "rangeDays" INTEGER NOT NULL DEFAULT 14;
+ALTER TABLE "CalendarPreference" ADD COLUMN "roomColumnWidth" TEXT NOT NULL DEFAULT 'STANDARD';

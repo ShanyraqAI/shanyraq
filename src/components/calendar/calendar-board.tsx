@@ -4,7 +4,7 @@ import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Clock3, Loader2, Maximize2, Settings2, StickyNote, X, ZoomIn, ZoomOut } from "lucide-react";
+import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Clock3, Loader2, Settings2, StickyNote, X, ZoomIn, ZoomOut } from "lucide-react";
 import { ACTIVE_RESERVATION_STATUSES } from "@/lib/constants";
 import { reservationMatchesCalendarSearch } from "@/lib/reservations/calendar-search";
 import { calendarStayPosition, calendarTimelineRange, shiftCalendarAnchor, staysOverlap, type CalendarRangeDays } from "@/lib/reservations/calendar-range";
@@ -25,8 +25,7 @@ import { channelLabel, t } from "@/lib/i18n";
 import { addDays, diffDays, eachDay, formatISOCompactDate, formatISODate, formatMonthYear, isSameDay, parseISODate, toISODate, weekdayShort } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
-const LABEL_W = 176;
-const MOBILE_LABEL_W = 82;
+const ROOM_WIDTHS = { COMPACT: 160, STANDARD: 208, WIDE: 264 } as const;
 const DAY_W: Record<CalendarRangeDays, number> = { 7: 136, 14: 84, 30: 52 };
 
 const ZOOM_MIN = 0.75;
@@ -130,7 +129,6 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   const [zoom, setZoom] = useState(1);
   const [viewportWidth, setViewportWidth] = useState(0);
   const [showMobileTools, setShowMobileTools] = useState(false);
-  const mobileDismissed = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const nextScrollLeft = useRef<number | null>(null);
   const pinch = useRef<{ distance: number; zoom: number; dayIndex: number } | null>(null);
@@ -139,13 +137,13 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   const today = parseISODate(data.todayISO);
   const range = useMemo(() => calendarTimelineRange(anchorISO, rangeDays), [anchorISO, rangeDays]);
   const days = useMemo(() => eachDay(range.start, range.endExclusive), [range.start, range.endExclusive]);
-  const mobileFullscreen = viewportWidth > 0 && viewportWidth < 1024 && fullscreen;
-  const labelWidth = mobileFullscreen ? MOBILE_LABEL_W : LABEL_W;
-  const fitDayWidth = mobileFullscreen ? Math.max(7, (viewportWidth - labelWidth) / rangeDays) : DAY_W[rangeDays];
+  const mobileFullscreen = viewportWidth > 0 && viewportWidth < 640 && fullscreen;
+  const labelWidth = viewportWidth > 0 && viewportWidth < 640 ? Math.max(136, ROOM_WIDTHS[preferences.roomColumnWidth] - 48) : ROOM_WIDTHS[preferences.roomColumnWidth];
+  const fitDayWidth = mobileFullscreen ? Math.max(68, DAY_W[rangeDays]) : fullscreen && viewportWidth >= 640 ? Math.max(DAY_W[rangeDays], (viewportWidth - labelWidth - 16) / rangeDays) : DAY_W[rangeDays];
   const dayWidth = mobileFullscreen ? fitDayWidth * zoom : Math.round(fitDayWidth * zoom);
   const overview = mobileFullscreen && dayWidth < 24;
   const density = DENSITY[preferences.density];
-  const rowHeight = mobileFullscreen ? Math.min(density.row, Math.round(28 * zoom)) : density.row;
+  const rowHeight = mobileFullscreen ? Math.max(44, Math.round(density.row * Math.min(zoom, 1.5))) : density.row;
   const blockHeight = mobileFullscreen ? Math.max(18, rowHeight - 6) : density.block;
   const blockTop = mobileFullscreen ? Math.max(3, Math.round((rowHeight - blockHeight) / 2)) : density.top;
   const selected = findSelectedReservation(reservations, selectedId);
@@ -237,23 +235,11 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
     const updateWidth = () => {
       const width = window.innerWidth;
       setViewportWidth(width);
-      if (width < 1024 && rooms.length > 0 && !mobileDismissed.current) setFullscreen(true);
-      if (width >= 1024) {
-        setFullscreen(false);
-        setZoom(1);
-      }
     };
     updateWidth();
     window.addEventListener("resize", updateWidth);
     return () => window.removeEventListener("resize", updateWidth);
-  }, [rooms.length]);
-
-  useEffect(() => {
-    if (viewportWidth >= 1024 || viewportWidth === 0 || rangeDays === 30) return;
-    if (!new URLSearchParams(window.location.search).has("range")) {
-      router.replace(`/dashboard/calendar?date=${anchorISO}&range=30`, { scroll: false });
-    }
-  }, [anchorISO, rangeDays, router, viewportWidth]);
+  }, []);
 
   useLayoutEffect(() => {
     if (nextScrollLeft.current !== null && scrollRef.current) {
@@ -295,6 +281,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
 
   function navigate(nextAnchor: string, nextRange: CalendarRangeDays = rangeDays) {
     if (nextRange !== rangeDays) setZoom(1);
+    if (nextRange !== preferences.rangeDays) void savePreferences({ ...preferences, rangeDays: nextRange }, true);
     const query = new URLSearchParams({ date: nextAnchor, range: String(nextRange) });
     startNavigation(() => router.push(`/dashboard/calendar?${query.toString()}`, { scroll: false }));
   }
@@ -315,7 +302,6 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   }
 
   function closeFullscreen() {
-    mobileDismissed.current = true;
     setFullscreen(false);
     setZoom(1);
   }
@@ -436,6 +422,8 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
       onFiltersChange={setFilters}
       onPreferencesChange={savePreferences}
       onCreate={() => setCreateState({ open: true })}
+      onFullscreen={() => setFullscreen(true)}
+      fullscreen={fullscreen}
     />
   );
 
@@ -448,11 +436,11 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
 
   const board = (
     <>
-      <div className={cn("flex border-b bg-secondary/40", mobileFullscreen ? "h-6" : "h-7", fullscreen && "sticky top-0 z-40")}>
+      <div className={cn("sticky top-0 z-40 flex border-b bg-secondary/40", mobileFullscreen ? "h-6" : "h-7")}>
         <div className={cn("sticky left-0 z-40 flex shrink-0 items-center border-r bg-secondary text-[10px] font-semibold uppercase tracking-wider text-muted-foreground", mobileFullscreen ? "px-1.5" : "px-3")} style={{ width: labelWidth }}>{mobileFullscreen ? "Номера" : "Категория / номер"}</div>
-        <div className="flex">{monthSegments.map((segment) => <div key={segment.key} style={{ width: segment.days * dayWidth }} className="shrink-0 overflow-hidden border-r py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground last:border-r-0"><span className={cn("sticky block w-fit whitespace-nowrap", mobileFullscreen ? "px-1" : "left-44 px-2")}>{overview ? segment.label.slice(0, 3) : segment.label}</span></div>)}</div>
+        <div className="flex">{monthSegments.map((segment) => <div key={segment.key} style={{ width: segment.days * dayWidth }} className="shrink-0 overflow-hidden border-r py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground last:border-r-0"><span className="block w-fit whitespace-nowrap px-2">{overview ? segment.label.slice(0, 3) : segment.label}</span></div>)}</div>
       </div>
-      <div className={cn("flex border-b bg-secondary/50", mobileFullscreen ? "h-8" : "h-12", fullscreen && (mobileFullscreen ? "sticky top-6 z-40" : "sticky top-7 z-40"))}>
+      <div className={cn("sticky z-40 flex border-b bg-secondary/50", mobileFullscreen ? "top-6 h-8" : "top-7 h-12")}>
         <div className={cn("sticky left-0 z-40 flex shrink-0 items-end border-r bg-secondary text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", mobileFullscreen ? "px-1.5 pb-1" : "px-3 pb-2")} style={{ width: labelWidth }}>{mobileFullscreen ? "Номер" : "Номер и статус"}</div>
         <div className="flex">{days.map((day) => {
           const isToday = isSameDay(day, today);
@@ -555,17 +543,11 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
       <div className="space-y-3">
         {toolbar}
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border bg-card px-3.5 py-2 shadow-xs" aria-label="Сводка на сегодня">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border bg-card px-3.5 py-1.5 shadow-xs" aria-label="Сводка на сегодня">
           <Metric label="Заезды" value={todayStats.arrivals} />
           <Metric label="Выезды" value={todayStats.departures} />
           <Metric label="Проживают" value={todayStats.staying} />
           <Metric label="Свободно" value={todayStats.available} />
-          {rooms.length > 0 ? (
-            <button type="button" onClick={() => { mobileDismissed.current = false; setFullscreen(true); }} className="ml-auto inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-accent lg:hidden" aria-label="Открыть шахматку во весь экран">
-              <Maximize2 className="size-3.5" />
-              Во весь экран
-            </button>
-          ) : null}
           <span className="ml-auto hidden items-center gap-3 border-l pl-4 text-xs text-muted-foreground lg:flex" aria-label="Статусы бронирований">
             <Legend style={(preferences.reservationColors === "CALM" ? CALM_RESERVATION_STYLES : RESERVATION_STYLES).PENDING} />
             <Legend style={(preferences.reservationColors === "CALM" ? CALM_RESERVATION_STYLES : RESERVATION_STYLES).CONFIRMED} />
@@ -584,6 +566,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
             >
               <div className="flex shrink-0 items-center justify-between gap-1 border-b bg-card px-2 py-1.5">
                 <DialogTitle className="truncate text-sm font-semibold">Шахматка · {rangeDays} дней</DialogTitle>
+                <div className="hidden items-center gap-3 text-xs text-muted-foreground md:flex"><Metric label="Заезды" value={todayStats.arrivals} /><Metric label="Выезды" value={todayStats.departures} /><Metric label="Проживают" value={todayStats.staying} /></div>
                 <div className="flex shrink-0 items-center">
                   {mobileFullscreen ? <Button variant="ghost" size="icon-sm" onClick={() => setShowMobileTools((current) => !current)} aria-label="Инструменты шахматки" aria-expanded={showMobileTools}><Settings2 className="size-4" /></Button> : null}
                   <Button variant="ghost" size="icon-sm" onClick={() => changeZoom(-1)} disabled={zoom <= (mobileFullscreen ? 1 : ZOOM_MIN)} aria-label="Уменьшить масштаб"><ZoomOut className="size-4" /></Button>
@@ -612,8 +595,8 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
           </Dialog>
         ) : (
           <div className="isolate overflow-hidden rounded-xl border bg-card shadow-sm">
-            <div className="calendar-timeline-scroll overflow-x-auto overscroll-x-contain">
-              <div style={{ minWidth: LABEL_W + range.days * dayWidth }}>{board}</div>
+            <div className="calendar-timeline-scroll max-h-[min(55dvh,560px)] overflow-auto overscroll-contain">
+              <div style={{ minWidth: labelWidth + range.days * dayWidth }}>{board}</div>
             </div>
           </div>
         )}

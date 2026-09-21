@@ -20,7 +20,7 @@ import { NAV_MAIN, NAV_SECONDARY } from "./nav-config";
 import { SupportDialog } from "@/components/support/support-dialog";
 import type { HotelPermission } from "@/lib/access";
 
-function NavLinks({ onNavigate, accessLevel = "FULL", permissions = [], isOwner = false }: { onNavigate?: () => void; accessLevel?: string; permissions?: HotelPermission[]; isOwner?: boolean }) {
+function NavLinks({ onNavigate, mobile = false, accessLevel = "FULL", permissions = [], isOwner = false }: { onNavigate?: () => void; mobile?: boolean; accessLevel?: string; permissions?: HotelPermission[]; isOwner?: boolean }) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
@@ -32,9 +32,18 @@ function NavLinks({ onNavigate, accessLevel = "FULL", permissions = [], isOwner 
         : permissions.includes(permission);
   const mainItems = NAV_MAIN.filter((item) => canOpen(item.permission) && (!item.ownerOnly || isOwner));
   const secondaryItems = NAV_SECONDARY.filter((item) => canOpen(item.permission) && (!item.ownerOnly || isOwner));
+  const groups = mobile ? [
+    ["Основное", mainItems.filter((item) => ["/dashboard", "/dashboard/calendar", "/dashboard/reservations"].includes(item.href))],
+    ["Объект", mainItems.filter((item) => !["/dashboard", "/dashboard/calendar", "/dashboard/reservations"].includes(item.href))],
+    ["Аналитика", secondaryItems.filter((item) => ["/dashboard/reports", "/dashboard/exports"].includes(item.href))],
+    ["Система", secondaryItems.filter((item) => !["/dashboard/reports", "/dashboard/exports"].includes(item.href))],
+  ] as const : [];
+
+  const navLink = (item: (typeof mainItems)[number]) => <Link key={item.href} href={item.href} data-tour-id={item.tourId} onClick={onNavigate} className={cn("flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors", isActive(item.href) ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground")}><item.icon className={cn("size-4 shrink-0", isActive(item.href) && "text-primary")} />{item.title}</Link>;
 
   return (
     <nav className="flex flex-col gap-1 px-3">
+      {mobile ? groups.map(([label, items]) => items.length ? <div key={label} className="space-y-1"><div className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">{label}</div>{items.map(navLink)}</div> : null) : <>
       {mainItems.map((item) => (
         <Link
           key={item.href}
@@ -71,6 +80,7 @@ function NavLinks({ onNavigate, accessLevel = "FULL", permissions = [], isOwner 
           {item.title}
         </Link>
       ))}
+      </>}
     </nav>
   );
 }
@@ -84,6 +94,8 @@ export function SidebarContent({
   accessLevel,
   permissions,
   canManageHotels,
+  mobile = false,
+  onNavigate,
 }: {
   hotelName: string;
   userName: string;
@@ -93,6 +105,8 @@ export function SidebarContent({
   accessLevel?: string;
   permissions?: HotelPermission[];
   canManageHotels: boolean;
+  mobile?: boolean;
+  onNavigate?: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -195,7 +209,7 @@ export function SidebarContent({
       </DropdownMenu>
 
       <div className="mt-4 flex-1 overflow-y-auto">
-        <NavLinks accessLevel={accessLevel} permissions={permissions} isOwner={canManageHotels} />
+        <NavLinks mobile={mobile} onNavigate={onNavigate} accessLevel={accessLevel} permissions={permissions} isOwner={canManageHotels} />
       </div>
 
       {/* Footer */}

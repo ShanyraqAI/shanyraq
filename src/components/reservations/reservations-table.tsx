@@ -155,7 +155,8 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           }
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
+        <>
+        <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-sm sm:block">
           <Table>
             <TableHeader>
               <TableRow className="bg-secondary/50 hover:bg-secondary/50">
@@ -220,6 +221,15 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
             </TableBody>
           </Table>
         </div>
+        <div className="grid gap-2 sm:hidden">
+          {filtered.slice(0, 100).map((r) => <button key={r.id} type="button" onClick={() => setSelectedId(r.id)} className="min-w-0 rounded-xl border bg-card p-3 text-left shadow-xs">
+            <span className="flex items-start justify-between gap-2"><span className="min-w-0 truncate font-semibold">{r.guestName}</span><span className="shrink-0 font-mono text-xs text-muted-foreground">{reservationDisplayId(r.sequenceNumber)}</span></span>
+            <span className="mt-1 block text-sm text-muted-foreground">Номер {r.roomNumber} · {formatISOCompactDate(r.checkIn)} → {formatISOCompactDate(r.checkOut)}</span>
+            <span className="mt-2 flex items-center justify-between gap-2"><ReservationStatusBadge status={r.status} /><span className="shrink-0 text-xs font-semibold tabular-nums">{formatMoney(r.totalAmount)}</span></span>
+          </button>)}
+          {filtered.length === 0 ? <p className="rounded-xl border bg-card py-8 text-center text-sm text-muted-foreground">{t.filters.noMatch}</p> : null}
+        </div>
+        </>
       )}
 
       {selected && (

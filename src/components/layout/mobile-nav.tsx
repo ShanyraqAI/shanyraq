@@ -40,7 +40,7 @@ export function MobileNav({
         <SheetHeader className="sr-only">
           <SheetTitle>{t.a11y.navigation}</SheetTitle>
         </SheetHeader>
-        <SidebarContent hotelName={hotelName} userName={userName} userAvatarUrl={userAvatarUrl} hotels={hotels} activeHotelId={activeHotelId} accessLevel={accessLevel} permissions={permissions} canManageHotels={canManageHotels} />
+        <SidebarContent mobile onNavigate={() => setOpen(false)} hotelName={hotelName} userName={userName} userAvatarUrl={userAvatarUrl} hotels={hotels} activeHotelId={activeHotelId} accessLevel={accessLevel} permissions={permissions} canManageHotels={canManageHotels} />
       </SheetContent>
     </Sheet>
   );

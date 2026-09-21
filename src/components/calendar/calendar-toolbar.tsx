@@ -3,7 +3,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CalendarDays, ChevronLeft, ChevronRight, ListFilter, Plus, Search, Settings2, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, ListFilter, Maximize2, Plus, Search, Settings2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { CALENDAR_RANGE_OPTIONS, formatCalendarRange, type CalendarRangeDays } f
 import { channelLabel, t } from "@/lib/i18n";
 import type { RoomVM } from "@/lib/types";
 import { saveRoomOrderAction } from "@/server/actions/rooms";
+import { addDays, formatISOCompactDate, parseISODate, toISODate } from "@/lib/dates";
 
 interface CalendarToolbarProps {
   anchorISO: string;
@@ -36,12 +37,15 @@ interface CalendarToolbarProps {
   onFiltersChange: (filters: CalendarFilters) => void;
   onPreferencesChange: (preferences: CalendarPreferences) => Promise<boolean>;
   onCreate: () => void;
+  onFullscreen: () => void;
+  fullscreen: boolean;
 }
 
 const EMPTY_FILTERS: CalendarFilters = { roomTypeId: "all", channelId: "all", statusId: "all" };
 const CHANNEL_OPTIONS = ["booking", "ostrovok", "krisha", "direct"];
 const STATUS_OPTIONS = ["PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"] as const;
 const DENSITY_OPTIONS = [["COMFORTABLE", "Комфортный"], ["STANDARD", "Стандартный"], ["COMPACT", "Компактный"]] as const;
+const ROOM_WIDTH_OPTIONS = [["COMPACT", "Компактная"], ["STANDARD", "Стандартная"], ["WIDE", "Широкая"]] as const;
 const CURRENCY_OPTIONS = [["SYMBOL", "Символ"], ["CODE", "Код"], ["HIDDEN", "Скрыть"]] as const;
 const VIEW_FIELDS = [
   { key: "showGuestName", label: "Имя гостя", description: "Главная подпись бронирования" },
@@ -58,7 +62,7 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
   const activeFilterCount = Object.values(props.filters).filter((value) => value !== "all").length;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2 shadow-sm [&_button]:active:translate-y-0">
+    <div className="flex flex-wrap items-center gap-1.5 rounded-xl border bg-card p-1.5 shadow-sm sm:gap-2 sm:p-2 [&_button]:active:translate-y-0">
       <Button variant="outline" size="sm" onClick={() => props.onNavigate(props.todayISO)} disabled={props.navigating}>{t.common.today}</Button>
       <div className="flex items-center">
         <Button variant="ghost" size="icon-sm" onClick={() => props.onShift(-1)} disabled={props.navigating} aria-label="Предыдущий диапазон"><ChevronLeft className="size-4" /></Button>
@@ -81,16 +85,18 @@ export function CalendarToolbar(props: CalendarToolbarProps) {
       <FilterPopover {...props} activeCount={activeFilterCount} />
       <ViewSettings {...props} />
       <Button size="sm" className="shadow-sm" onClick={props.onCreate}><Plus className="mr-1.5 size-4" /><span className="hidden sm:inline">{t.calendar.newReservation}</span><span className="sm:hidden">Бронь</span></Button>
+      {!props.fullscreen ? <Button variant="outline" size="sm" onClick={props.onFullscreen}><Maximize2 className="size-4" /><span className="hidden min-[370px]:inline">Весь экран</span></Button> : null}
     </div>
   );
 }
 
 function DateJumpButton({ anchorISO, rangeDays, navigating, onNavigate, label, id }: CalendarToolbarProps & { label: string; id: string }) {
   const [open, setOpen] = useState(false);
+  const shortLabel = `${formatISOCompactDate(anchorISO)}–${formatISOCompactDate(toISODate(addDays(parseISODate(anchorISO), rangeDays - 1)))}`;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="min-w-44 justify-center px-2 font-semibold" disabled={navigating} aria-label={`Текущий диапазон: ${label}. Выбрать дату`}><CalendarDays className="mr-1.5 size-4 shrink-0 text-primary" /><span className="truncate">{label}</span></Button>
+        <Button variant="ghost" size="sm" className="justify-center px-1 font-semibold sm:min-w-44 sm:px-2" disabled={navigating} aria-label={`Текущий диапазон: ${label}. Выбрать дату`}><CalendarDays className="mr-1.5 size-4 shrink-0 text-primary" /><span className="sm:hidden">{shortLabel}</span><span className="hidden sm:inline">{label}</span></Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-4">
         <div className="space-y-2">
@@ -144,6 +150,10 @@ function ViewSettings({ preferences, onPreferencesChange, savingPreferences, roo
             <Label>Плотность строк</Label>
             <div className="grid h-9 grid-cols-3 gap-1 rounded-lg bg-secondary p-1">{DENSITY_OPTIONS.map(([value, label]) => <button key={value} type="button" aria-pressed={draft.density === value} className="h-7 rounded-md px-2 text-xs font-medium transition-colors active:scale-100 aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm" onClick={() => setDraft({ ...draft, density: value })}>{label}</button>)}</div>
             <p className="text-xs text-muted-foreground">На телефоне при обзоре 30 дней строки сжаты. Выбранная плотность видна после увеличения.</p>
+          </div>
+          <div className="space-y-2">
+            <Label>Ширина колонки номеров</Label>
+            <div className="grid grid-cols-3 gap-1 rounded-lg bg-secondary p-1">{ROOM_WIDTH_OPTIONS.map(([value, label]) => <button key={value} type="button" aria-pressed={draft.roomColumnWidth === value} className="min-h-9 rounded-md px-1 text-xs font-medium aria-pressed:bg-background aria-pressed:shadow-sm" onClick={() => setDraft({ ...draft, roomColumnWidth: value })}>{label}</button>)}</div>
           </div>
           <div className="space-y-2">
             <Label>Цвета бронирований</Label>
