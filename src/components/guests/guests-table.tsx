@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Mail, Phone, Plus, Search, UserRound } from "lucide-react";
+import { Mail, MessageCircle, Phone, Plus, Search, UserRound } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -66,6 +66,7 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
   const [createOpen, setCreateOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
+  const [showAllNotes, setShowAllNotes] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
   const router = useRouter();
 
@@ -181,7 +182,7 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
 
       {/* Details modal — full-screen drawer on mobile via responsive Dialog */}
       <Dialog open={Boolean(selected)} onOpenChange={(o) => !o && setSelectedId(null)}>
-        <DialogContent className="flex max-h-dvh flex-col gap-3 overflow-hidden rounded-none p-4 sm:max-h-[90vh] sm:max-w-xl sm:rounded-lg sm:p-6">
+        <DialogContent className="flex max-h-[90dvh] flex-col gap-3 overflow-hidden p-4 max-sm:top-auto max-sm:bottom-0 max-sm:w-full max-sm:max-w-full max-sm:-translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:pb-[max(env(safe-area-inset-bottom),12px)] sm:max-w-xl sm:p-6">
           {selected && (
             <>
               <DialogHeader>
@@ -197,7 +198,8 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
               </DialogHeader>
 
               <div className="space-y-2 rounded-xl bg-secondary/30 p-3 sm:hidden">
-                <a href={selected.phone ? `tel:${selected.phone}` : undefined} className="flex items-center gap-2 text-sm font-medium"><Phone className="size-4 text-primary" />{selected.phone ?? "Телефон не указан"}</a>
+                <p className="text-sm font-medium">{selected.phone ?? "Телефон не указан"}</p>
+                {selected.phone ? <div className="grid grid-cols-2 gap-2"><Button asChild variant="outline" size="sm" className="h-10"><a href={`tel:${selected.phone}`}><Phone className="size-4" />Позвонить</a></Button><Button asChild variant="outline" size="sm" className="h-10"><a href={`https://wa.me/${selected.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer"><MessageCircle className="size-4" />WhatsApp</a></Button></div> : null}
                 <div className="flex flex-wrap items-center gap-2 text-xs"><span className="text-muted-foreground">Последнее проживание:</span>{history[0] ? <ReservationStatusBadge status={history[0].status} /> : <span>Нет бронирований</span>}</div>
                 {selected.notes ? <p className="line-clamp-2 text-xs text-muted-foreground">{selected.notes}</p> : null}
                 <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>Редактировать гостя</Button>
@@ -237,7 +239,7 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
                 <TabsContent value="notes"><section className="space-y-2">
                 <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">Внутренние заметки</h3><Button type="button" size="sm" variant="outline" onClick={() => setNoteOpen((value) => !value)}><Plus className="size-3.5" /> Добавить заметку</Button></div>
                 {noteOpen ? <div className="space-y-2"><Textarea aria-label="Новая заметка о госте" value={noteText} onChange={(event) => setNoteText(event.target.value)} maxLength={2000} rows={2} placeholder="Видно только сотрудникам отеля" /><Button type="button" size="sm" disabled={savingNote || !noteText.trim()} onClick={addNote}>Сохранить заметку</Button></div> : null}
-                {selected.internalNotes.length ? <ul className="max-h-40 space-y-2 overflow-y-auto">{selected.internalNotes.map((note) => <li key={note.id} className="rounded-lg bg-secondary/40 p-2.5 text-sm"><p className="whitespace-pre-wrap">{note.content}</p><p className="mt-1 text-xs text-muted-foreground">{note.authorName} · {new Date(note.createdAt).toLocaleDateString("ru-RU")}</p></li>)}</ul> : <p className="text-xs text-muted-foreground">Заметок пока нет.</p>}
+                {selected.internalNotes.length ? <><ul className="space-y-2">{selected.internalNotes.slice(0, showAllNotes ? undefined : 3).map((note) => <li key={note.id} className="rounded-lg bg-secondary/40 p-2.5 text-sm"><p className="whitespace-pre-wrap">{note.content}</p><p className="mt-1 text-xs text-muted-foreground">{note.authorName} · {new Date(note.createdAt).toLocaleDateString("ru-RU")}</p></li>)}</ul>{selected.internalNotes.length > 3 ? <Button size="sm" variant="ghost" onClick={() => setShowAllNotes((value) => !value)}>{showAllNotes ? "Свернуть" : `Показать все · ${selected.internalNotes.length}`}</Button> : null}</> : <p className="text-xs text-muted-foreground">Заметок пока нет.</p>}
               </section></TabsContent>
 
               <TabsContent value="stays"><div>

@@ -92,10 +92,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
   return (
     <div className="space-y-6">
       <CalendarOpenTracker rangeDays={rangeDays} />
-      <PageHeader
+      <div className="hidden sm:block"><PageHeader
         title={t.calendar.title}
         description={`${rooms.length} номеров · ${rangeDays} дней · перетаскивайте брони прямо на таймлайне`}
-      />
+      /></div>
       <CalendarBoard
         rooms={rooms}
         reservations={reservationsRaw.map(toReservationVM)}

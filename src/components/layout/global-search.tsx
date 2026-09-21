@@ -74,7 +74,7 @@ export function GlobalSearch({ items }: { items: GlobalSearchItem[] }) {
         className="h-9 w-9 bg-background pl-8 pr-0 shadow-none placeholder:text-transparent focus:w-44 focus:pr-3 focus:placeholder:text-muted-foreground sm:w-72 sm:pr-3 sm:placeholder:text-muted-foreground"
       />
       {showResults ? (
-        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 max-h-[420px] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border bg-popover p-2 text-popover-foreground shadow-lg">
+        <div className="fixed inset-x-4 top-14 z-50 max-h-[min(420px,70dvh)] overflow-y-auto rounded-xl border bg-popover p-2 text-popover-foreground shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+0.5rem)] sm:w-[min(32rem,calc(100vw-2rem))]">
           {results.length ? results.map((item) => {
             const Icon = typeIcons[item.type];
             return <Link key={item.id} href={item.href} onClick={() => { setFocused(false); setQuery(""); }} className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-secondary/70"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-primary"><Icon className="size-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{item.title}</span><span className="block truncate text-xs text-muted-foreground">{item.subtitle}</span></span><span className="text-[10px] text-muted-foreground">{typeLabels[item.type]}</span></Link>;

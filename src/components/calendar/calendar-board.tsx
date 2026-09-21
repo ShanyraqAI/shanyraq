@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/shared/page-header";
 import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
 import { ReservationFormDialog } from "@/components/reservations/reservation-form-dialog";
 import { CalendarToolbar } from "@/components/calendar/calendar-toolbar";
+import { MobileCalendar } from "@/components/calendar/mobile-calendar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -434,13 +435,19 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
     </>
   );
 
+  if (viewportWidth === 0) return <CalendarBoardSkeleton />;
+  if (viewportWidth < 640) return <>
+    <MobileCalendar anchorISO={anchorISO} todayISO={data.todayISO} viewportWidth={viewportWidth} rooms={visibleRooms} reservations={visibleReservations} navigating={navigating} onShift={(count) => navigate(toISODate(addDays(parseISODate(anchorISO), count)))} onToday={() => navigate(data.todayISO)} onOpen={(id) => { setSelectedId(id); setDetailsOpen(true); }} onCreate={(roomId, date) => { if (roomId && date) openQuickBooking(roomId, date); else setCreateState({ open: true }); }} />
+    {dialogs}
+  </>;
+
   const board = (
     <>
-      <div className={cn("sticky top-0 z-40 flex border-b bg-secondary/40", mobileFullscreen ? "h-6" : "h-7")}>
+      <div className={cn("flex border-b bg-secondary", mobileFullscreen ? "h-6" : "h-7", fullscreen && "sticky top-0 z-40")}>
         <div className={cn("sticky left-0 z-40 flex shrink-0 items-center border-r bg-secondary text-[10px] font-semibold uppercase tracking-wider text-muted-foreground", mobileFullscreen ? "px-1.5" : "px-3")} style={{ width: labelWidth }}>{mobileFullscreen ? "Номера" : "Категория / номер"}</div>
         <div className="flex">{monthSegments.map((segment) => <div key={segment.key} style={{ width: segment.days * dayWidth }} className="shrink-0 overflow-hidden border-r py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground last:border-r-0"><span className="block w-fit whitespace-nowrap px-2">{overview ? segment.label.slice(0, 3) : segment.label}</span></div>)}</div>
       </div>
-      <div className={cn("sticky z-40 flex border-b bg-secondary/50", mobileFullscreen ? "top-6 h-8" : "top-7 h-12")}>
+      <div className={cn("flex border-b bg-secondary", mobileFullscreen ? "h-8" : "h-12", fullscreen && (mobileFullscreen ? "sticky top-6 z-40" : "sticky top-7 z-40"))}>
         <div className={cn("sticky left-0 z-40 flex shrink-0 items-end border-r bg-secondary text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", mobileFullscreen ? "px-1.5 pb-1" : "px-3 pb-2")} style={{ width: labelWidth }}>{mobileFullscreen ? "Номер" : "Номер и статус"}</div>
         <div className="flex">{days.map((day) => {
           const isToday = isSameDay(day, today);
@@ -595,7 +602,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
           </Dialog>
         ) : (
           <div className="isolate overflow-hidden rounded-xl border bg-card shadow-sm">
-            <div className="calendar-timeline-scroll max-h-[min(55dvh,560px)] overflow-auto overscroll-contain">
+            <div className="calendar-timeline-scroll overflow-x-auto overscroll-x-contain">
               <div style={{ minWidth: labelWidth + range.days * dayWidth }}>{board}</div>
             </div>
           </div>

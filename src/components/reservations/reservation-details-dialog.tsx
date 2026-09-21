@@ -13,6 +13,8 @@ import {
   LogIn,
   LogOut,
   Pencil,
+  Phone,
+  MessageCircle,
   User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -66,6 +68,8 @@ export function ReservationDetailsDialog({
   const [editing, setEditing] = useState(false);
   const [documentsOpen, setDocumentsOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const callNumber = r.guestPhone?.replace(/[^+\d]/g, "") ?? "";
+  const whatsappNumber = r.guestPhone?.replace(/\D/g, "") ?? "";
 
   async function changeStatus(status: string) {
     setBusy(status);
@@ -101,7 +105,7 @@ export function ReservationDetailsDialog({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="sm:max-w-lg">
+        <SheetContent className="max-sm:!inset-x-0 max-sm:!top-auto max-sm:!bottom-0 max-sm:!h-auto max-sm:!max-h-[90dvh] max-sm:!w-screen max-sm:!max-w-none max-sm:rounded-t-3xl max-sm:pb-[max(env(safe-area-inset-bottom),12px)] sm:max-w-lg">
           <SheetHeader className="border-b">
             <div className="flex items-center justify-between gap-3 pr-6">
               <SheetTitle className="text-base">
@@ -116,7 +120,7 @@ export function ReservationDetailsDialog({
             </SheetDescription>
           </SheetHeader>
 
-          <div className="flex-1 space-y-4 overflow-y-auto px-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4">
             <div className="flex items-center gap-3 rounded-lg border bg-secondary/40 p-3">
               <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <User className="size-4" />
@@ -129,14 +133,16 @@ export function ReservationDetailsDialog({
               </div>
             </div>
 
+            {r.guestPhone ? <div className="grid grid-cols-2 gap-2 sm:hidden"><Button asChild variant="outline" className="h-11"><a href={`tel:${callNumber}`}><Phone className="size-4" />Позвонить</a></Button><Button asChild variant="outline" className="h-11"><a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noopener noreferrer"><MessageCircle className="size-4" />WhatsApp</a></Button></div> : null}
+
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
               <Field label={t.dashboard.table.room} value={`${r.roomNumber} · ${r.roomTypeName}`} />
-              <Field label={t.reservations.details.guestsLabel} value={t.reservations.details.guestsField(r.adults, r.children)} />
-              <Field label={t.dashboard.table.channel} value={<ChannelLabel channel={r.channel} />} />
+              <div className="hidden sm:block"><Field label={t.reservations.details.guestsLabel} value={t.reservations.details.guestsField(r.adults, r.children)} /></div>
+              <div className="hidden sm:block"><Field label={t.dashboard.table.channel} value={<ChannelLabel channel={r.channel} />} /></div>
               <Field label={t.reservations.form.checkIn} value={`${formatMediumDate(new Date(`${r.checkIn}T00:00:00Z`))}, ${r.checkInTime}`} />
               <Field label={t.reservations.form.checkOut} value={`${formatMediumDate(new Date(`${r.checkOut}T00:00:00Z`))}, ${r.checkOutTime}`} />
               <Field label="Способ оплаты" value={r.paymentMethod === "CASH" ? "Наличные" : r.paymentMethod === "ONLINE" ? "Онлайн" : "Не указан"} />
-              <Field label={t.dashboard.table.nights} value={Math.round((Date.parse(`${r.checkOut}T00:00:00Z`) - Date.parse(`${r.checkIn}T00:00:00Z`)) / 86_400_000)} />
+              <div className="hidden sm:block"><Field label={t.dashboard.table.nights} value={Math.round((Date.parse(`${r.checkOut}T00:00:00Z`) - Date.parse(`${r.checkIn}T00:00:00Z`)) / 86_400_000)} /></div>
             </dl>
 
             <Separator />
@@ -160,11 +166,12 @@ export function ReservationDetailsDialog({
                 “{r.notes}”
               </div>
             ) : null}
+            <details className="rounded-lg border px-3 py-2 sm:hidden"><summary className="cursor-pointer text-sm font-medium">Подробнее и действия</summary><div className="space-y-3 pt-3 text-sm"><p>Гостей: {t.reservations.details.guestsField(r.adults, r.children)} · {channelLabel(r.channel)}</p><div className="grid grid-cols-2 gap-2"><Button size="sm" variant="outline" onClick={() => setEditing(true)}><Pencil className="size-4" />Изменить</Button><Button size="sm" variant="outline" onClick={() => setDocumentsOpen(true)}><FileText className="size-4" />Документы</Button><Button size="sm" variant="outline" onClick={() => setEditing(true)}><CalendarRange className="size-4" />Переместить</Button><Button size="sm" variant="outline" disabled={busy !== null || r.status === "CANCELLED"} onClick={cancel}><Ban className="size-4" />Отменить</Button></div></div></details>
           </div>
 
           <SheetFooter className="border-t bg-background/95 pt-4 backdrop-blur">
             {/* Status actions */}
-            <div className="flex w-full flex-wrap gap-2">
+            <div className="flex w-full flex-wrap gap-2 max-sm:[&_button]:h-11 max-sm:[&_button]:w-full">
               {r.status === "PENDING" && (
                 <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => changeStatus("CONFIRMED")}>
                   {busy === "CONFIRMED" ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <CheckCheck className="mr-1.5 size-3.5" />}
@@ -190,11 +197,11 @@ export function ReservationDetailsDialog({
               )}
             </div>
 
-            <Button size="sm" variant="outline" className="w-full" onClick={() => setDocumentsOpen(true)}>
+            <Button size="sm" variant="outline" className="w-full max-sm:hidden" onClick={() => setDocumentsOpen(true)}>
               <FileText className="mr-1.5 size-3.5" /> Документы
             </Button>
 
-            <div className="grid w-full grid-cols-3 gap-2">
+            <div className="grid w-full grid-cols-3 gap-2 max-sm:hidden">
               <Button size="sm" onClick={() => setEditing(true)}>
                 <Pencil className="mr-1.5 size-3.5" /> {t.common.edit}
               </Button>

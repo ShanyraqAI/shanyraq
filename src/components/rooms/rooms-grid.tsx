@@ -128,7 +128,7 @@ export function RoomsGrid({
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {rooms.map((room) => (
-            <div key={room.id} className="group relative flex min-h-48 flex-col overflow-hidden rounded-xl border border-primary/10 bg-gradient-to-br from-card via-card to-primary/[0.035] p-4 shadow-sm transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-md">
+            <div key={room.id} className="group relative flex flex-col overflow-hidden rounded-xl border border-primary/10 bg-card p-3 shadow-sm sm:min-h-48 sm:bg-gradient-to-br sm:from-card sm:via-card sm:to-primary/[0.035] sm:p-4 sm:transition-[border-color,box-shadow,transform] sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:border-primary/25 sm:hover:shadow-md">
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-primary/65 via-chart-2/35 to-transparent" />
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">
@@ -157,13 +157,14 @@ export function RoomsGrid({
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 text-sm">
+              <div className="mt-1 flex items-center justify-between gap-2 pl-[46px] sm:hidden">{room.guestTonight && room.status === "AVAILABLE" ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Занят</span> : <RoomStatusBadge status={room.status} />}{room.guestTonight ? <span className="truncate text-xs text-muted-foreground">{room.guestTonight}</span> : null}</div>
+              <div className="mt-4 hidden grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 text-sm sm:grid">
                 <span className="text-muted-foreground">Этаж</span><span className="min-w-12 text-right tabular-nums">{room.floor}</span>
                 <span className="text-muted-foreground">Вместимость</span><span className="min-w-12 text-right tabular-nums">{room.capacity ?? 1}</span>
                 <span className="text-muted-foreground">Цена</span><span className="whitespace-nowrap text-right font-medium tabular-nums">{formatMoney(room.basePrice ?? 0)}</span>
                 <span className="text-muted-foreground">Статус</span><span className="justify-self-end"><RoomStatusBadge status={room.status} /></span>
               </div>
-              {room.guestTonight ? <p className="mt-auto truncate rounded-md bg-secondary/60 px-2 py-1 text-xs">{t.rooms.tonight(room.guestTonight)}</p> : null}
+              {room.guestTonight ? <p className="mt-auto hidden truncate rounded-md bg-secondary/60 px-2 py-1 text-xs sm:block">{t.rooms.tonight(room.guestTonight)}</p> : null}
             </div>
           ))}
         </div>

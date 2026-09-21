@@ -49,12 +49,12 @@ export default async function SettingsPage() {
 
       <Tabs defaultValue="hotel" className="max-w-5xl space-y-5">
         <div className="overflow-hidden rounded-xl border border-primary/15 bg-card shadow-sm">
-        <TabsList variant="line" className="grid h-auto w-full grid-cols-2 gap-0 rounded-none bg-transparent p-0 sm:grid-cols-5">
-          <TabsTrigger value="hotel" className="h-12 justify-start rounded-none border-r border-b px-4 data-active:bg-primary/[0.045] data-active:text-primary sm:justify-center sm:border-b-0"><Building2 className="size-4" />Отель</TabsTrigger>
-          <TabsTrigger value="profile" className="h-12 justify-start rounded-none border-b px-4 data-active:bg-primary/[0.045] data-active:text-primary sm:justify-center sm:border-r sm:border-b-0"><UserRound className="size-4" />Профиль</TabsTrigger>
-          <TabsTrigger value="access" className="h-12 justify-start rounded-none border-r border-b px-4 data-active:bg-primary/[0.045] data-active:text-primary sm:justify-center sm:border-b-0"><ShieldCheck className="size-4" />Доступ</TabsTrigger>
-          <TabsTrigger value="notifications" className="h-12 justify-start rounded-none border-b px-4 data-active:bg-primary/[0.045] data-active:text-primary sm:justify-center sm:border-r sm:border-b-0"><BellRing className="size-4" />Уведомления</TabsTrigger>
-          <TabsTrigger value="documents" className="col-span-2 h-12 justify-start rounded-none px-4 data-active:bg-primary/[0.045] data-active:text-primary sm:col-span-1 sm:justify-center"><FileText className="size-4" />Документы</TabsTrigger>
+        <TabsList variant="line" style={{ height: "auto" }} className="grid w-full grid-cols-5 gap-0 rounded-none bg-transparent p-0">
+          <TabsTrigger value="hotel" className="h-14 flex-col justify-center gap-0.5 rounded-none border-r px-1 text-[10px] leading-none data-active:bg-primary/[0.045] data-active:text-primary sm:h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm"><Building2 className="size-4 shrink-0" />Отель</TabsTrigger>
+          <TabsTrigger value="profile" className="h-14 flex-col justify-center gap-0.5 rounded-none border-r px-1 text-[10px] leading-none data-active:bg-primary/[0.045] data-active:text-primary sm:h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm"><UserRound className="size-4 shrink-0" />Профиль</TabsTrigger>
+          <TabsTrigger value="access" className="h-14 flex-col justify-center gap-0.5 rounded-none border-r px-1 text-[10px] leading-none data-active:bg-primary/[0.045] data-active:text-primary sm:h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm"><ShieldCheck className="size-4 shrink-0" />Доступ</TabsTrigger>
+          <TabsTrigger value="notifications" className="h-14 flex-col justify-center gap-0.5 rounded-none border-r px-1 text-[10px] leading-none data-active:bg-primary/[0.045] data-active:text-primary sm:h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm"><BellRing className="size-4 shrink-0" /><span className="sm:hidden">Оповещ.</span><span className="hidden sm:inline">Уведомления</span></TabsTrigger>
+          <TabsTrigger value="documents" className="h-14 flex-col justify-center gap-0.5 rounded-none px-1 text-[10px] leading-none data-active:bg-primary/[0.045] data-active:text-primary sm:h-12 sm:flex-row sm:gap-2 sm:px-4 sm:text-sm"><FileText className="size-4 shrink-0" /><span className="sm:hidden">Док.</span><span className="hidden sm:inline">Документы</span></TabsTrigger>
         </TabsList>
         </div>
         <TabsContent value="hotel" className="mt-0">

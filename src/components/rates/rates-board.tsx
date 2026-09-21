@@ -156,7 +156,8 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
           <Tag className="mr-2 size-4" /> Создать тариф
         </Button>
       </div>
-      <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
+      <div className="space-y-2 sm:hidden">{plans.map((plan) => <div key={plan.id} className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{plan.name}</p><p className="truncate text-xs text-muted-foreground">{plan.roomTypeName}{plan.availableToday !== null ? ` · ${plan.availableToday} свободно` : ""}</p></div><div className="text-right"><p className="text-sm font-semibold tabular-nums">{formatCompactNightlyPrice(prices[plan.id]?.[0] ?? plan.basePrice)}</p><p className="text-[10px] text-muted-foreground">за ночь</p></div><Button variant="ghost" size="icon" aria-label={t.rates.editPricesAria(plan.name)} onClick={() => { setPlanForUpdate(plan); setFrom(dates[0]); setTo(dates[Math.min(6, dates.length - 1)]); }}><PencilLine className="size-4" /></Button></div>)}</div>
+      <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-sm sm:block">
         <Table>
           <TableHeader>
             <TableRow className="bg-secondary/50 hover:bg-secondary/50">

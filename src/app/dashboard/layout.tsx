@@ -1,11 +1,10 @@
 import { BillingBanner } from "@/components/billing/billing-banner";
 import { getSubscription } from "@/lib/billing/service";
 import { accessUntil, isExpired } from "@/lib/billing/policy";
-import { BrandLogo } from "@/components/shared/brand-logo";
 import { requireOnboardingComplete } from "@/lib/auth/session";
 import { getCurrentHotel } from "@/lib/tenant";
 import { DesktopSidebar } from "@/components/layout/app-sidebar";
-import { MobileNav } from "@/components/layout/mobile-nav";
+import { MobileAppShell } from "@/components/layout/mobile-app-shell";
 import { db } from "@/lib/db";
 import { avatarDisplayUrl } from "@/lib/avatar";
 import Link from "next/link";
@@ -73,25 +72,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
         canManageHotels={user.role === "OWNER"}
       />
       <div className="lg:pl-64">
-        {/* Mobile top bar */}
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden">
-          <MobileNav
-            hotelName={hotelName}
-            userName={userName}
-            userAvatarUrl={avatarDisplayUrl(user.id, user.avatarUrl)}
-            hotels={hotelOptions}
-            activeHotelId={hotel.id}
-            accessLevel={user.accessLevel ?? "FULL"}
-            permissions={permissions}
-            canManageHotels={user.role === "OWNER"}
-          />
-          <BrandLogo className="h-6 w-auto" />
-          <div className="ml-auto flex items-center gap-1"><GlobalSearch items={searchItems} /><NotificationCenter initialUnreadCount={notificationCenter.unreadCount} initialItems={notificationCenter.items.map((item) => ({ ...item, readAt: item.readAt?.toISOString() ?? null, createdAt: item.createdAt.toISOString() }))} /></div>
-        </header>
+        <MobileAppShell hotelName={hotelName} hotels={hotelOptions} activeHotelId={hotel.id} accessLevel={user.accessLevel ?? "FULL"} permissions={permissions} canManageHotels={user.role === "OWNER"} searchItems={searchItems} notificationCount={notificationCenter.unreadCount} notificationItems={notificationCenter.items.map((item) => ({ ...item, readAt: item.readAt?.toISOString() ?? null, createdAt: item.createdAt.toISOString() }))} />
         <header className="sticky top-0 z-30 hidden h-16 items-center border-b bg-background/95 px-8 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:flex">
           <div className="mx-auto flex w-full max-w-[1400px] items-center justify-end gap-2"><GlobalSearch items={searchItems} /><NotificationCenter initialUnreadCount={notificationCenter.unreadCount} initialItems={notificationCenter.items.map((item) => ({ ...item, readAt: item.readAt?.toISOString() ?? null, createdAt: item.createdAt.toISOString() }))} /></div>
         </header>
-        <main className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-8 md:py-8">
+        <main className="mx-auto w-full max-w-[1400px] px-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pt-6 lg:px-8 lg:py-8">
           {user.platformRole === "SUPER_ADMIN" && (
             <Link href="/superadmin" className="mb-4 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100">
               <span className="flex items-center gap-2"><ShieldCheck className="size-4" />Открыть панель суперадминистратора</span>
@@ -111,11 +96,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
         submitted: Boolean(productExperience?.feedbackSubmittedAt),
         dismissed: Boolean(productExperience?.feedbackDismissedAt),
       }) ? <ContextualFeedbackPrompt /> : null}
-      <SupportChatWidget
+      <div className="hidden lg:block"><SupportChatWidget
         source="DASHBOARD"
         defaultName={user.fullName}
         defaultContact={user.email ?? user.phone ?? ""}
-      />
+      /></div>
     </div>
   );
 }

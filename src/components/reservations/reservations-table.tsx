@@ -47,15 +47,17 @@ interface Props {
   ratePlans: RatePlanVM[];
   guests: GuestVM[];
   hotelCurrency: string;
+  todayISO: string;
   initialSelectedId?: string | null;
 }
 
 const STATUSES: ReservationStatus[] = ["PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"];
 
-export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency, initialSelectedId = null }: Props) {
+export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency, todayISO, initialSelectedId = null }: Props) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [channel, setChannel] = useState("all");
+  const [period, setPeriod] = useState<"all" | "today" | "arrivals" | "departures">("all");
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [createOpen, setCreateOpen] = useState(false);
   const selected = findSelectedReservation(reservations, selectedId);
@@ -65,6 +67,9 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return reservations.filter((r) => {
+      if (period === "today" && !(r.checkIn <= todayISO && r.checkOut >= todayISO)) return false;
+      if (period === "arrivals" && r.checkIn !== todayISO) return false;
+      if (period === "departures" && r.checkOut !== todayISO) return false;
       if (status !== "all" && r.status !== status) return false;
       if (channel !== "all" && r.channel !== channel) return false;
       if (!q) return true;
@@ -75,7 +80,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
         r.id.toLowerCase().includes(q.toLowerCase())
       );
     });
-  }, [reservations, query, status, channel]);
+  }, [reservations, query, status, channel, period, todayISO]);
 
   const stats = useMemo(
     () => ({
@@ -97,7 +102,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
             className="w-full pl-8 sm:w-[240px]"
           />
         </div>
-        <Select value={status} onValueChange={setStatus}>
+        <div className="hidden sm:block"><Select value={status} onValueChange={setStatus}>
           <SelectTrigger size="sm" className="w-full sm:w-[170px]">
             <SelectValue />
           </SelectTrigger>
@@ -109,8 +114,8 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
               </SelectItem>
             ))}
           </SelectContent>
-        </Select>
-        <Select value={channel} onValueChange={setChannel}>
+        </Select></div>
+        <div className="hidden sm:block"><Select value={channel} onValueChange={setChannel}>
           <SelectTrigger size="sm" className="w-full sm:w-[150px]">
             <SelectValue />
           </SelectTrigger>
@@ -122,7 +127,10 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
               </SelectItem>
             ))}
           </SelectContent>
-        </Select>
+        </Select></div>
+
+        <div className="grid w-full grid-cols-4 gap-1 rounded-xl bg-secondary p-1 sm:hidden">{([ ["today", "Сегодня"], ["arrivals", "Заезды"], ["departures", "Выезды"], ["all", "Все"] ] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setPeriod(value)} aria-pressed={period === value} className="min-h-10 rounded-lg px-1 text-xs font-medium aria-pressed:bg-card aria-pressed:text-primary aria-pressed:shadow-sm">{label}</button>)}</div>
+        <details className="w-full sm:hidden"><summary className="cursor-pointer text-xs font-medium text-muted-foreground">Статус и источник</summary><div className="grid grid-cols-2 gap-2 pt-2"><Select value={status} onValueChange={setStatus}><SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Все статусы</SelectItem>{STATUSES.map((item) => <SelectItem key={item} value={item}>{t.statuses.reservation[item]}</SelectItem>)}</SelectContent></Select><Select value={channel} onValueChange={setChannel}><SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Все каналы</SelectItem>{channelsPresent.map((item) => <SelectItem key={item} value={item}>{channelLabel(item)}</SelectItem>)}</SelectContent></Select></div></details>
 
         <div className="flex w-full flex-wrap items-center gap-3 text-sm text-muted-foreground xl:ml-auto xl:w-auto">
           <div className="flex items-center gap-3">
@@ -222,7 +230,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           </Table>
         </div>
         <div className="grid gap-2 sm:hidden">
-          {filtered.slice(0, 100).map((r) => <button key={r.id} type="button" onClick={() => setSelectedId(r.id)} className="min-w-0 rounded-xl border bg-card p-3 text-left shadow-xs">
+          {filtered.slice(0, 100).map((r) => <button key={r.id} type="button" onClick={() => setSelectedId(r.id)} className="min-w-0 rounded-xl border bg-card px-3 py-2.5 text-left shadow-xs">
             <span className="flex items-start justify-between gap-2"><span className="min-w-0 truncate font-semibold">{r.guestName}</span><span className="shrink-0 font-mono text-xs text-muted-foreground">{reservationDisplayId(r.sequenceNumber)}</span></span>
             <span className="mt-1 block text-sm text-muted-foreground">Номер {r.roomNumber} · {formatISOCompactDate(r.checkIn)} → {formatISOCompactDate(r.checkOut)}</span>
             <span className="mt-2 flex items-center justify-between gap-2"><ReservationStatusBadge status={r.status} /><span className="shrink-0 text-xs font-semibold tabular-nums">{formatMoney(r.totalAmount)}</span></span>

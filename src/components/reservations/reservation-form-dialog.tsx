@@ -208,10 +208,10 @@ export function ReservationFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("max-h-[92vh] overflow-y-auto", compact ? "sm:max-w-lg" : "sm:max-w-xl")}>
+      <DialogContent className={cn("max-h-[92dvh] overflow-y-auto max-sm:top-auto max-sm:bottom-0 max-sm:max-h-[94dvh] max-sm:w-full max-sm:max-w-full max-sm:-translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:pb-[max(env(safe-area-inset-bottom),12px)]", compact ? "sm:max-w-lg" : "sm:max-w-xl")}>
         <DialogHeader>
           <DialogTitle>{compact && mode === "create" ? "Быстрая бронь" : mode === "create" ? t.reservations.form.createTitle : t.reservations.form.editTitle}</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="max-sm:hidden">
             {compact && mode === "create"
               ? "Основные данные — без перехода на отдельную страницу."
               : mode === "create"
@@ -250,6 +250,7 @@ export function ReservationFormDialog({
                   required
                 />
                 <Input
+                  className="max-sm:hidden"
                   placeholder={t.reservations.form.emailPlaceholder}
                   type="email"
                   value={newEmail}
@@ -287,23 +288,23 @@ export function ReservationFormDialog({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5 rounded-lg border bg-secondary/20 p-3">
               <Label htmlFor="checkin">{t.reservations.form.checkIn}</Label>
-              <div className="grid grid-cols-[minmax(0,1fr)_104px] gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_104px]">
                 <Input id="checkin" type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} required />
-                <Input aria-label="Время заезда" type="time" value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} required />
+                <Input className="max-sm:hidden" aria-label="Время заезда" type="time" value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} required />
               </div>
               {!compact ? <p className="text-[11px] text-muted-foreground">Гость занимает вторую половину дня заезда.</p> : null}
             </div>
             <div className="space-y-1.5 rounded-lg border bg-secondary/20 p-3">
               <Label htmlFor="checkout">{t.reservations.form.checkOut}</Label>
-              <div className="grid grid-cols-[minmax(0,1fr)_104px] gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_104px]">
                 <Input id="checkout" type="date" value={checkOut} min={addDaysISO(checkIn, 1)} onChange={(e) => setCheckOut(e.target.value)} required />
-                <Input aria-label="Время выезда" type="time" value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} required />
+                <Input className="max-sm:hidden" aria-label="Время выезда" type="time" value={checkOutTime} onChange={(e) => setCheckOutTime(e.target.value)} required />
               </div>
               {!compact ? <p className="text-[11px] text-muted-foreground">Первая половина дня остаётся за выезжающим гостем.</p> : null}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 max-sm:hidden">
             <div className="space-y-1.5">
               <Label>{t.reservations.form.adults}</Label>
               <Select value={adults} onValueChange={setAdults}>
@@ -323,7 +324,7 @@ export function ReservationFormDialog({
           <section className="space-y-3 rounded-xl border p-3.5" aria-labelledby="reservation-pricing-title">
             <div>
               <Label id="reservation-pricing-title">Как рассчитать стоимость</Label>
-              <p className="text-xs text-muted-foreground">Выберите готовый тариф или укажите итоговую цену вручную.</p>
+              <p className="hidden text-xs text-muted-foreground sm:block">Выберите готовый тариф или укажите итоговую цену вручную.</p>
             </div>
             <div className="grid h-10 grid-cols-2 gap-1 rounded-lg bg-secondary p-1">
               <button type="button" aria-pressed={pricingMode === "RATE_PLAN"} disabled={!hasPlansForType} onClick={() => setPricingMode("RATE_PLAN")} className="flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors active:scale-100 disabled:cursor-not-allowed disabled:opacity-45 aria-pressed:bg-background aria-pressed:shadow-sm"><Tags className="size-3.5" />Из тарифа</button>
@@ -351,6 +352,8 @@ export function ReservationFormDialog({
             {!hasPlansForType ? <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">Для этой категории ещё нет тарифов — укажите стоимость вручную.</p> : null}
           </section>
 
+          <div className="space-y-1.5 sm:hidden"><Label>Способ оплаты</Label><Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as typeof paymentMethod)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="UNSPECIFIED">Не указан</SelectItem><SelectItem value="ONLINE">Онлайн</SelectItem><SelectItem value="CASH">Наличные</SelectItem></SelectContent></Select></div>
+
           {mode === "create" ? (
             <Button type="button" variant="ghost" size="sm" className="px-0 text-muted-foreground" onClick={() => setAdvancedOpen((value) => !value)}>
               {advancedOpen ? "Скрыть дополнительные параметры" : "Дополнительные параметры"}
@@ -359,7 +362,9 @@ export function ReservationFormDialog({
 
           {advancedOpen ? (
             <div className="space-y-4 rounded-lg border bg-secondary/20 p-3">
-              <div className="space-y-1.5">
+              {guestChoice === NEW_GUEST ? <div className="space-y-1 sm:hidden"><Label>Email гостя · необязательно</Label><Input type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} /></div> : null}
+              <div className="grid grid-cols-2 gap-2 sm:hidden"><div className="space-y-1"><Label>Время заезда</Label><Input type="time" value={checkInTime} onChange={(event) => setCheckInTime(event.target.value)} /></div><div className="space-y-1"><Label>Время выезда</Label><Input type="time" value={checkOutTime} onChange={(event) => setCheckOutTime(event.target.value)} /></div><div className="space-y-1"><Label>{t.reservations.form.adults}</Label><Select value={adults} onValueChange={setAdults}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[1, 2, 3, 4, 5, 6].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent></Select></div><div className="space-y-1"><Label>{t.reservations.form.children}</Label><Select value={children} onValueChange={setChildren}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[0, 1, 2, 3, 4, 5, 6].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent></Select></div></div>
+              <div className="hidden space-y-1.5 sm:block">
                 <Label>Способ оплаты</Label>
                 <Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as typeof paymentMethod)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -391,7 +396,7 @@ export function ReservationFormDialog({
             <span className="font-semibold tabular-nums">{Number.isFinite(total) ? formatMoney(total) : "—"}</span>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-[-12px] z-10 bg-background/95 pt-3 pb-1 backdrop-blur max-sm:flex-row">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t.common.cancel}
             </Button>

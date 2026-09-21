@@ -66,7 +66,7 @@ export default async function RoomsPage() {
       </PageHeader>
 
       {/* Room type summary cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="hidden grid-cols-1 gap-4 sm:grid md:grid-cols-3">
         {populatedRoomTypes.map((type) => {
           const available = type.rooms.filter((room) => room.status === "AVAILABLE").length;
           const occupancy = type.rooms.length === 0 ? 0 : 1 - available / type.rooms.length;

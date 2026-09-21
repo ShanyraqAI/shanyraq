@@ -56,12 +56,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
   }));
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Отчёты" description="Загрузка, выручка и эффективность номерного фонда за выбранный период.">
+    <div className="flex flex-col gap-5 sm:block sm:space-y-6">
+      <div className="order-0"><PageHeader title="Отчёты" description="Загрузка, выручка и эффективность номерного фонда за выбранный период.">
         <DataExportDialog dataset="reports" defaultFrom={report.period.from} defaultTo={report.period.to} defaultSource={selectedSource} maxTo={currentDateText} />
-      </PageHeader>
+      </PageHeader></div>
 
-      <form action="/dashboard/reports" method="get" className="grid gap-4 rounded-xl border bg-card p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.2fr_auto_auto] lg:items-end">
+      <form action="/dashboard/reports" method="get" className="order-2 grid gap-3 rounded-xl border bg-card p-3 shadow-sm sm:grid-cols-2 sm:gap-4 sm:p-4 lg:grid-cols-[1fr_1fr_1.2fr_auto_auto] lg:items-end">
         <div className="space-y-1.5"><Label htmlFor="report-from">Дата с</Label><Input id="report-from" name="from" type="date" max={currentDateText} defaultValue={report.period.from} required /></div>
         <div className="space-y-1.5"><Label htmlFor="report-to">Дата по</Label><Input id="report-to" name="to" type="date" min={report.period.from} max={currentDateText} defaultValue={report.period.to} required /></div>
         <div className="space-y-1.5">
@@ -75,14 +75,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
         <Button asChild type="button" variant="outline"><Link href="/dashboard/reports">Сбросить</Link></Button>
       </form>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="order-1 rounded-2xl border bg-card p-4 shadow-sm sm:hidden"><p className="text-xs font-medium text-muted-foreground">{formatISODate(report.period.from)} — {formatISODate(report.period.to)}</p><p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-primary">{money(report.summary.revenue)}</p><p className="text-xs text-muted-foreground">Выручка за период</p><div className="mt-4 grid grid-cols-2 divide-x border-t pt-3 text-center"><div><p className="text-lg font-semibold tabular-nums">{formatPercent(report.summary.occupancy)}</p><p className="text-xs text-muted-foreground">Загрузка</p></div><div><p className="text-lg font-semibold tabular-nums">{money(report.summary.adr, true)}</p><p className="text-xs text-muted-foreground">Средняя цена ночи</p></div></div></section>
+      <div className="order-3 hidden grid-cols-1 gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Загрузка" value={formatPercent(report.summary.occupancy)} sub={`${report.summary.occupiedRoomNights} из ${report.summary.availableRoomNights} номеро-ночей`} icon={Percent} accent />
         <KpiCard label="Выручка" value={money(report.summary.revenue)} sub={`За ${report.period.days} дн.`} icon={ReceiptText} />
         <KpiCard label="ADR" value={money(report.summary.adr)} sub="Средняя цена проданной ночи" icon={CircleDollarSign} />
         <KpiCard label="RevPAR" value={money(report.summary.revpar)} sub="Выручка на доступный номер" icon={BedDouble} />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
+      <div className="order-3 grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
         <Card className="min-w-0 shadow-sm">
           <CardHeader><CardTitle className="text-base">Динамика загрузки</CardTitle><CardDescription>{formatISODate(report.period.from)} — {formatISODate(report.period.to)} · наведите на линию, чтобы увидеть день</CardDescription></CardHeader>
           <CardContent><InteractiveTrendChart points={occupancyPoints} maxValue={100} ariaLabel="Интерактивная динамика загрузки по дням" /></CardContent>
@@ -101,7 +102,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
         </Card>
       </div>
 
-      <Card className="relative overflow-hidden border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.035] shadow-sm">
+      <Card className="relative order-4 hidden overflow-hidden border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.035] shadow-sm sm:block">
         <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary via-chart-2/65 to-transparent" />
         <CardHeader className="border-b border-primary/10 bg-primary/[0.025] pb-4">
           <div className="flex items-start justify-between gap-4">
@@ -114,6 +115,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
         </CardHeader>
         <CardContent className="pt-5"><DailyMetricsTable rows={dailyRows} /></CardContent>
       </Card>
+      <details className="order-4 rounded-xl border bg-card sm:hidden"><summary className="cursor-pointer px-4 py-3 text-sm font-semibold">Показатели по дням · полный отчёт</summary><div className="overflow-x-auto border-t p-3"><DailyMetricsTable rows={dailyRows} /></div></details>
     </div>
   );
 }

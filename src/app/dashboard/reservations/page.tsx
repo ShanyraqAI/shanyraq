@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ReservationsTable } from "@/components/reservations/reservations-table";
 import { t } from "@/lib/i18n";
 import { requireSectionAccess } from "@/server/guards";
+import { todayInTimeZone, toISODate } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,7 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
         ratePlans={ratePlans}
         guests={guests}
         hotelCurrency={hotel.currency}
+        todayISO={toISODate(todayInTimeZone(hotel.timezone))}
         initialSelectedId={initialSelectedId}
       />
     </div>
