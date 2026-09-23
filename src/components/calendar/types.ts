@@ -17,7 +17,7 @@ export type CalendarCurrencyDisplay = "SYMBOL" | "CODE" | "HIDDEN";
 
 export interface CalendarPreferences {
   density: CalendarDensity;
-  rangeDays: 7 | 14 | 30;
+  rangeDays: 3 | 7 | 14 | 30;
   roomColumnWidth: "COMPACT" | "STANDARD" | "WIDE";
   showGuestName: boolean;
   showGuestCount: boolean;

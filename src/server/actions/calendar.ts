@@ -10,7 +10,7 @@ import { toErrorMessage } from "@/server/errors";
 
 const calendarPreferencesSchema = z.object({
   density: z.enum(["COMFORTABLE", "STANDARD", "COMPACT"]),
-  rangeDays: z.union([z.literal(7), z.literal(14), z.literal(30)]),
+  rangeDays: z.union([z.literal(3), z.literal(7), z.literal(14), z.literal(30)]),
   roomColumnWidth: z.enum(["COMPACT", "STANDARD", "WIDE"]),
   showGuestName: z.boolean(),
   showGuestCount: z.boolean(),

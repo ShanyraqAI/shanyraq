@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   let rangeDays: number | undefined;
   try {
     const body = await request.json() as { rangeDays?: unknown };
-    if ([7, 14, 30].includes(Number(body.rangeDays))) rangeDays = Number(body.rangeDays);
+    if ([3, 7, 14, 30].includes(Number(body.rangeDays))) rangeDays = Number(body.rangeDays);
   } catch {
     // Invalid optional metadata does not prevent recording the page view.
   }

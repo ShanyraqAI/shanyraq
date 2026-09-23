@@ -55,6 +55,10 @@ test("invalid URL navigation falls back while range changes preserve the anchor"
     rangeDays: 30,
   });
   assert.equal(parseCalendarNavigation("2026-09-27", "7", "2026-09-10").anchorISO, "2026-09-27");
+  assert.deepEqual(parseCalendarNavigation("2026-09-27", "3", "2026-09-10"), {
+    anchorISO: "2026-09-27",
+    rangeDays: 3,
+  });
 });
 
 test("hotel business date does not depend on the server timezone", () => {

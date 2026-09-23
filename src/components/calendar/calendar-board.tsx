@@ -4,7 +4,7 @@ import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Clock3, Loader2, Settings2, StickyNote, X, ZoomIn, ZoomOut } from "lucide-react";
+import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Clock3, Loader2, StickyNote, X, ZoomIn, ZoomOut } from "lucide-react";
 import { ACTIVE_RESERVATION_STATUSES } from "@/lib/constants";
 import { reservationMatchesCalendarSearch } from "@/lib/reservations/calendar-search";
 import { calendarStayPosition, calendarTimelineRange, shiftCalendarAnchor, staysOverlap, type CalendarRangeDays } from "@/lib/reservations/calendar-range";
@@ -27,12 +27,13 @@ import { addDays, diffDays, eachDay, formatISOCompactDate, formatISODate, format
 import { cn } from "@/lib/utils";
 
 const ROOM_WIDTHS = { COMPACT: 160, STANDARD: 208, WIDE: 264 } as const;
-const DAY_W: Record<CalendarRangeDays, number> = { 7: 136, 14: 84, 30: 52 };
+const DAY_W: Record<CalendarRangeDays, number> = { 3: 136, 7: 136, 14: 84, 30: 52 };
 
 const ZOOM_MIN = 0.75;
 const ZOOM_MAX = 2;
 const ZOOM_STEP = 0.25;
-const MOBILE_ZOOM_MAX = 8;
+const MOBILE_ZOOM_MAX = 4;
+const MOBILE_ZOOM_MIN = 0.6;
 
 const RESERVATION_STYLES: Record<string, { bar: string; dot: string; label: string; legend: string }> = {
   CANCELLED: { bar: "border-rose-400 bg-rose-100 text-rose-950 before:bg-rose-600 dark:border-rose-700 dark:bg-rose-950/70 dark:text-rose-100", dot: "bg-rose-600", label: "Отменена", legend: "border-rose-300 bg-rose-100 text-rose-950" },
@@ -129,9 +130,11 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   const [fullscreen, setFullscreen] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [viewportWidth, setViewportWidth] = useState(0);
-  const [showMobileTools, setShowMobileTools] = useState(false);
+  const [showOccupancy, setShowOccupancy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const nextScrollLeft = useRef<number | null>(null);
+  const fullscreenHistory = useRef(false);
+  const fullscreenUrl = useRef<string | null>(null);
   const pinch = useRef<{ distance: number; zoom: number; dayIndex: number } | null>(null);
   const router = useRouter();
 
@@ -140,9 +143,9 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   const days = useMemo(() => eachDay(range.start, range.endExclusive), [range.start, range.endExclusive]);
   const mobileFullscreen = viewportWidth > 0 && viewportWidth < 640 && fullscreen;
   const labelWidth = viewportWidth > 0 && viewportWidth < 640 ? Math.max(136, ROOM_WIDTHS[preferences.roomColumnWidth] - 48) : ROOM_WIDTHS[preferences.roomColumnWidth];
-  const fitDayWidth = mobileFullscreen ? Math.max(68, DAY_W[rangeDays]) : fullscreen && viewportWidth >= 640 ? Math.max(DAY_W[rangeDays], (viewportWidth - labelWidth - 16) / rangeDays) : DAY_W[rangeDays];
+  const fitDayWidth = mobileFullscreen ? DAY_W[rangeDays] : fullscreen && viewportWidth >= 640 ? Math.max(DAY_W[rangeDays], (viewportWidth - labelWidth - 16) / rangeDays) : DAY_W[rangeDays];
   const dayWidth = mobileFullscreen ? fitDayWidth * zoom : Math.round(fitDayWidth * zoom);
-  const overview = mobileFullscreen && dayWidth < 24;
+  const overview = mobileFullscreen && rangeDays === 30 && zoom < 1;
   const density = DENSITY[preferences.density];
   const rowHeight = mobileFullscreen ? Math.max(44, Math.round(density.row * Math.min(zoom, 1.5))) : density.row;
   const blockHeight = mobileFullscreen ? Math.max(18, rowHeight - 6) : density.block;
@@ -191,6 +194,12 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
     const directRoomMatches = new Set(visibleRooms.filter((room) => [room.number, room.roomTypeName].some((value) => value.toLocaleLowerCase("ru-RU").includes(normalizedSearch))).map((room) => room.id));
     return filteredReservations.filter((reservation) => matchingReservationIds.has(reservation.id) || directRoomMatches.has(reservation.roomId));
   }, [filteredReservations, matchingReservationIds, normalizedSearch, visibleRooms]);
+
+  const occupancy = useMemo(() => days.map((day) => {
+    const iso = toISODate(day);
+    const occupied = rooms.filter((room) => activeStays.some((reservation) => reservation.roomId === room.id && reservation.checkIn <= iso && reservation.checkOut > iso)).length;
+    return { iso, occupied, total: rooms.length };
+  }), [activeStays, days, rooms]);
 
   const blocksByRoom = useMemo(() => {
     const grouped = new Map<string, ReservationBlock[]>();
@@ -250,6 +259,18 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   }, [dayWidth]);
 
   useEffect(() => {
+    if (!fullscreen) return;
+    const onBack = () => {
+      fullscreenHistory.current = false;
+      setFullscreen(false);
+      setZoom(1);
+      if (fullscreenUrl.current) router.replace(fullscreenUrl.current, { scroll: false });
+    };
+    window.addEventListener("popstate", onBack);
+    return () => window.removeEventListener("popstate", onBack);
+  }, [fullscreen, router]);
+
+  useEffect(() => {
     const element = scrollRef.current;
     if (!mobileFullscreen || !element) return;
     const distance = (touches: TouchList) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
@@ -262,7 +283,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
     const onMove = (event: TouchEvent) => {
       if (event.touches.length !== 2 || !pinch.current) return;
       event.preventDefault();
-      const nextZoom = Math.min(MOBILE_ZOOM_MAX, Math.max(1, Math.round(pinch.current.zoom * distance(event.touches) / pinch.current.distance * 10) / 10));
+      const nextZoom = Math.min(MOBILE_ZOOM_MAX, Math.max(MOBILE_ZOOM_MIN, Math.round(pinch.current.zoom * distance(event.touches) / pinch.current.distance * 10) / 10));
       nextScrollLeft.current = Math.max(0, labelWidth + pinch.current.dayIndex * fitDayWidth * nextZoom - center(event.touches));
       setZoom(nextZoom);
       if (nextZoom === zoom) element.scrollLeft = nextScrollLeft.current;
@@ -281,10 +302,15 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   }, [dayWidth, fitDayWidth, labelWidth, mobileFullscreen, zoom]);
 
   function navigate(nextAnchor: string, nextRange: CalendarRangeDays = rangeDays) {
-    if (nextRange !== rangeDays) setZoom(1);
+    if (nextRange !== rangeDays) {
+      setZoom(nextRange === 30 && mobileFullscreen ? MOBILE_ZOOM_MIN : 1);
+      nextScrollLeft.current = 0;
+    }
     if (nextRange !== preferences.rangeDays) void savePreferences({ ...preferences, rangeDays: nextRange }, true);
     const query = new URLSearchParams({ date: nextAnchor, range: String(nextRange) });
-    startNavigation(() => router.push(`/dashboard/calendar?${query.toString()}`, { scroll: false }));
+    const url = `/dashboard/calendar?${query.toString()}`;
+    if (fullscreen) fullscreenUrl.current = url;
+    startNavigation(() => (fullscreen ? router.replace : router.push)(url, { scroll: false }));
   }
 
   function shift(direction: 1 | -1) {
@@ -292,7 +318,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   }
 
   function changeZoom(direction: 1 | -1) {
-    const next = Math.min(mobileFullscreen ? MOBILE_ZOOM_MAX : ZOOM_MAX, Math.max(mobileFullscreen ? 1 : ZOOM_MIN, zoom + direction * (mobileFullscreen ? 1 : ZOOM_STEP)));
+    const next = Math.min(mobileFullscreen ? MOBILE_ZOOM_MAX : ZOOM_MAX, Math.max(mobileFullscreen ? MOBILE_ZOOM_MIN : ZOOM_MIN, zoom + direction * (mobileFullscreen ? 0.4 : ZOOM_STEP)));
     if (mobileFullscreen && scrollRef.current) {
       const element = scrollRef.current;
       const center = element.clientWidth / 2;
@@ -304,6 +330,35 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
 
   function closeFullscreen() {
     setFullscreen(false);
+    setZoom(1);
+    if (fullscreenHistory.current) {
+      fullscreenHistory.current = false;
+      window.history.back();
+    }
+  }
+
+  function openFullscreen() {
+    fullscreenUrl.current = window.location.pathname + window.location.search;
+    window.history.pushState({ ...window.history.state, shanyraqCalendarExpanded: true }, "", window.location.href);
+    fullscreenHistory.current = true;
+    setZoom(rangeDays === 30 ? MOBILE_ZOOM_MIN : 1);
+    setFullscreen(true);
+  }
+
+  function focusDay(iso: string) {
+    if (rangeDays === 30 && zoom < 1) setZoom(1.5);
+    const index = diffDays(range.start, parseISODate(iso));
+    nextScrollLeft.current = Math.max(0, labelWidth + index * fitDayWidth * (rangeDays === 30 && zoom < 1 ? 1.5 : zoom) - labelWidth);
+    requestAnimationFrame(() => { if (scrollRef.current && nextScrollLeft.current !== null) { scrollRef.current.scrollLeft = nextScrollLeft.current; nextScrollLeft.current = null; } });
+  }
+
+  function resetZoom() {
+    if (mobileFullscreen && scrollRef.current) {
+      const element = scrollRef.current;
+      const center = element.clientWidth / 2;
+      const dayIndex = (element.scrollLeft + center - labelWidth) / dayWidth;
+      nextScrollLeft.current = Math.max(0, labelWidth + dayIndex * fitDayWidth - center);
+    }
     setZoom(1);
   }
 
@@ -423,7 +478,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
       onFiltersChange={setFilters}
       onPreferencesChange={savePreferences}
       onCreate={() => setCreateState({ open: true })}
-      onFullscreen={() => setFullscreen(true)}
+      onFullscreen={openFullscreen}
       fullscreen={fullscreen}
     />
   );
@@ -436,11 +491,6 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   );
 
   if (viewportWidth === 0) return <CalendarBoardSkeleton />;
-  if (viewportWidth < 640) return <>
-    <MobileCalendar anchorISO={anchorISO} todayISO={data.todayISO} viewportWidth={viewportWidth} rooms={visibleRooms} reservations={visibleReservations} navigating={navigating} onShift={(count) => navigate(toISODate(addDays(parseISODate(anchorISO), count)))} onToday={() => navigate(data.todayISO)} onOpen={(id) => { setSelectedId(id); setDetailsOpen(true); }} onCreate={(roomId, date) => { if (roomId && date) openQuickBooking(roomId, date); else setCreateState({ open: true }); }} />
-    {dialogs}
-  </>;
-
   const board = (
     <>
       <div className={cn("flex border-b bg-secondary", mobileFullscreen ? "h-6" : "h-7", fullscreen && "sticky top-0 z-40")}>
@@ -452,10 +502,10 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
         <div className="flex">{days.map((day) => {
           const isToday = isSameDay(day, today);
           const weekend = day.getUTCDay() === 0 || day.getUTCDay() === 6;
-          return <div key={day.toISOString()} style={{ width: dayWidth }} title={formatISODate(toISODate(day))} className={cn("flex shrink-0 flex-col items-center justify-center overflow-hidden border-l first:border-l-0", weekend && !isToday && "bg-secondary/40", isToday && "bg-primary/10")}>
+          return <button type="button" key={day.toISOString()} onClick={() => focusDay(toISODate(day))} style={{ width: dayWidth }} title={formatISODate(toISODate(day))} className={cn("flex shrink-0 flex-col items-center justify-center overflow-hidden border-l first:border-l-0", weekend && !isToday && "bg-secondary/40", isToday && "bg-primary/10")}>
             {!overview && dayWidth >= 42 ? <span className={cn("text-[10px] uppercase tracking-wide text-muted-foreground", isToday && "font-semibold text-primary")}>{isToday ? "Сегодня" : weekdayShort(day)}</span> : null}
             {(!overview || day.getUTCDate() === 1 || day.getUTCDate() % 5 === 0 || isToday) ? <span className={cn("tabular-nums", overview ? "text-[9px] font-semibold" : "mt-0.5 text-sm", isToday && !overview ? "flex size-6 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground" : "font-medium", isToday && overview && "text-primary")}>{day.getUTCDate()}</span> : null}
-          </div>;
+          </button>;
         })}</div>
       </div>
 
@@ -487,7 +537,9 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
                           key={iso}
                           type="button"
                           aria-label={t.calendar.newReservationCell(room.number, iso)}
-                          onClick={() => openQuickBooking(room.id, iso)}
+                          onClick={() => {
+                            if (!overview) openQuickBooking(room.id, iso);
+                          }}
                           onDragEnter={(event) => {
                             event.preventDefault();
                             setDropTarget((current) => current?.roomId === room.id && current.date === iso ? current : { roomId: room.id, date: iso });
@@ -525,6 +577,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
                       height={blockHeight}
                       top={blockTop}
                       overview={overview}
+                      allowDrag={!mobileFullscreen}
                       clippedStart={clippedStart}
                       clippedEnd={clippedEnd}
                       moving={movingId === res.id || draggingId === res.id}
@@ -545,12 +598,17 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
     </>
   );
 
+  if (viewportWidth < 640 && !fullscreen) return <>
+    <MobileCalendar anchorISO={anchorISO} todayISO={data.todayISO} viewportWidth={viewportWidth} rooms={visibleRooms} reservations={visibleReservations} navigating={navigating} onShift={(count) => navigate(toISODate(addDays(parseISODate(anchorISO), count)))} onToday={() => navigate(data.todayISO)} onOpen={(id) => { setSelectedId(id); setDetailsOpen(true); }} onCreate={(roomId, date) => { if (roomId && date) openQuickBooking(roomId, date); else setCreateState({ open: true }); }} onExpand={openFullscreen} />
+    {dialogs}
+  </>;
+
   return (
     <TooltipProvider delayDuration={250}>
       <div className="space-y-3">
-        {toolbar}
+        {!mobileFullscreen ? toolbar : null}
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border bg-card px-3.5 py-1.5 shadow-xs" aria-label="Сводка на сегодня">
+        {!mobileFullscreen ? <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border bg-card px-3.5 py-1.5 shadow-xs" aria-label="Сводка на сегодня">
           <Metric label="Заезды" value={todayStats.arrivals} />
           <Metric label="Выезды" value={todayStats.departures} />
           <Metric label="Проживают" value={todayStats.staying} />
@@ -560,7 +618,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
             <Legend style={(preferences.reservationColors === "CALM" ? CALM_RESERVATION_STYLES : RESERVATION_STYLES).CONFIRMED} />
             <Legend style={(preferences.reservationColors === "CALM" ? CALM_RESERVATION_STYLES : RESERVATION_STYLES).CHECKED_IN} />
           </span>
-        </div>
+        </div> : null}
 
         {rooms.length === 0 ? (
           <EmptyState icon={CalendarPlus} title={t.calendar.noRoomsTitle} description={t.calendar.noRoomsDescription} action={<Link href="/dashboard/rooms" className="text-sm font-medium text-primary hover:underline">{t.calendar.goToRooms}</Link>} />
@@ -569,24 +627,32 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
             <DialogContent
               showCloseButton={false}
               aria-describedby={undefined}
-              className="fixed inset-0 flex h-dvh max-h-dvh w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-none bg-background p-0 ring-0 sm:max-w-full data-closed:zoom-out-100 data-open:zoom-in-100"
+              className="fixed inset-0 flex h-dvh max-h-dvh w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-none bg-background p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] ring-0 sm:max-w-full data-closed:zoom-out-100 data-open:zoom-in-100"
             >
               <div className="flex shrink-0 items-center justify-between gap-1 border-b bg-card px-2 py-1.5">
-                <DialogTitle className="truncate text-sm font-semibold">Шахматка · {rangeDays} дней</DialogTitle>
+                <DialogTitle className="truncate text-sm font-semibold">Календарь · {rangeDays} дней</DialogTitle>
                 <div className="hidden items-center gap-3 text-xs text-muted-foreground md:flex"><Metric label="Заезды" value={todayStats.arrivals} /><Metric label="Выезды" value={todayStats.departures} /><Metric label="Проживают" value={todayStats.staying} /></div>
                 <div className="flex shrink-0 items-center">
-                  {mobileFullscreen ? <Button variant="ghost" size="icon-sm" onClick={() => setShowMobileTools((current) => !current)} aria-label="Инструменты шахматки" aria-expanded={showMobileTools}><Settings2 className="size-4" /></Button> : null}
-                  <Button variant="ghost" size="icon-sm" onClick={() => changeZoom(-1)} disabled={zoom <= (mobileFullscreen ? 1 : ZOOM_MIN)} aria-label="Уменьшить масштаб"><ZoomOut className="size-4" /></Button>
-                  <button type="button" onClick={() => { nextScrollLeft.current = 0; setZoom(1); if (scrollRef.current) scrollRef.current.scrollLeft = 0; }} className="w-11 text-center text-xs tabular-nums text-muted-foreground" aria-label="Показать весь диапазон">{Math.round(zoom * 100)}%</button>
+                  <Button variant="ghost" size="icon-sm" onClick={() => changeZoom(-1)} disabled={zoom <= (mobileFullscreen ? MOBILE_ZOOM_MIN : ZOOM_MIN)} aria-label="Уменьшить"><ZoomOut className="size-4" /></Button>
+                  <button type="button" onClick={resetZoom} className="min-h-11 w-12 text-center text-xs tabular-nums text-muted-foreground" aria-label="Сбросить масштаб" title="Сбросить масштаб">{Math.round(zoom * 100)}%</button>
                   <Button variant="ghost" size="icon-sm" onClick={() => changeZoom(1)} disabled={zoom >= (mobileFullscreen ? MOBILE_ZOOM_MAX : ZOOM_MAX)} aria-label="Увеличить масштаб"><ZoomIn className="size-4" /></Button>
                   <Button variant="ghost" size="icon-sm" onClick={closeFullscreen} aria-label="Закрыть"><X className="size-4" /></Button>
                 </div>
               </div>
-              {mobileFullscreen ? <div className="flex shrink-0 items-center justify-between border-b bg-card px-2 py-1 text-xs">
-                <div className="flex items-center gap-1"><Button variant="ghost" size="icon-sm" onClick={() => shift(-1)} disabled={navigating} aria-label="Предыдущие дни"><ChevronLeft className="size-4" /></Button><button type="button" onClick={() => navigate(data.todayISO)} className="rounded px-1.5 py-1 font-medium text-primary hover:bg-accent">Сегодня</button><Button variant="ghost" size="icon-sm" onClick={() => shift(1)} disabled={navigating} aria-label="Следующие дни"><ChevronRight className="size-4" /></Button></div>
-                <span className="truncate text-[11px] text-muted-foreground">{formatRangeShort(anchorISO, toISODate(addDays(range.start, range.days - 1)))}</span>
-              </div> : null}
-              {(!mobileFullscreen || showMobileTools) ? <div className="shrink-0 border-b bg-secondary/30 p-2">{toolbar}</div> : null}
+              {mobileFullscreen ? <div className="shrink-0 border-b bg-card px-2 py-1.5 text-xs">
+                <div className="grid grid-cols-4 gap-1 rounded-lg bg-secondary/60 p-1" aria-label="Диапазон дат">
+                  {([[3, "Ближайшие"], [7, "Неделя"], [14, "2 недели"], [30, "Месяц"]] as const).map(([count, label]) => <button key={count} type="button" disabled={navigating} aria-pressed={rangeDays === count} onClick={() => navigate(anchorISO, count)} className="min-h-10 rounded-md px-1 text-[11px] font-medium aria-pressed:bg-card aria-pressed:text-primary aria-pressed:shadow-sm disabled:opacity-50">{label}</button>)}
+                </div>
+                <div className="mt-1 flex items-center justify-between gap-1">
+                  <Button variant="ghost" size="icon-sm" onClick={() => shift(-1)} disabled={navigating} aria-label="Предыдущие дни"><ChevronLeft className="size-4" /></Button>
+                  <button type="button" onClick={() => navigate(data.todayISO)} className="min-h-10 rounded px-2 font-medium text-primary hover:bg-accent">Сегодня</button>
+                  <label className="flex min-h-10 min-w-0 flex-1 items-center justify-end gap-1 text-muted-foreground"><span className="truncate">{formatRangeShort(anchorISO, toISODate(addDays(range.start, range.days - 1)))}</span><input type="date" aria-label="Перейти к дате" value={anchorISO} onChange={(event) => { if (event.target.value) navigate(event.target.value); }} className="w-7 min-w-7 text-transparent [color-scheme:light]" /></label>
+                  <Button variant="ghost" size="icon-sm" onClick={() => shift(1)} disabled={navigating} aria-label="Следующие дни"><ChevronRight className="size-4" /></Button>
+                </div>
+                <button type="button" onClick={() => setShowOccupancy((value) => !value)} aria-expanded={showOccupancy} className="flex min-h-8 w-full items-center justify-between text-left text-[11px] font-medium text-muted-foreground">Загрузка по дням <ChevronDown className={cn("size-3.5 transition-transform", showOccupancy && "rotate-180")} /></button>
+                {showOccupancy ? <div className="flex gap-1 overflow-x-auto pb-1" aria-label="Загрузка по дням">{occupancy.map((item) => <button type="button" key={item.iso} onClick={() => focusDay(item.iso)} className="flex min-h-14 min-w-12 flex-col items-center justify-end rounded-md bg-secondary/60 px-1 py-1 text-[10px] tabular-nums" aria-label={`${formatISODate(item.iso)}: занято ${item.occupied} из ${item.total}`}><span className="text-muted-foreground">{formatISOCompactDate(item.iso)}</span><span className="font-semibold">{item.occupied}/{item.total}</span><span className="mt-0.5 h-1 w-full rounded-full bg-border"><span className="block h-1 rounded-full bg-primary" style={{ width: `${item.total ? item.occupied / item.total * 100 : 0}%` }} /></span></button>)}</div> : null}
+                <p className="sr-only">Диапазон загружает дни, масштаб меняет ширину ячеек.</p>
+              </div> : <div className="shrink-0 border-b bg-secondary/30 p-2">{toolbar}</div>}
               <div className="flex min-h-0 flex-1 flex-col bg-card">
                 <div ref={scrollRef} className={cn("calendar-timeline-scroll min-h-0 flex-1 overflow-auto overscroll-contain", mobileFullscreen && "calendar-timeline-scroll--mobile")}>
                   <div style={{ width: labelWidth + range.days * dayWidth }}>{board}</div>
@@ -608,7 +674,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground">Нажмите на свободную ячейку для новой брони. Перетащите бронь на свободный номер или дату — сервер повторно проверит доступность.</p>
+        {!mobileFullscreen ? <p className="text-xs text-muted-foreground">Нажмите на свободную ячейку для новой брони. Перетащите бронь на свободный номер или дату — сервер повторно проверит доступность.</p> : null}
 
         {!fullscreen ? dialogs : null}
       </div>
@@ -626,7 +692,7 @@ function RoomLabel({ room, width, compact }: { room: RoomVM; width: number; comp
   );
 }
 
-function ReservationBar({ reservation, left, width, height, top, overview, clippedStart, clippedEnd, moving, preferences, highlighted, turnaroundMinutes: gapMinutes, onDragStart, onDragEnd, onOpen }: { reservation: ReservationVM; left: number; width: number; height: number; top: number; overview: boolean; clippedStart: boolean; clippedEnd: boolean; moving: boolean; preferences: CalendarPreferences; highlighted: boolean; turnaroundMinutes?: number; onDragStart: () => void; onDragEnd: () => void; onOpen: () => void }) {
+function ReservationBar({ reservation, left, width, height, top, overview, allowDrag, clippedStart, clippedEnd, moving, preferences, highlighted, turnaroundMinutes: gapMinutes, onDragStart, onDragEnd, onOpen }: { reservation: ReservationVM; left: number; width: number; height: number; top: number; overview: boolean; allowDrag: boolean; clippedStart: boolean; clippedEnd: boolean; moving: boolean; preferences: CalendarPreferences; highlighted: boolean; turnaroundMinutes?: number; onDragStart: () => void; onDragEnd: () => void; onOpen: () => void }) {
   const nights = diffDays(parseISODate(reservation.checkIn), parseISODate(reservation.checkOut));
   const styles = preferences.reservationColors === "CALM" ? CALM_RESERVATION_STYLES : RESERVATION_STYLES;
   const statusStyle = styles[reservation.status] ?? styles.CONFIRMED;
@@ -641,6 +707,7 @@ function ReservationBar({ reservation, left, width, height, top, overview, clipp
         <button
           type="button"
           disabled={moving}
+          tabIndex={overview ? -1 : 0}
           onClick={(event) => { event.stopPropagation(); onOpen(); }}
           onTouchStart={(event) => { event.currentTarget.draggable = false; }}
           onDragStart={(event) => {
@@ -649,12 +716,12 @@ function ReservationBar({ reservation, left, width, height, top, overview, clipp
             onDragStart();
           }}
           onDragEnd={onDragEnd}
-          draggable={!moving && ACTIVE_RESERVATION_STATUSES.includes(reservation.status)}
+          draggable={allowDrag && !moving && ACTIVE_RESERVATION_STATUSES.includes(reservation.status)}
           style={{ left, width, height, top }}
           aria-label={`${reservation.guestName}, номер ${reservation.roomNumber}, заезд ${formatISODate(reservation.checkIn)} в ${reservation.checkInTime}, выезд ${formatISODate(reservation.checkOut)} в ${reservation.checkOutTime}`}
           className={cn(
             "absolute z-10 flex cursor-grab items-center gap-1.5 overflow-hidden rounded-lg border py-1.5 pl-4 pr-3 text-left shadow-[0_1px_2px_rgba(25,62,48,0.10)] transition-[filter,box-shadow,opacity] before:absolute before:inset-y-1.5 before:left-1.5 before:w-0.5 before:rounded-full hover:z-20 hover:brightness-[0.98] hover:shadow-[0_3px_8px_rgba(25,62,48,0.14)] active:cursor-grabbing focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-            overview && "rounded-sm py-0 pl-0 pr-0 before:hidden",
+            overview && "pointer-events-none rounded-sm py-0 pl-0 pr-0 before:hidden",
             clippedStart && "rounded-l-none pl-2.5 before:left-0.5",
             clippedEnd && "rounded-r-none pr-2.5",
             statusStyle.bar,

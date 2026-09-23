@@ -1,6 +1,6 @@
 import { addDays, diffDays, isISODate, parseISODate, toISODate } from "@/lib/dates";
 
-export const CALENDAR_RANGE_OPTIONS = [7, 14, 30] as const;
+export const CALENDAR_RANGE_OPTIONS = [3, 7, 14, 30] as const;
 export type CalendarRangeDays = (typeof CALENDAR_RANGE_OPTIONS)[number];
 export const DEFAULT_CALENDAR_RANGE: CalendarRangeDays = 14;
 
