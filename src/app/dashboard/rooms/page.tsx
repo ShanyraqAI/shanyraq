@@ -10,12 +10,14 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { requireSectionAccess } from "@/server/guards";
+import { getRequestLocale } from "@/lib/locale-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function RoomsPage() {
   await requireSectionAccess("ROOMS");
   const hotelId = await getCurrentHotelId();
+  const locale = await getRequestLocale();
   const day = today();
 
   const [roomTypes, roomsRaw] = await Promise.all([
@@ -61,8 +63,8 @@ export default async function RoomsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t.rooms.title} description={t.rooms.description}>
-        <RoomsGrid rooms={[]} roomTypes={roomTypes.map((type) => type.name)} addButtonOnly />
+      <PageHeader title={locale === "kk" ? "Нысандар мен юниттер" : "Объекты и юниты"} description={locale === "kk" ? "Орналастыру қорының дайындығы мен ағымдағы күйі." : t.rooms.description}>
+        <RoomsGrid rooms={[]} roomTypes={roomTypes.map((type) => type.name)} addButtonOnly locale={locale} />
       </PageHeader>
 
       {/* Room type summary cards */}
@@ -111,8 +113,8 @@ export default async function RoomsPage() {
 
       {/* All rooms by floor */}
       <section>
-        <h2 className="mb-3 text-base font-semibold">{t.rooms.allRooms}</h2>
-        <RoomsGrid rooms={rooms} roomTypes={roomTypes.map((type) => type.name)} />
+        <h2 className="mb-3 text-base font-semibold">{locale === "kk" ? "Барлық юниттер" : "Все юниты"}</h2>
+        <RoomsGrid rooms={rooms} roomTypes={roomTypes.map((type) => type.name)} locale={locale} />
       </section>
     </div>
   );

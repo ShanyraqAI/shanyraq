@@ -10,6 +10,7 @@ import { CalendarOpenTracker } from "@/components/analytics/calendar-open-tracke
 import { getCurrentMembership } from "@/lib/tenant";
 import { DEFAULT_CALENDAR_PREFERENCES, type CalendarDensity } from "@/components/calendar/types";
 import { hasHotelPermission } from "@/lib/access";
+import { getRequestLocale } from "@/lib/locale-server";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
   await requireSectionAccess("CALENDAR");
   const hotel = await getCurrentHotel();
   const hotelId = hotel.id;
+  const locale = await getRequestLocale();
   const membership = await getCurrentMembership();
   const params = await searchParams;
   const todayISO = toISODate(todayInTimeZone(hotel.timezone));
@@ -120,6 +122,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Cal
           reservationColors: savedPreferences.reservationColors as "BRIGHT" | "CALM",
           collapsedRoomTypeIds: savedPreferences.collapsedRoomTypeIds,
         } : DEFAULT_CALENDAR_PREFERENCES}
+        locale={locale}
       />
     </div>
   );

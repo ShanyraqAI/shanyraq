@@ -23,7 +23,11 @@
     "test:provision:phase2": "node --env-file=.env scripts/provision-phase2-e2e.mjs",
     "test:phase2:e2e": "node --env-file=.env scripts/verify-phase2-e2e.mjs",
     "test:smoke": "tsx scripts/smoke.ts",
-    "test:room-tenancy": "tsx scripts/audit-room-tenancy.ts"
+    "test:room-tenancy": "tsx scripts/audit-room-tenancy.ts",
+    "test:rental-property": "tsx --test src/lib/rental-properties.test.ts",
+    "test:rental-property-migration": "node --env-file=.env scripts/verify-rental-property-migration.mjs",
+    "test:migrations:clean": "node --env-file=.env scripts/verify-clean-migrations.mjs",
+    "test:channex-property-migration": "node --env-file=.env scripts/verify-channex-property-migration.mjs"
   },
   "engines": {
     "node": ">=20.9.0"
@@ -45,6 +49,7 @@
     "radix-ui": "^1.6.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "server-only": "0.0.1",
     "sharp": "0.35.4",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.3.1",

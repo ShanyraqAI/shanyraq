@@ -40,6 +40,7 @@ import { formatMoney } from "@/lib/utils";
 import { t, channelLabel } from "@/lib/i18n";
 import { formatISOCompactDate } from "@/lib/dates";
 import { reservationDisplayId } from "@/lib/types";
+import { mobileCopy, type AppLocale } from "@/lib/locale";
 
 interface Props {
   reservations: ReservationVM[];
@@ -49,17 +50,20 @@ interface Props {
   hotelCurrency: string;
   todayISO: string;
   initialSelectedId?: string | null;
+  initialCreateOpen?: boolean;
+  locale?: AppLocale;
 }
 
 const STATUSES: ReservationStatus[] = ["PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"];
 
-export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency, todayISO, initialSelectedId = null }: Props) {
+export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency, todayISO, initialSelectedId = null, initialCreateOpen = false, locale = "ru" }: Props) {
+  const copy = mobileCopy[locale].reservations;
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [channel, setChannel] = useState("all");
   const [period, setPeriod] = useState<"all" | "today" | "arrivals" | "departures">("all");
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(initialCreateOpen);
   const selected = findSelectedReservation(reservations, selectedId);
 
   const channelsPresent = useMemo(() => Array.from(new Set(reservations.map((r) => r.channel))), [reservations]);
@@ -98,7 +102,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t.reservations.searchPlaceholder}
+            placeholder={copy.search}
             className="w-full pl-8 sm:w-[240px]"
           />
         </div>
@@ -129,14 +133,14 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           </SelectContent>
         </Select></div>
 
-        <div className="grid w-full grid-cols-4 gap-1 rounded-xl bg-secondary p-1 sm:hidden">{([ ["today", "Сегодня"], ["arrivals", "Заезды"], ["departures", "Выезды"], ["all", "Все"] ] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setPeriod(value)} aria-pressed={period === value} className="min-h-10 rounded-lg px-1 text-xs font-medium aria-pressed:bg-card aria-pressed:text-primary aria-pressed:shadow-sm">{label}</button>)}</div>
-        <details className="w-full sm:hidden"><summary className="cursor-pointer text-xs font-medium text-muted-foreground">Статус и источник</summary><div className="grid grid-cols-2 gap-2 pt-2"><Select value={status} onValueChange={setStatus}><SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Все статусы</SelectItem>{STATUSES.map((item) => <SelectItem key={item} value={item}>{t.statuses.reservation[item]}</SelectItem>)}</SelectContent></Select><Select value={channel} onValueChange={setChannel}><SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Все каналы</SelectItem>{channelsPresent.map((item) => <SelectItem key={item} value={item}>{channelLabel(item)}</SelectItem>)}</SelectContent></Select></div></details>
+        <div className="grid w-full grid-cols-4 gap-1 rounded-xl bg-secondary p-1 sm:hidden">{([ ["today", copy.today], ["arrivals", copy.arrivals], ["departures", copy.departures], ["all", copy.all] ] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setPeriod(value)} aria-pressed={period === value} className="min-h-10 rounded-lg px-1 text-xs font-medium aria-pressed:bg-card aria-pressed:text-primary aria-pressed:shadow-sm">{label}</button>)}</div>
+        <details className="w-full sm:hidden"><summary className="cursor-pointer text-xs font-medium text-muted-foreground">{copy.filters}</summary><div className="grid grid-cols-2 gap-2 pt-2"><Select value={status} onValueChange={setStatus}><SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{copy.allStatuses}</SelectItem>{STATUSES.map((item) => <SelectItem key={item} value={item}>{t.statuses.reservation[item]}</SelectItem>)}</SelectContent></Select><Select value={channel} onValueChange={setChannel}><SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{copy.allChannels}</SelectItem>{channelsPresent.map((item) => <SelectItem key={item} value={item}>{channelLabel(item)}</SelectItem>)}</SelectContent></Select></div></details>
 
         <div className="flex w-full flex-wrap items-center gap-3 text-sm text-muted-foreground xl:ml-auto xl:w-auto">
           <div className="flex items-center gap-3">
             <span>
               <strong className="text-foreground tabular-nums">{stats.total}</strong>{" "}
-              {t.reservations.statsCount(stats.total)}
+              <span className="sm:hidden">{copy.bookings(stats.total).replace(String(stats.total), "").trim()}</span><span className="hidden sm:inline">{t.reservations.statsCount(stats.total)}</span>
             </span>
             <span className="hidden sm:inline">
               <strong className="text-foreground tabular-nums">{formatMoney(stats.revenue, { compact: true })}</strong>{" "}
@@ -145,7 +149,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-1.5 size-4" /> {t.reservations.newButton}
+              <Plus className="mr-1.5 size-4" /> <span className="sm:hidden">{copy.newBooking}</span><span className="hidden sm:inline">{t.reservations.newButton}</span>
             </Button>
           </div>
         </div>
@@ -232,7 +236,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
         <div className="grid gap-2 sm:hidden">
           {filtered.slice(0, 100).map((r) => <button key={r.id} type="button" onClick={() => setSelectedId(r.id)} className="min-w-0 rounded-xl border bg-card px-3 py-2.5 text-left shadow-xs">
             <span className="flex items-start justify-between gap-2"><span className="min-w-0 truncate font-semibold">{r.guestName}</span><span className="shrink-0 font-mono text-xs text-muted-foreground">{reservationDisplayId(r.sequenceNumber)}</span></span>
-            <span className="mt-1 block text-sm text-muted-foreground">Номер {r.roomNumber} · {formatISOCompactDate(r.checkIn)} → {formatISOCompactDate(r.checkOut)}</span>
+            <span className="mt-1 block text-sm text-muted-foreground">{copy.unit} {r.roomNumber} · {formatISOCompactDate(r.checkIn)} → {formatISOCompactDate(r.checkOut)}</span>
             <span className="mt-2 flex items-center justify-between gap-2"><ReservationStatusBadge status={r.status} /><span className="shrink-0 text-xs font-semibold tabular-nums">{formatMoney(r.totalAmount)}</span></span>
           </button>)}
           {filtered.length === 0 ? <p className="rounded-xl border bg-card py-8 text-center text-sm text-muted-foreground">{t.filters.noMatch}</p> : null}

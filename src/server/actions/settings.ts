@@ -20,6 +20,7 @@ import { PublicError } from "@/server/errors";
 import { randomUUID } from "node:crypto";
 import { recordAnalyticsEventSafely } from "@/lib/analytics/service";
 import { accessLevelForPermissions, HOTEL_PERMISSIONS } from "@/lib/access";
+import { createDefaultRentalProperty, syncDefaultRentalProperty } from "@/lib/rental-properties";
 
 const createHotelSchema = z.object({ name: z.string().trim().min(2, "Введите название отеля").max(120) });
 const permissionsSchema = z.array(z.enum(HOTEL_PERMISSIONS)).min(1, "Выберите хотя бы один раздел").max(HOTEL_PERMISSIONS.length)
@@ -54,9 +55,12 @@ export async function saveHotelSettingsAction(input: unknown): Promise<ActionRes
       timezone: data.timezone,
       currency: data.currency,
     };
-    await db.hotel.update({
-      where: { id: currentHotelId },
-      data: next,
+    await db.$transaction(async (tx) => {
+      const updated = await tx.hotel.update({
+        where: { id: currentHotelId },
+        data: next,
+      });
+      await syncDefaultRentalProperty(tx, updated);
     });
     await writeAudit(currentHotelId, "hotel.settings_updated", "Hotel", currentHotelId, undefined, previous, next);
     revalidatePath("/dashboard/settings");
@@ -77,12 +81,12 @@ export async function createHotelAction(input: unknown): Promise<ActionResult<{ 
     const hotel = await db.$transaction(async (tx) => {
       const created = await tx.hotel.create({
         data: { orgId: owner.organizationId, slug, name: parsed.data.name, timezone: "Asia/Almaty", currency: "KZT", country: "Казахстан" },
-        select: { id: true, name: true },
       });
+      await createDefaultRentalProperty(tx, created);
       await tx.membership.create({
         data: { organizationId: owner.organizationId, userId: owner.userId, hotelId: created.id, role: "OWNER", accessLevel: "FULL" },
       });
-      return created;
+      return { id: created.id, name: created.name };
     });
     const store = await cookies();
     store.set(ACTIVE_HOTEL_COOKIE, hotel.id, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 31_536_000 });

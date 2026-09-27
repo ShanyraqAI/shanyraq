@@ -91,18 +91,26 @@ export async function upsertRoomAction(input: unknown): Promise<ActionResult<{ i
 
       const existingType = await tx.roomType.findUnique({
         where: { hotelId_name: { hotelId, name: data.roomTypeName } },
-        select: { id: true },
+        select: { id: true, rentalPropertyId: true },
       });
       const roomType = existingType
         ? await tx.roomType.update({
             where: { id: existingType.id },
             data: { capacity: data.capacity, basePrice: data.basePrice },
-            select: { id: true },
+            select: { id: true, rentalPropertyId: true },
           })
-        : await tx.roomType.create({
-            data: { hotelId, name: data.roomTypeName, capacity: data.capacity, basePrice: data.basePrice },
-            select: { id: true },
-          });
+        : await (async () => {
+            const rentalProperty = await tx.rentalProperty.findFirst({
+              where: { hotelId },
+              orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+              select: { id: true },
+            });
+            if (!rentalProperty) throw new Error("Объект размещения для текущего workspace не найден");
+            return tx.roomType.create({
+              data: { hotelId, rentalPropertyId: rentalProperty.id, name: data.roomTypeName, capacity: data.capacity, basePrice: data.basePrice },
+              select: { id: true, rentalPropertyId: true },
+            });
+          })();
 
       if (data.id) {
         const previous = await tx.room.findFirstOrThrow({
@@ -112,7 +120,7 @@ export async function upsertRoomAction(input: unknown): Promise<ActionResult<{ i
         const nextOrder = previous.roomTypeId === roomType.id ? undefined : ((await tx.room.aggregate({ where: { hotelId, roomTypeId: roomType.id }, _max: { sortOrder: true } }))._max.sortOrder ?? -1);
         const result = await tx.room.updateMany({
           where: { id: data.id, hotelId },
-          data: { number: data.number, floor: data.floor, status: data.status, roomTypeId: roomType.id, ...(nextOrder === undefined ? {} : { sortOrder: nextOrder + 1 }) },
+          data: { number: data.number, floor: data.floor, status: data.status, roomTypeId: roomType.id, rentalPropertyId: roomType.rentalPropertyId, ...(nextOrder === undefined ? {} : { sortOrder: nextOrder + 1 }) },
         });
         if (result.count !== 1) throw new Error(t.rooms.errors.roomNotFound);
         await recomputeExistingAvailability(hotelId, [previous.roomTypeId, roomType.id], tx);
@@ -128,7 +136,7 @@ export async function upsertRoomAction(input: unknown): Promise<ActionResult<{ i
 
       const maxOrder = (await tx.room.aggregate({ where: { hotelId, roomTypeId: roomType.id }, _max: { sortOrder: true } }))._max.sortOrder ?? -1;
       const created = await tx.room.create({
-        data: { hotelId, roomTypeId: roomType.id, number: data.number, floor: data.floor, status: data.status, sortOrder: maxOrder + 1 },
+        data: { hotelId, rentalPropertyId: roomType.rentalPropertyId, roomTypeId: roomType.id, number: data.number, floor: data.floor, status: data.status, sortOrder: maxOrder + 1 },
         select: { id: true },
       });
       await recomputeExistingAvailability(hotelId, [roomType.id], tx);

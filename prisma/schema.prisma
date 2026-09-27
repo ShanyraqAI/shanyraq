@@ -3,8 +3,8 @@
 // NOTE ON DATABASE PROVIDER
 // PostgreSQL (hosted, e.g. Neon via the Vercel marketplace) is the primary
 // target — it keeps users and sessions persistent across serverless cold
-// starts. The schema is portable: no native enums (status fields are strings
-// validated with Zod/TS unions).
+// starts. Most legacy status fields remain strings validated with Zod/TS
+// unions; new bounded RentalProperty fields use PostgreSQL-backed Prisma enums.
 //
 // NOTE ON DATES
 // Hotel-business dates (checkIn/checkOut/rate dates) are stored as UTC midnight
@@ -23,6 +23,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum RentalPropertyStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum RentalPropertyInventoryMode {
+  SINGLE_UNIT
+  GROUPED_UNITS
+}
+
 // ---------------------------------------------------------------------------
 // Tenancy & hotel
 // ---------------------------------------------------------------------------
@@ -39,6 +50,7 @@ model Organization {
   users              User[]
   memberships        Membership[]
   hotels             Hotel[]
+  rentalProperties   RentalProperty[]
   invitations        HotelInvitation[]
   analyticsEvents    AnalyticsEvent[]
   supportRequests    SupportRequest[]
@@ -189,6 +201,7 @@ model Hotel {
   updatedAt    DateTime     @updatedAt
   memberships  Membership[]
 
+  rentalProperties    RentalProperty[]
   roomTypes           RoomType[]
   rooms               Room[]
   guests              Guest[]
@@ -197,9 +210,16 @@ model Hotel {
   availability        Availability[]
   connections         ChannelConnection[]
   channelSyncJobs     ChannelSyncJob[]
+  channexProperties   ChannexProperty[]
+  channexRoomMappings ChannexRoomTypeMapping[]
+  channexRateMappings ChannexRatePlanMapping[]
+  channexBookings     ChannexBooking[]
+  channexRevisions    ChannexBookingRevision[]
+  channexSyncJobs     ChannexSyncJob[]
+  channexBookingLinks ChannexBookingReservation[]
   notifications       Notification[]
   invitations         HotelInvitation[]
-  organization        Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  organization        Organization                @relation(fields: [orgId], references: [id], onDelete: Cascade)
   analyticsEvents     AnalyticsEvent[]
   productExperiences  ProductExperience[]
   supportRequests     SupportRequest[]
@@ -210,6 +230,39 @@ model Hotel {
   generatedDocuments  GeneratedDocument[]
 
   @@unique([id, orgId])
+}
+
+// A customer-facing accommodation inside the legacy Hotel workspace.
+// Hotel remains the workspace boundary during the expand-and-contract rollout.
+model RentalProperty {
+  id             String                      @id @default(cuid())
+  organizationId String
+  hotelId        String
+  internalName   String
+  publicName     String
+  propertyType   String?
+  status         RentalPropertyStatus        @default(ACTIVE)
+  inventoryMode  RentalPropertyInventoryMode
+  address        String?
+  city           String?
+  country        String?
+  timezone       String                      @default("Asia/Almaty")
+  currency       String                      @default("KZT")
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  hotel             Hotel             @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  roomTypes         RoomType[]
+  rooms             Room[]
+  reservations      Reservation[]
+  ratePlans         RatePlan[]
+  channexProperties ChannexProperty[]
+  channexSyncJobs   ChannexSyncJob[]
+
+  @@unique([id, hotelId])
+  @@unique([id, hotelId, organizationId])
+  @@index([organizationId, hotelId])
 }
 
 // Personal calendar layout preferences. They are scoped to both the employee
@@ -458,40 +511,49 @@ model HotelInvitation {
 // ---------------------------------------------------------------------------
 
 model RoomType {
-  id          String  @id @default(cuid())
-  hotelId     String
-  name        String
-  description String?
-  capacity    Int // max adults
-  basePrice   Decimal @db.Decimal(14, 2)
-  sortOrder   Int     @default(0)
+  id               String  @id @default(cuid())
+  hotelId          String
+  rentalPropertyId String
+  name             String
+  description      String?
+  capacity         Int // max adults
+  basePrice        Decimal @db.Decimal(14, 2)
+  sortOrder        Int     @default(0)
 
-  hotel               Hotel                @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  hotel               Hotel                    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  rentalProperty      RentalProperty           @relation(fields: [rentalPropertyId, hotelId], references: [id, hotelId], onDelete: Restrict)
   rooms               Room[]
   reservations        Reservation[]
   ratePlans           RatePlan[]
   availability        Availability[]
   channelRoomMappings ChannelRoomMapping[]
+  channexMappings     ChannexRoomTypeMapping[]
 
   @@unique([hotelId, name])
   @@unique([id, hotelId])
+  @@unique([id, rentalPropertyId, hotelId])
+  @@index([rentalPropertyId, hotelId])
 }
 
 model Room {
-  id         String @id @default(cuid())
-  hotelId    String
-  roomTypeId String
-  number     String
-  floor      Int    @default(1)
-  sortOrder  Int    @default(0)
-  status     String @default("AVAILABLE") // AVAILABLE | OCCUPIED | CLEANING | MAINTENANCE | OUT_OF_ORDER
+  id               String @id @default(cuid())
+  hotelId          String
+  rentalPropertyId String
+  roomTypeId       String
+  number           String
+  floor            Int    @default(1)
+  sortOrder        Int    @default(0)
+  status           String @default("AVAILABLE") // AVAILABLE | OCCUPIED | CLEANING | MAINTENANCE | OUT_OF_ORDER
 
-  hotel        Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  roomType     RoomType      @relation(fields: [roomTypeId, hotelId], references: [id, hotelId], onDelete: Restrict)
-  reservations Reservation[]
+  hotel          Hotel          @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  rentalProperty RentalProperty @relation(fields: [rentalPropertyId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  roomType       RoomType       @relation(fields: [roomTypeId, rentalPropertyId, hotelId], references: [id, rentalPropertyId, hotelId], onDelete: Restrict)
+  reservations   Reservation[]
 
   @@unique([hotelId, number])
   @@unique([id, hotelId])
+  @@unique([id, rentalPropertyId, hotelId])
+  @@index([rentalPropertyId, hotelId])
 }
 
 // ---------------------------------------------------------------------------
@@ -508,8 +570,8 @@ model Guest {
   country        String?
   notes          String?
 
-  hotel        Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  reservations Reservation[]
+  hotel         Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  reservations  Reservation[]
   internalNotes GuestNote[]
 
   @@unique([id, hotelId])
@@ -535,6 +597,7 @@ model GuestNote {
 model Reservation {
   id                    String   @id @default(cuid())
   hotelId               String
+  rentalPropertyId      String
   guestId               String
   roomId                String
   roomTypeId            String
@@ -553,22 +616,28 @@ model Reservation {
   currency              String   @default("KZT")
   totalAmount           Decimal  @db.Decimal(14, 2)
   notes                 String?
-  paymentMethod         String?  // ONLINE | CASH; nullable for older reservations
+  paymentMethod         String? // ONLINE | CASH; nullable for older reservations
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  hotel              Hotel               @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  guest              Guest               @relation(fields: [guestId, hotelId], references: [id, hotelId], onDelete: Restrict)
-  room               Room                @relation(fields: [roomId, hotelId], references: [id, hotelId], onDelete: Restrict)
-  roomType           RoomType            @relation(fields: [roomTypeId, hotelId], references: [id, hotelId], onDelete: Restrict)
-  ratePlan           RatePlan?           @relation(fields: [ratePlanId, hotelId], references: [id, hotelId], onDelete: Restrict)
-  generatedDocuments GeneratedDocument[]
+  hotel               Hotel                       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  rentalProperty      RentalProperty              @relation(fields: [rentalPropertyId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  guest               Guest                       @relation(fields: [guestId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  room                Room                        @relation(fields: [roomId, rentalPropertyId, hotelId], references: [id, rentalPropertyId, hotelId], onDelete: Restrict)
+  roomType            RoomType                    @relation(fields: [roomTypeId, rentalPropertyId, hotelId], references: [id, rentalPropertyId, hotelId], onDelete: Restrict)
+  ratePlan            RatePlan?                   @relation(fields: [ratePlanId, rentalPropertyId, hotelId], references: [id, rentalPropertyId, hotelId], onDelete: Restrict)
+  generatedDocuments  GeneratedDocument[]
+  channexBookings     ChannexBooking[]
+  channexBookingLinks ChannexBookingReservation[]
 
+  @@unique([id, hotelId])
+  @@unique([id, rentalPropertyId, hotelId])
   @@unique([hotelId, sourceChannel, externalReservationId])
   @@unique([hotelId, sequenceNumber])
   @@index([hotelId, checkIn])
   @@index([hotelId, status])
   @@index([roomId, checkIn, checkOut])
+  @@index([rentalPropertyId, hotelId])
 }
 
 // ---------------------------------------------------------------------------
@@ -578,6 +647,7 @@ model Reservation {
 model RatePlan {
   id                String  @id @default(cuid())
   hotelId           String
+  rentalPropertyId  String
   roomTypeId        String
   sequenceNumber    Int?
   name              String
@@ -586,22 +656,32 @@ model RatePlan {
   basePrice         Decimal @db.Decimal(14, 2)
   currency          String  @default("KZT")
 
-  hotel        Hotel                @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  roomType     RoomType             @relation(fields: [roomTypeId], references: [id])
-  rates        Rate[]
-  rateMappings ChannelRateMapping[]
-  reservations Reservation[]
+  hotel           Hotel                    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  rentalProperty  RentalProperty           @relation(fields: [rentalPropertyId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  roomType        RoomType                 @relation(fields: [roomTypeId, rentalPropertyId, hotelId], references: [id, rentalPropertyId, hotelId], onDelete: Restrict)
+  rates           Rate[]
+  rateMappings    ChannelRateMapping[]
+  channexMappings ChannexRatePlanMapping[]
+  reservations    Reservation[]
 
   @@unique([hotelId, name])
   @@unique([id, hotelId])
+  @@unique([id, rentalPropertyId, hotelId])
   @@unique([hotelId, sequenceNumber])
+  @@index([rentalPropertyId, hotelId])
 }
 
 model Rate {
-  id         String   @id @default(cuid())
-  ratePlanId String
-  date       DateTime // UTC midnight
-  price      Decimal  @db.Decimal(14, 2)
+  id                String   @id @default(cuid())
+  ratePlanId        String
+  date              DateTime // UTC midnight
+  price             Decimal  @db.Decimal(14, 2)
+  minStay           Int      @default(1)
+  minStayType       String   @default("ARRIVAL") // ARRIVAL | THROUGH
+  maxStay           Int?
+  stopSell          Boolean  @default(false)
+  closedToArrival   Boolean  @default(false)
+  closedToDeparture Boolean  @default(false)
 
   ratePlan RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
 
@@ -739,6 +819,223 @@ model ChannelSyncJob {
   @@index([status, availableAt])
   @@index([hotelId, createdAt])
   @@index([connectionId, createdAt])
+}
+
+// Channex is a transport layer for multiple OTAs. These records intentionally
+// live beside the legacy per-channel architecture until that architecture can
+// be migrated incrementally without changing existing channel behaviour.
+model ChannexProperty {
+  id                      String    @id @default(cuid())
+  organizationId          String
+  hotelId                 String
+  rentalPropertyId        String
+  environment             String    @default("STAGING") // STAGING | PRODUCTION
+  propertyId              String?
+  provisioningStatus      String    @default("NOT_STARTED") // NOT_STARTED | IN_PROGRESS | READY | FAILED
+  provisioningStep        String?
+  webhookId               String?
+  lastProcessedRevisionId String?
+  lastProvisionedAt       DateTime?
+  lastFullSyncAt          DateTime?
+  lastSyncAt              DateTime?
+  lastSyncStatus          String? // QUEUED | RUNNING | SUCCESS | FAILED
+  lastBookingPollAt       DateTime?
+  lastErrorCode           String?
+  lastErrorMessage        String?   @db.VarChar(1000)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  hotel            Hotel                    @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  rentalProperty   RentalProperty           @relation(fields: [rentalPropertyId, hotelId, organizationId], references: [id, hotelId, organizationId], onDelete: Cascade)
+  roomTypeMappings ChannexRoomTypeMapping[]
+  ratePlanMappings ChannexRatePlanMapping[]
+  bookings         ChannexBooking[]
+  revisions        ChannexBookingRevision[]
+  syncJobs         ChannexSyncJob[]
+
+  @@unique([rentalPropertyId, environment])
+  @@unique([environment, propertyId])
+  @@unique([environment, webhookId])
+  @@unique([id, rentalPropertyId, hotelId, organizationId])
+  @@index([organizationId, hotelId])
+}
+
+model ChannexRoomTypeMapping {
+  id                 String    @id @default(cuid())
+  propertyRefId      String
+  organizationId     String
+  hotelId            String
+  rentalPropertyId   String
+  roomTypeId         String
+  channexRoomTypeId  String?
+  provisioningStatus String    @default("PENDING") // PENDING | PROVISIONED | FAILED
+  lastErrorCode      String?
+  lastErrorMessage   String?   @db.VarChar(1000)
+  lastProvisionedAt  DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  property ChannexProperty @relation(fields: [propertyRefId, rentalPropertyId, hotelId, organizationId], references: [id, rentalPropertyId, hotelId, organizationId], onDelete: Cascade)
+  hotel    Hotel           @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  roomType RoomType        @relation(fields: [roomTypeId, rentalPropertyId, hotelId], references: [id, rentalPropertyId, hotelId], onDelete: Restrict)
+
+  @@unique([propertyRefId, roomTypeId])
+  @@unique([propertyRefId, channexRoomTypeId])
+  @@index([organizationId, hotelId])
+}
+
+model ChannexRatePlanMapping {
+  id                 String    @id @default(cuid())
+  propertyRefId      String
+  organizationId     String
+  hotelId            String
+  rentalPropertyId   String
+  ratePlanId         String
+  channexRatePlanId  String?
+  provisioningStatus String    @default("PENDING") // PENDING | PROVISIONED | FAILED
+  lastErrorCode      String?
+  lastErrorMessage   String?   @db.VarChar(1000)
+  lastProvisionedAt  DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  property ChannexProperty @relation(fields: [propertyRefId, rentalPropertyId, hotelId, organizationId], references: [id, rentalPropertyId, hotelId, organizationId], onDelete: Cascade)
+  hotel    Hotel           @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  ratePlan RatePlan        @relation(fields: [ratePlanId, rentalPropertyId, hotelId], references: [id, rentalPropertyId, hotelId], onDelete: Restrict)
+
+  @@unique([propertyRefId, ratePlanId])
+  @@unique([propertyRefId, channexRatePlanId])
+  @@index([organizationId, hotelId])
+}
+
+// The Channex booking is the transport identity. otaCode/otaReservationCode
+// preserve the actual sales source (Booking.com, Airbnb, ETG, etc.).
+model ChannexBooking {
+  id                 String    @id @default(cuid())
+  propertyRefId      String
+  organizationId     String
+  hotelId            String
+  rentalPropertyId   String
+  reservationId      String?
+  channexBookingId   String
+  uniqueId           String
+  otaCode            String
+  otaName            String?
+  otaReservationCode String?
+  firstSeenAt        DateTime  @default(now())
+  lastRevisionAt     DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  property     ChannexProperty             @relation(fields: [propertyRefId, rentalPropertyId, hotelId, organizationId], references: [id, rentalPropertyId, hotelId, organizationId], onDelete: Cascade)
+  hotel        Hotel                       @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  reservation  Reservation?                @relation(fields: [reservationId, rentalPropertyId, hotelId], references: [id, rentalPropertyId, hotelId], onDelete: Restrict)
+  revisions    ChannexBookingRevision[]
+  reservations ChannexBookingReservation[]
+
+  @@unique([propertyRefId, channexBookingId])
+  @@unique([propertyRefId, uniqueId])
+  @@unique([id, rentalPropertyId, hotelId, organizationId])
+  @@index([organizationId, hotelId])
+  @@index([reservationId, hotelId])
+  @@index([otaCode, otaReservationCode])
+}
+
+model ChannexBookingRevision {
+  id                  String    @id @default(cuid())
+  propertyRefId       String
+  organizationId      String
+  hotelId             String
+  rentalPropertyId    String
+  bookingRecordId     String?
+  revisionId          String
+  channexBookingId    String
+  sourceSystemId      String?
+  idempotencyKey      String
+  eventType           String // NEW | MODIFIED | CANCELLED
+  processingStatus    String    @default("RECEIVED") // RECEIVED | PROCESSING | PROCESSED | FAILED
+  payload             Json
+  attempts            Int       @default(0)
+  safeErrorCode       String?
+  safeErrorMessage    String?   @db.VarChar(1000)
+  receivedAt          DateTime  @default(now())
+  processingStartedAt DateTime?
+  processedAt         DateTime?
+  acknowledgedAt      DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  property ChannexProperty @relation(fields: [propertyRefId, rentalPropertyId, hotelId, organizationId], references: [id, rentalPropertyId, hotelId, organizationId], onDelete: Cascade)
+  hotel    Hotel           @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  booking  ChannexBooking? @relation(fields: [bookingRecordId, rentalPropertyId, hotelId, organizationId], references: [id, rentalPropertyId, hotelId, organizationId], onDelete: Restrict)
+
+  @@unique([propertyRefId, revisionId])
+  @@unique([propertyRefId, idempotencyKey])
+  @@index([organizationId, hotelId, processingStatus, receivedAt])
+  @@index([propertyRefId, channexBookingId])
+  @@index([bookingRecordId, hotelId, organizationId])
+}
+
+// One durable property-scoped ARI job coalesces changes before sending at most
+// one availability and one restrictions request to Channex per worker run.
+model ChannexSyncJob {
+  id                    String    @id @default(cuid())
+  propertyRefId         String
+  organizationId        String
+  hotelId               String
+  rentalPropertyId      String
+  deduplicationKey      String?   @unique
+  status                String    @default("PENDING") // PENDING | RUNNING | SUCCEEDED | FAILED
+  availabilityRequested Boolean   @default(false)
+  restrictionsRequested Boolean   @default(false)
+  fullSyncRequested     Boolean   @default(false)
+  roomTypeIds           Json
+  ratePlanIds           Json
+  dateFrom              DateTime
+  dateTo                DateTime // inclusive business date
+  attempts              Int       @default(0)
+  maxAttempts           Int       @default(6)
+  rerunRequested        Boolean   @default(false)
+  availableAt           DateTime  @default(now())
+  lockedAt              DateTime?
+  lockedBy              String?
+  finishedAt            DateTime?
+  lastTaskIds           Json?
+  lastErrorCode         String?
+  lastErrorMessage      String?   @db.VarChar(1000)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  property       ChannexProperty @relation(fields: [propertyRefId, rentalPropertyId, hotelId, organizationId], references: [id, rentalPropertyId, hotelId, organizationId], onDelete: Cascade)
+  hotel          Hotel           @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  rentalProperty RentalProperty  @relation(fields: [rentalPropertyId, hotelId, organizationId], references: [id, hotelId, organizationId], onDelete: Cascade)
+
+  @@index([status, availableAt])
+  @@index([propertyRefId, createdAt])
+  @@index([organizationId, hotelId])
+}
+
+// Channex group bookings contain several rooms while a local Reservation owns
+// exactly one physical unit. This table preserves every room independently.
+model ChannexBookingReservation {
+  id               String   @id @default(cuid())
+  bookingRecordId  String
+  reservationId    String
+  organizationId   String
+  hotelId          String
+  rentalPropertyId String
+  roomKey          String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  booking     ChannexBooking @relation(fields: [bookingRecordId, rentalPropertyId, hotelId, organizationId], references: [id, rentalPropertyId, hotelId, organizationId], onDelete: Cascade)
+  reservation Reservation    @relation(fields: [reservationId, rentalPropertyId, hotelId], references: [id, rentalPropertyId, hotelId], onDelete: Restrict)
+  hotel       Hotel          @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+
+  @@unique([bookingRecordId, roomKey])
+  @@unique([bookingRecordId, reservationId])
+  @@index([reservationId, hotelId])
+  @@index([organizationId, hotelId])
 }
 
 model Notification {

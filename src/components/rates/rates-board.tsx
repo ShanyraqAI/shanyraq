@@ -38,16 +38,41 @@ import { ratePlanDisplayId } from "@/lib/types";
 export interface RatesBoardProps {
   plans: (RatePlanVM & { availableToday: number | null })[];
   dates: string[]; // ISO dates for columns
-  prices: Record<string, (number | null)[]>; // planId → price per date
+  dailyRates: Record<string, DailyRateVM[]>;
   roomTypes: { id: string; name: string }[];
 }
 
-export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps) {
+export interface DailyRateVM {
+  price: number | null;
+  minStay: number;
+  minStayType: "ARRIVAL" | "THROUGH";
+  maxStay: number | null;
+  stopSell: boolean;
+  closedToArrival: boolean;
+  closedToDeparture: boolean;
+}
+
+const DEFAULT_RESTRICTIONS: Omit<DailyRateVM, "price"> = {
+  minStay: 1,
+  minStayType: "ARRIVAL",
+  maxStay: null,
+  stopSell: false,
+  closedToArrival: false,
+  closedToDeparture: false,
+};
+
+export function RatesBoard({ plans, dates, dailyRates, roomTypes }: RatesBoardProps) {
   const router = useRouter();
   const [planForUpdate, setPlanForUpdate] = useState<RatePlanVM | null>(null);
   const [from, setFrom] = useState(dates[0] ?? "");
   const [to, setTo] = useState(dates[Math.min(6, dates.length - 1)] ?? "");
   const [price, setPrice] = useState("");
+  const [minStay, setMinStay] = useState("1");
+  const [minStayType, setMinStayType] = useState<"ARRIVAL" | "THROUGH">("ARRIVAL");
+  const [maxStay, setMaxStay] = useState("");
+  const [stopSell, setStopSell] = useState(false);
+  const [closedToArrival, setClosedToArrival] = useState(false);
+  const [closedToDeparture, setClosedToDeparture] = useState(false);
   const [weekendsOnly, setWeekendsOnly] = useState(false);
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -58,6 +83,21 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
   const [newPlanBreakfast, setNewPlanBreakfast] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  function openRateEditor(plan: RatePlanVM, dateIndex = 0) {
+    const rate = dailyRates[plan.id]?.[dateIndex];
+    setPlanForUpdate(plan);
+    setFrom(dates[dateIndex] ?? dates[0] ?? "");
+    setTo(dates[Math.min(dateIndex + 6, dates.length - 1)] ?? dates[dateIndex] ?? "");
+    setPrice(String(rate?.price ?? plan.basePrice));
+    setMinStay(String(rate?.minStay ?? DEFAULT_RESTRICTIONS.minStay));
+    setMinStayType(rate?.minStayType ?? DEFAULT_RESTRICTIONS.minStayType);
+    setMaxStay(rate?.maxStay ? String(rate.maxStay) : "");
+    setStopSell(rate?.stopSell ?? false);
+    setClosedToArrival(rate?.closedToArrival ?? false);
+    setClosedToDeparture(rate?.closedToDeparture ?? false);
+    setWeekendsOnly(false);
+  }
+
   async function saveBulk() {
     if (!planForUpdate) return;
     setSaving(true);
@@ -67,6 +107,12 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
         from,
         to,
         price: Number(price),
+        minStay: Number(minStay),
+        minStayType,
+        maxStay: maxStay ? Number(maxStay) : null,
+        stopSell,
+        closedToArrival,
+        closedToDeparture,
         weekendsOnly,
       });
       if (!result.ok) {
@@ -75,7 +121,6 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
       }
       toast.success(result.message);
       setPlanForUpdate(null);
-      setPrice("");
       router.refresh();
     } finally {
       setSaving(false);
@@ -127,11 +172,11 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Новый тариф</DialogTitle>
-              <DialogDescription>Создайте тариф для категории номера. Базовая цена будет использоваться по умолчанию при бронировании.</DialogDescription>
+              <DialogDescription>Создайте тариф для типа размещения. Базовая цена будет использоваться по умолчанию при бронировании.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label>Категория номера</Label>
+                <Label>Тип размещения</Label>
                 <Select value={newPlanRoomTypeId} onValueChange={setNewPlanRoomTypeId}>
                   <SelectTrigger><SelectValue placeholder="Выберите категорию" /></SelectTrigger>
                   <SelectContent>{roomTypes.map((rt) => <SelectItem key={rt.id} value={rt.id}>{rt.name}</SelectItem>)}</SelectContent>
@@ -156,7 +201,29 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
           <Tag className="mr-2 size-4" /> Создать тариф
         </Button>
       </div>
-      <div className="space-y-2 sm:hidden">{plans.map((plan) => <div key={plan.id} className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{plan.name}</p><p className="truncate text-xs text-muted-foreground">{plan.roomTypeName}{plan.availableToday !== null ? ` · ${plan.availableToday} свободно` : ""}</p></div><div className="text-right"><p className="text-sm font-semibold tabular-nums">{formatCompactNightlyPrice(prices[plan.id]?.[0] ?? plan.basePrice)}</p><p className="text-[10px] text-muted-foreground">за ночь</p></div><Button variant="ghost" size="icon" aria-label={t.rates.editPricesAria(plan.name)} onClick={() => { setPlanForUpdate(plan); setFrom(dates[0]); setTo(dates[Math.min(6, dates.length - 1)]); }}><PencilLine className="size-4" /></Button></div>)}</div>
+      <div className="space-y-2 sm:hidden">
+        {plans.map((plan) => {
+          const rate = dailyRates[plan.id]?.[0];
+          return (
+            <div key={plan.id} className="flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{plan.name}</p>
+                <p className="truncate text-xs text-muted-foreground">{plan.roomTypeName}{plan.availableToday !== null ? ` · ${plan.availableToday} свободно` : ""}</p>
+                {rate && (rate.stopSell || rate.closedToArrival || rate.closedToDeparture || rate.minStay > 1 || rate.maxStay) ? (
+                  <p className="mt-1 text-[11px] text-amber-700">Есть ограничения на сегодня</p>
+                ) : null}
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-semibold tabular-nums">{formatCompactNightlyPrice(rate?.price ?? plan.basePrice)}</p>
+                <p className="text-[10px] text-muted-foreground">за ночь</p>
+              </div>
+              <Button variant="ghost" size="icon" aria-label={t.rates.editPricesAria(plan.name)} onClick={() => openRateEditor(plan)}>
+                <PencilLine className="size-4" />
+              </Button>
+            </div>
+          );
+        })}
+      </div>
       <div className="hidden overflow-x-auto rounded-xl border bg-card shadow-sm sm:block">
         <Table>
           <TableHeader>
@@ -196,32 +263,35 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
                       size="icon"
                       className="size-7 shrink-0"
                       aria-label={t.rates.editPricesAria(plan.name)}
-                      onClick={() => {
-                        setPlanForUpdate(plan);
-                        setFrom(dates[0]);
-                        setTo(dates[Math.min(6, dates.length - 1)]);
-                      }}
+                      onClick={() => openRateEditor(plan)}
                     >
                       <PencilLine className="size-3.5" />
                     </Button>
                   </div>
                 </TableCell>
-                {(prices[plan.id] ?? []).map((p, i) => (
+                {(dailyRates[plan.id] ?? []).map((rate, i) => (
                   <TableCell key={`${plan.id}-${dates[i]}`} className="text-center tabular-nums">
-                    {p === null ? (
+                    {rate.price === null ? (
                       <span className="text-muted-foreground">—</span>
                     ) : (
                       <Badge
                         variant="outline"
                         className={
-                          p > plan.basePrice
+                          rate.price > plan.basePrice
                             ? "border-transparent bg-orange-50 font-medium text-orange-700"
                             : "border-transparent bg-emerald-50 font-medium text-emerald-700"
                         }
                       >
-                        {formatCompactNightlyPrice(p)}
+                        {formatCompactNightlyPrice(rate.price)}
                       </Badge>
                     )}
+                    <div className="mt-1 flex min-h-4 flex-wrap justify-center gap-0.5 text-[9px] font-medium">
+                      {rate.minStay > 1 ? <span className="text-sky-700">мин {rate.minStay}</span> : null}
+                      {rate.maxStay ? <span className="text-violet-700">макс {rate.maxStay}</span> : null}
+                      {rate.stopSell ? <span className="text-destructive">закрыто</span> : null}
+                      {rate.closedToArrival ? <span className="text-amber-700">без заезда</span> : null}
+                      {rate.closedToDeparture ? <span className="text-amber-700">без выезда</span> : null}
+                    </div>
                   </TableCell>
                 ))}
               </TableRow>
@@ -232,7 +302,7 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
 
       {/* Bulk update dialog */}
       <Dialog open={Boolean(planForUpdate)} onOpenChange={(o) => !o && setPlanForUpdate(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t.rates.bulkDialog.title}</DialogTitle>
             <DialogDescription>
@@ -265,6 +335,58 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
             />
             <p className="text-xs text-muted-foreground">От 1 000 до 999 000 ₸</p>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-min-stay">Минимум ночей</Label>
+              <Input
+                id="bulk-min-stay"
+                type="number"
+                min={1}
+                max={730}
+                value={minStay}
+                onChange={(event) => setMinStay(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-max-stay">Максимум ночей</Label>
+              <Input
+                id="bulk-max-stay"
+                type="number"
+                min={1}
+                max={730}
+                placeholder="Без ограничения"
+                value={maxStay}
+                onChange={(event) => setMaxStay(event.target.value)}
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Как применять минимум</Label>
+            <Select value={minStayType} onValueChange={(value) => setMinStayType(value as "ARRIVAL" | "THROUGH")}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ARRIVAL">По дате заезда</SelectItem>
+                <SelectItem value="THROUGH">На весь период проживания</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              «По дате заезда» проверяет только день прибытия, «на весь период» — каждую ночь проживания.
+            </p>
+          </div>
+          <div className="space-y-2 rounded-lg border p-3">
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={stopSell} onCheckedChange={(value) => setStopSell(value === true)} />
+              Закрыть продажи
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={closedToArrival} onCheckedChange={(value) => setClosedToArrival(value === true)} />
+              Запретить заезд
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={closedToDeparture} onCheckedChange={(value) => setClosedToDeparture(value === true)} />
+              Запретить выезд
+            </label>
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={weekendsOnly} onCheckedChange={(v) => setWeekendsOnly(v === true)} />
             {t.rates.bulkDialog.weekendsOnly}
@@ -273,7 +395,7 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
             <Button variant="outline" onClick={() => setPlanForUpdate(null)}>
               {t.common.cancel}
             </Button>
-            <Button onClick={saveBulk} disabled={saving || !price || !from || !to}>
+            <Button onClick={saveBulk} disabled={saving || !price || !minStay || !from || !to}>
               {t.rates.bulkDialog.apply}
             </Button>
           </DialogFooter>
@@ -283,11 +405,11 @@ export function RatesBoard({ plans, dates, prices, roomTypes }: RatesBoardProps)
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Новый тариф</DialogTitle>
-            <DialogDescription>Создайте тариф для категории номера. Базовая цена будет использоваться по умолчанию при бронировании.</DialogDescription>
+            <DialogDescription>Создайте тариф для типа размещения. Базовая цена будет использоваться по умолчанию при бронировании.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Категория номера</Label>
+              <Label>Тип размещения</Label>
               <Select value={newPlanRoomTypeId} onValueChange={setNewPlanRoomTypeId}>
                 <SelectTrigger><SelectValue placeholder="Выберите категорию" /></SelectTrigger>
                 <SelectContent>{roomTypes.map((rt) => <SelectItem key={rt.id} value={rt.id}>{rt.name}</SelectItem>)}</SelectContent>

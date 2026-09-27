@@ -94,3 +94,30 @@
   color: var(--sidebar-foreground);
   border-color: var(--sidebar-border);
 }
+
+@media (max-width: 1023px) {
+  [data-dashboard-theme] {
+    background:
+      radial-gradient(circle at 100% 8%, rgb(230 220 192 / 0.22), transparent 22rem),
+      var(--background);
+  }
+
+  .mobile-ornament {
+    background-image:
+      linear-gradient(45deg, transparent 46%, rgb(230 220 192 / 0.2) 47% 53%, transparent 54%),
+      linear-gradient(-45deg, transparent 46%, rgb(230 220 192 / 0.14) 47% 53%, transparent 54%);
+    background-position: calc(100% + 18px) -32px;
+    background-size: 84px 84px;
+  }
+
+  .mobile-income-card {
+    border-color: rgb(25 62 48 / 0.12);
+    box-shadow: 0 12px 34px rgb(25 62 48 / 0.08);
+  }
+}
+
+@media (display-mode: standalone) {
+  [data-dashboard-theme] > div > header:first-child {
+    padding-top: max(env(safe-area-inset-top), 0.25rem);
+  }
+}

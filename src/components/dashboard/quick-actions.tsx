@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReservationFormDialog } from "@/components/reservations/reservation-form-dialog";
 import type { GuestVM, RatePlanVM, RoomVM } from "@/lib/types";
+import type { AppLocale } from "@/lib/locale";
 
-export function QuickActions({ rooms, ratePlans, guests, hotelCurrency, canCreateReservation, canOpenCalendar, canOpenGuests, canOpenRooms, mobile = false }: {
+export function QuickActions({ rooms, ratePlans, guests, hotelCurrency, canCreateReservation, canOpenCalendar, canOpenGuests, canOpenRooms, mobile = false, locale = "ru" }: {
   rooms: RoomVM[]; ratePlans: RatePlanVM[]; guests: GuestVM[]; hotelCurrency: string;
-  canCreateReservation: boolean; canOpenCalendar: boolean; canOpenGuests: boolean; canOpenRooms: boolean; mobile?: boolean;
+  canCreateReservation: boolean; canOpenCalendar: boolean; canOpenGuests: boolean; canOpenRooms: boolean; mobile?: boolean; locale?: AppLocale;
 }) {
   const [reservationOpen, setReservationOpen] = useState(false);
   const links = [
@@ -21,7 +22,7 @@ export function QuickActions({ rooms, ratePlans, guests, hotelCurrency, canCreat
 
   if (!canCreateReservation && links.length === 0) return null;
   return <>
-    {mobile && canCreateReservation ? <Button onClick={() => setReservationOpen(true)} className="h-12 w-full text-sm"><Plus className="size-4" /> Новая бронь</Button> : null}
+    {mobile && canCreateReservation ? <Button onClick={() => setReservationOpen(true)} className="h-12 w-full text-sm"><Plus className="size-4" /> {locale === "kk" ? "Жаңа бронь" : "Новая бронь"}</Button> : null}
     {!mobile ? <Card className="shadow-sm">
       <CardHeader className="border-b pb-4"><CardTitle className="text-base">Быстрые действия</CardTitle></CardHeader>
       <CardContent className="grid gap-2 pt-5 sm:grid-cols-2 xl:grid-cols-1">

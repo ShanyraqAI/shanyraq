@@ -10,9 +10,10 @@ test("PostgreSQL import saves valid rows and reports conflicts without touching 
   try {
     await db.organization.create({ data: { id, name: "Automated import check" } });
     created = true;
-    await db.hotel.create({ data: { id, orgId: id, name: "Import fixture", slug: id } });
-    const type = await db.roomType.create({ data: { hotelId: id, name: "Standard", capacity: 2, basePrice: 25_000 } });
-    await db.room.create({ data: { hotelId: id, roomTypeId: type.id, number: "101" } });
+    const hotel = await db.hotel.create({ data: { id, orgId: id, name: "Import fixture", slug: id } });
+    const property = await db.rentalProperty.create({ data: { organizationId: id, hotelId: id, internalName: hotel.name, publicName: hotel.name, inventoryMode: "GROUPED_UNITS" } });
+    const type = await db.roomType.create({ data: { hotelId: id, rentalPropertyId: property.id, name: "Standard", capacity: 2, basePrice: 25_000 } });
+    await db.room.create({ data: { hotelId: id, rentalPropertyId: property.id, roomTypeId: type.id, number: "101" } });
     const rows = [
       { sourceRow: 2, guestName: "Айбек", roomNumber: "101", checkIn: "2031-09-01", checkOut: "2031-09-03" },
       { sourceRow: 3, guestName: "Иван", roomNumber: "101", checkIn: "2031-09-02", checkOut: "2031-09-04" },

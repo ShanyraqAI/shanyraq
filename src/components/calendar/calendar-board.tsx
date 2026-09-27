@@ -25,6 +25,7 @@ import { reservationDisplayId, type ReservationVM, type RoomVM } from "@/lib/typ
 import { channelLabel, t } from "@/lib/i18n";
 import { addDays, diffDays, eachDay, formatISOCompactDate, formatISODate, formatMonthYear, isSameDay, parseISODate, toISODate, weekdayShort } from "@/lib/dates";
 import { cn } from "@/lib/utils";
+import type { AppLocale } from "@/lib/locale";
 
 const ROOM_WIDTHS = { COMPACT: 160, STANDARD: 208, WIDE: 264 } as const;
 const DAY_W: Record<CalendarRangeDays, number> = { 3: 136, 7: 136, 14: 84, 30: 52 };
@@ -111,7 +112,7 @@ function normalizeSearch(value: string): string {
   return value.trim().toLocaleLowerCase("ru-RU");
 }
 
-export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRangeDays; initialAnchor?: string }) {
+export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRangeDays; initialAnchor?: string; locale?: AppLocale }) {
   const { rooms, reservations, ratePlans, guests, hotelCurrency } = data;
   const anchorISO = data.initialAnchor ?? data.todayISO;
   const rangeDays = data.rangeDays;
@@ -599,7 +600,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   );
 
   if (viewportWidth < 640 && !fullscreen) return <>
-    <MobileCalendar anchorISO={anchorISO} todayISO={data.todayISO} viewportWidth={viewportWidth} rooms={visibleRooms} reservations={visibleReservations} navigating={navigating} onShift={(count) => navigate(toISODate(addDays(parseISODate(anchorISO), count)))} onToday={() => navigate(data.todayISO)} onOpen={(id) => { setSelectedId(id); setDetailsOpen(true); }} onCreate={(roomId, date) => { if (roomId && date) openQuickBooking(roomId, date); else setCreateState({ open: true }); }} onExpand={openFullscreen} />
+    <MobileCalendar locale={data.locale ?? "ru"} anchorISO={anchorISO} todayISO={data.todayISO} viewportWidth={viewportWidth} rooms={visibleRooms} reservations={visibleReservations} navigating={navigating} onShift={(count) => navigate(toISODate(addDays(parseISODate(anchorISO), count)))} onToday={() => navigate(data.todayISO)} onOpen={(id) => { setSelectedId(id); setDetailsOpen(true); }} onCreate={(roomId, date) => { if (roomId && date) openQuickBooking(roomId, date); else setCreateState({ open: true }); }} onExpand={openFullscreen} />
     {dialogs}
   </>;
 

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { PublicError } from "@/server/errors";
 import { channelSyncDeduplicationKey } from "./queue-policy";
 import { channelSyncEnabled } from "./runtime-policy";
+import { enqueueChannexSyncs } from "./channex/sync-outbox";
 
 const DEFAULT_MAX_ATTEMPTS = 6;
 type QueueTransaction = Prisma.TransactionClient;
@@ -108,7 +109,8 @@ export async function enqueueHotelChannelSyncs(
       data: { lastSyncStatus: "QUEUED" },
     });
   }
-  return connections.length;
+  const channexJobs = await enqueueChannexSyncs(tx, hotelId);
+  return connections.length + channexJobs;
 }
 
 export async function enqueueAllChannelSyncs(hotelId: string): Promise<EnqueuedSyncJob[]> {

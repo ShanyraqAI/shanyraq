@@ -1,6 +1,32 @@
 # Shanyraq AI — Agent Instructions
 
-Production SaaS platform for real hotel businesses: hotel management system + channel manager connecting to Booking.com, Ostrovok, Krisha.kz, and other channels.
+Production SaaS platform for Kazakhstan's short-term rental market. Shanyraq helps individual hosts and property-management teams operate apartments, houses, aparthotels, guest houses, and other daily-rental inventory from one mobile-friendly workspace.
+
+The product goal is to become the best operating system for short-term rental businesses in Kazakhstan, not a generic global hotel PMS. Optimize product decisions for local hosts and managers first: fast onboarding, a clear booking calendar, reliable channel synchronization, guest communication, payments and deposits, cleaning operations, and Kazakhstan-specific workflows.
+
+## Product positioning and audience
+
+- Primary customers: Kazakhstan-based short-term rental operators managing roughly 1–100 units.
+- Support both individual units and grouped inventory such as several similar apartments or aparthotel rooms.
+- Use customer-facing terms such as **property**, **unit**, and **accommodation** where they are clearer than hotel terminology. Existing `Hotel`, `RoomType`, and `Room` database names are legacy implementation details; do not rename them broadly unless a dedicated migration task explicitly requires it.
+- Kazakhstan is the default market: KZT, Russian and Kazakh localization, local payment methods, local documents, local time zones, and local support expectations matter.
+- Priority distribution channels are Krisha.kz, Booking.com, Airbnb, Ostrovok/Emerging Travel Group, and Bronevik, subject to confirmed partner/API access. Channex is the preferred aggregator for supported global channels; unsupported local channels may require separate adapters.
+- RealtyCalendar and similar products are competitive references, not designs to copy. Prefer a simpler, more modern, Kazakhstan-focused experience.
+
+## Product priorities
+
+When choosing between otherwise reasonable implementations, prioritize this order while still building only the feature requested:
+
+1. A fast, mobile-first calendar and reservation workflow.
+2. Accurate availability, rates, restrictions, and protection from double bookings.
+3. Reliable channel connections and actionable synchronization errors.
+4. Direct bookings, KZT payments, prepayments, deposits, and payment tracking.
+5. Automated guest messages and a guest stay page.
+6. Cleaning, turnover, maintenance, and staff tasks.
+7. Revenue, occupancy, channel commission, expense, and profit reporting.
+8. Automation that reduces repetitive work for hosts and managers.
+
+Do not prioritize enterprise-hotel features, complex front-desk workflows, or speculative global requirements unless the current feature or a real customer requires them.
 
 ## Incremental development (critical)
 
@@ -30,11 +56,11 @@ Do not add dependencies unless actually necessary. Persistent data uses PostgreS
 
 ## UI direction
 
-Modern premium B2B SaaS look: clean, minimal, professional, hotel-focused. Don't overcomplicate the interface.
+Modern premium B2B SaaS look: clean, minimal, professional, welcoming, and optimized for short-term rental operations. Mobile use is a first-class requirement because owners, managers, and cleaners work away from a desk. Don't overcomplicate the interface.
 
-Sidebar sections (implement only what's requested per task): Overview, Calendar, Reservations, Rooms, Guests, Channels, Reports, Settings.
+Sidebar sections (implement only what's requested per task): Overview, Calendar, Reservations, Properties, Guests, Channels, Tasks, Reports, Settings.
 
-Core data model: Organization → Hotels → Rooms → Reservations → Channels → Channel Connections; external channels use separate adapter modules.
+Conceptual product model: Organization → Properties → Units → Listings/Rate Plans → Reservations → Guests → Channels. The current Prisma schema may continue using `Hotel`, `RoomType`, and `Room` internally until a dedicated migration is justified. External channels use separate adapter modules behind a shared contract.
 
 ## Process per task
 

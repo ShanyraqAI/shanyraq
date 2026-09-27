@@ -14,6 +14,7 @@ import { DocumentProfileForm } from "@/components/settings/document-profile-form
 import { EMPTY_DOCUMENT_PROFILE, getDocumentProfile } from "@/lib/documents/service";
 import { BellRing, Building2, FileText, ShieldCheck, UserRound, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { getRequestLocale } from "@/lib/locale-server";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export default async function SettingsPage() {
   await requireSectionAccess("FULL");
   const user = await requireUser();
   const hotelId = await getCurrentHotelId();
+  const locale = await getRequestLocale();
   const hotel = await db.hotel.findUniqueOrThrow({ where: { id: hotelId } });
   const [memberships, invitations, notificationMembership, documentProfile] = await Promise.all([
     db.membership.findMany({
@@ -43,8 +45,8 @@ export default async function SettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={t.settings.title}
-        description={t.settings.description}
+        title={locale === "kk" ? "Баптаулар" : t.settings.title}
+        description={locale === "kk" ? "Жұмыс кеңістігі, профиль, команда және хабарландырулар." : t.settings.description}
       />
 
       <Tabs defaultValue="hotel" className="max-w-5xl space-y-5">

@@ -5,12 +5,14 @@ import { PageHeader } from "@/components/shared/page-header";
 import { GuestsTable, type GuestRow } from "@/components/guests/guests-table";
 import { t } from "@/lib/i18n";
 import { requireSectionAccess } from "@/server/guards";
+import { getRequestLocale } from "@/lib/locale-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function GuestsPage({ searchParams }: { searchParams: Promise<{ guest?: string | string[] }> }) {
   await requireSectionAccess("GUESTS");
   const hotelId = await getCurrentHotelId();
+  const locale = await getRequestLocale();
   const params = await searchParams;
   const initialSelectedId = typeof params.guest === "string" ? params.guest : null;
   const [guestsRaw, reservationsRaw] = await Promise.all([
@@ -41,10 +43,10 @@ export default async function GuestsPage({ searchParams }: { searchParams: Promi
   return (
     <div>
       <PageHeader
-        title={t.guests.title}
-        description={t.guests.description}
+        title={locale === "kk" ? "Қонақтар" : t.guests.title}
+        description={locale === "kk" ? "Қонақ профилі, байланыстары және сапарлар тарихы." : t.guests.description}
       />
-      <GuestsTable guests={rows} reservations={reservations} initialSelectedId={initialSelectedId} />
+      <GuestsTable guests={rows} reservations={reservations} initialSelectedId={initialSelectedId} locale={locale} />
     </div>
   );
 }

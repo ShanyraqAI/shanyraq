@@ -1,7 +1,7 @@
 import { db, getCurrentHotelId } from "@/lib/db";
 import { addDays, today, toISODate } from "@/lib/dates";
 import { PageHeader } from "@/components/shared/page-header";
-import { RatesBoard } from "@/components/rates/rates-board";
+import { RatesBoard, type DailyRateVM } from "@/components/rates/rates-board";
 import type { RatePlanVM } from "@/lib/types";
 import { t } from "@/lib/i18n";
 import { requireSectionAccess } from "@/server/guards";
@@ -31,7 +31,7 @@ export default async function RatesPage() {
     : [];
 
   const planVMs: (RatePlanVM & { availableToday: number | null })[] = [];
-  const prices: Record<string, (number | null)[]> = {};
+  const dailyRates: Record<string, DailyRateVM[]> = {};
   for (const plan of plansRaw) {
     const typeName = roomTypes.find((t) => t.id === plan.roomTypeId)?.name ?? "";
     planVMs.push({
@@ -46,8 +46,19 @@ export default async function RatesPage() {
       breakfastIncluded: plan.breakfastIncluded,
       availableToday: availabilityToday.find((a) => a.roomTypeId === plan.roomTypeId)?.availableRooms ?? null,
     });
-    const byDate = new Map(allRates.filter((r) => r.ratePlanId === plan.id).map((r) => [toISODate(r.date), Number(r.price)]));
-    prices[plan.id] = dates.map((d) => byDate.get(d) ?? null);
+    const byDate = new Map(allRates.filter((r) => r.ratePlanId === plan.id).map((r) => [toISODate(r.date), r]));
+    dailyRates[plan.id] = dates.map((date) => {
+      const rate = byDate.get(date);
+      return {
+        price: rate ? Number(rate.price) : null,
+        minStay: rate?.minStay ?? 1,
+        minStayType: rate?.minStayType === "THROUGH" ? "THROUGH" : "ARRIVAL",
+        maxStay: rate?.maxStay ?? null,
+        stopSell: rate?.stopSell ?? false,
+        closedToArrival: rate?.closedToArrival ?? false,
+        closedToDeparture: rate?.closedToDeparture ?? false,
+      };
+    });
   }
 
   return (
@@ -59,7 +70,7 @@ export default async function RatesPage() {
       <RatesBoard
         plans={planVMs}
         dates={dates}
-        prices={prices}
+        dailyRates={dailyRates}
         roomTypes={roomTypes.map((roomType) => ({ id: roomType.id, name: roomType.name }))}
       />
     </div>

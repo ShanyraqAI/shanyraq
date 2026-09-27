@@ -20,6 +20,7 @@ import { NotificationCenter } from "@/components/notifications/notification-cent
 import { GlobalSearch, type GlobalSearchItem } from "@/components/layout/global-search";
 import { formatISODate, toISODate } from "@/lib/dates";
 import { guestDisplayId, reservationDisplayId } from "@/lib/types";
+import { getRequestLocale } from "@/lib/locale-server";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireOnboardingComplete();
@@ -30,6 +31,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
   
   const hotelName = hotel.name;
+  const locale = await getRequestLocale();
   const userName = user.fullName;
   const permissions = resolveHotelPermissions(user);
   const [subscription, hotels, productExperience, reservationCount, notificationCenter, searchableData] = await Promise.all([
@@ -72,7 +74,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         canManageHotels={user.role === "OWNER"}
       />
       <div className="lg:pl-64">
-        <MobileAppShell hotelName={hotelName} hotels={hotelOptions} activeHotelId={hotel.id} accessLevel={user.accessLevel ?? "FULL"} permissions={permissions} canManageHotels={user.role === "OWNER"} searchItems={searchItems} notificationCount={notificationCenter.unreadCount} notificationItems={notificationCenter.items.map((item) => ({ ...item, readAt: item.readAt?.toISOString() ?? null, createdAt: item.createdAt.toISOString() }))} />
+        <MobileAppShell hotelName={hotelName} hotels={hotelOptions} activeHotelId={hotel.id} accessLevel={user.accessLevel ?? "FULL"} permissions={permissions} canManageHotels={user.role === "OWNER"} searchItems={searchItems} notificationCount={notificationCenter.unreadCount} notificationItems={notificationCenter.items.map((item) => ({ ...item, readAt: item.readAt?.toISOString() ?? null, createdAt: item.createdAt.toISOString() }))} locale={locale} />
         <header className="sticky top-0 z-30 hidden h-16 items-center border-b bg-background/95 px-8 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:flex">
           <div className="mx-auto flex w-full max-w-[1400px] items-center justify-end gap-2"><GlobalSearch items={searchItems} /><NotificationCenter initialUnreadCount={notificationCenter.unreadCount} initialItems={notificationCenter.items.map((item) => ({ ...item, readAt: item.readAt?.toISOString() ?? null, createdAt: item.createdAt.toISOString() }))} /></div>
         </header>

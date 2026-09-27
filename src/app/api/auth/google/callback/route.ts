@@ -5,6 +5,7 @@ import { createSession } from "@/lib/auth/session";
 import { appOrigin, exchangeGoogleCode, googleOAuthConfigured, OAUTH_STATE_COOKIE } from "@/lib/auth/google";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { recordAnalyticsEvent, recordAnalyticsEventSafely } from "@/lib/analytics/service";
+import { createDefaultRentalProperty } from "@/lib/rental-properties";
 
 /** Finishes the Google flow: validates state, upserts the user, opens a session. */
 export async function GET(request: Request) {
@@ -81,6 +82,7 @@ export async function GET(request: Request) {
           const hotel = await tx.hotel.create({
             data: { orgId: org.id, slug: `hotel-${crypto.randomUUID()}`, name: `Отель ${displayName.split(" ")[0]}`, timezone: "Asia/Almaty", currency: "KZT", country: "Казахстан" },
           });
+          await createDefaultRentalProperty(tx, hotel);
           await tx.membership.create({ data: { organizationId: org.id, userId: accountUser.id, hotelId: hotel.id, role: "OWNER", accessLevel: "FULL" } });
         }
       }

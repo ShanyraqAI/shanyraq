@@ -3,13 +3,14 @@ import { getAllReservations } from "@/lib/stats";
 import { toReservationVM, type GuestVM, type RatePlanVM, type RoomVM } from "@/lib/types";
 import { PageHeader } from "@/components/shared/page-header";
 import { ReservationsTable } from "@/components/reservations/reservations-table";
-import { t } from "@/lib/i18n";
 import { requireSectionAccess } from "@/server/guards";
 import { todayInTimeZone, toISODate } from "@/lib/dates";
+import { getRequestLocale } from "@/lib/locale-server";
+import { mobileCopy } from "@/lib/locale";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReservationsPage({ searchParams }: { searchParams: Promise<{ reservation?: string | string[] }> }) {
+export default async function ReservationsPage({ searchParams }: { searchParams: Promise<{ reservation?: string | string[]; new?: string | string[] }> }) {
   await requireSectionAccess("RESERVATIONS");
   const hotelId = await getCurrentHotelId();
   const params = await searchParams;
@@ -26,6 +27,8 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
     db.guest.findMany({ where: { hotelId }, orderBy: { fullName: "asc" } }),
     getAllReservations(hotelId),
   ]);
+  const locale = await getRequestLocale(hotel.language);
+  const copy = mobileCopy[locale].reservations;
 
   const rooms: RoomVM[] = roomsRaw.map((r) => ({
     id: r.id,
@@ -60,8 +63,8 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
   return (
     <div>
       <PageHeader
-        title={t.reservations.title}
-        description={t.reservations.description}
+        title={copy.title}
+        description={copy.description}
       />
       <ReservationsTable
         reservations={reservations.map(toReservationVM)}
@@ -71,6 +74,8 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
         hotelCurrency={hotel.currency}
         todayISO={toISODate(todayInTimeZone(hotel.timezone))}
         initialSelectedId={initialSelectedId}
+        initialCreateOpen={params.new === "1"}
+        locale={locale}
       />
     </div>
   );

@@ -56,12 +56,16 @@ async function resolveStayPrice(
   checkOut: Date,
   pricingMode: ReservationPricingMode,
   manualTotalAmount: number | undefined,
+  manualCurrency: string | undefined,
   client: ReservationDb,
 ): Promise<{ total: number; currency: string }> {
   if (pricingMode === "MANUAL") {
     if (manualTotalAmount === undefined || !Number.isFinite(manualTotalAmount) || manualTotalAmount < 0) {
       throw new PublicError("Укажите корректную итоговую стоимость бронирования");
     }
+    const currency = manualCurrency?.trim().toUpperCase();
+    if (currency && !/^[A-Z]{3}$/.test(currency)) throw new PublicError("Укажите корректную валюту бронирования");
+    if (currency) return { total: manualTotalAmount, currency };
     const hotel = await client.hotel.findUnique({ where: { id: hotelId }, select: { currency: true } });
     if (!hotel) throw new PublicError("Отель не найден");
     return { total: manualTotalAmount, currency: hotel.currency };
@@ -157,6 +161,7 @@ export interface CreateReservationParams {
   children: number;
   pricingMode?: ReservationPricingMode;
   manualTotalAmount?: number;
+  manualCurrency?: string;
   sourceChannel: string;
   externalReservationId?: string | null;
   status?: ReservationStatus;
@@ -182,10 +187,10 @@ export async function createReservation(params: CreateReservationParams) {
     await assertNoRoomOverlap(params.hotelId, room.id, checkIn, checkOut, undefined, tx);
     await assertTypeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, undefined, tx);
     const pricingMode = params.pricingMode ?? "RATE_PLAN";
-    const price = await resolveStayPrice(params.hotelId, params.ratePlanId, room.roomTypeId, checkIn, checkOut, pricingMode, params.manualTotalAmount, tx);
+    const price = await resolveStayPrice(params.hotelId, params.ratePlanId, room.roomTypeId, checkIn, checkOut, pricingMode, params.manualTotalAmount, params.manualCurrency, tx);
     const reservation = await tx.reservation.create({
       data: {
-        hotelId: params.hotelId, guestId: params.guestId, roomId: room.id, roomTypeId: room.roomTypeId,
+        hotelId: params.hotelId, rentalPropertyId: room.rentalPropertyId, guestId: params.guestId, roomId: room.id, roomTypeId: room.roomTypeId,
         ratePlanId: pricingMode === "MANUAL" ? null : params.ratePlanId, sourceChannel: params.sourceChannel,
         externalReservationId: params.externalReservationId ?? null, checkIn, checkOut,
         checkInTime: params.checkInTime ?? "14:00", checkOutTime: params.checkOutTime ?? "12:00",
@@ -243,8 +248,10 @@ export interface UpdateReservationParams {
   children: number;
   pricingMode?: ReservationPricingMode;
   manualTotalAmount?: number;
+  manualCurrency?: string;
   notes?: string | null;
   paymentMethod?: "ONLINE" | "CASH" | null;
+  enqueueChannelSync?: boolean;
 }
 
 export async function updateReservationDetails(params: UpdateReservationParams) {
@@ -267,13 +274,13 @@ export async function updateReservationDetails(params: UpdateReservationParams) 
     if (!room) throw new PublicError("Номер не найден или временно недоступен");
     if (!guest) throw new PublicError("Гость не найден в текущем отеле");
     const pricingMode = params.pricingMode ?? "RATE_PLAN";
-    const price = await resolveStayPrice(params.hotelId, params.ratePlanId, room.roomTypeId, checkIn, checkOut, pricingMode, params.manualTotalAmount, tx);
+    const price = await resolveStayPrice(params.hotelId, params.ratePlanId, room.roomTypeId, checkIn, checkOut, pricingMode, params.manualTotalAmount, params.manualCurrency, tx);
     await assertNoRoomOverlap(params.hotelId, room.id, checkIn, checkOut, existing.id, tx);
     await assertTypeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, existing.id, tx);
     const updated = await tx.reservation.update({
       where: { id: existing.id },
       data: {
-        guestId: params.guestId, roomId: room.id, roomTypeId: room.roomTypeId,
+        guestId: params.guestId, roomId: room.id, roomTypeId: room.roomTypeId, rentalPropertyId: room.rentalPropertyId,
         ratePlanId: pricingMode === "MANUAL" ? null : params.ratePlanId,
         checkIn, checkOut, checkInTime: params.checkInTime ?? "14:00", checkOutTime: params.checkOutTime ?? "12:00",
         adults: params.adults, children: params.children, pricingMode,
@@ -288,7 +295,7 @@ export async function updateReservationDetails(params: UpdateReservationParams) 
     ) {
       await recomputeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, tx);
     }
-    await enqueueHotelChannelSyncs(tx, params.hotelId);
+    if (params.enqueueChannelSync !== false) await enqueueHotelChannelSyncs(tx, params.hotelId);
     return { existing, room, guest, updated };
   }, { timeout: 15_000 });
   const { updated } = result;
@@ -326,7 +333,12 @@ const ALLOWED_STATUS_TRANSITIONS: Record<ReservationStatus, readonly Reservation
   NO_SHOW: [],
 };
 
-export async function setReservationStatus(hotelId: string, reservationId: string, status: ReservationStatus) {
+export async function setReservationStatus(
+  hotelId: string,
+  reservationId: string,
+  status: ReservationStatus,
+  options: { enqueueChannelSync?: boolean } = {},
+) {
   const { reservation, updated, changed } = await db.$transaction(async (tx) => {
     await lockBusinessKeys(tx, [`reservation:${reservationId}`]);
     const current = await tx.reservation.findFirst({ where: { id: reservationId, hotelId } });
@@ -366,7 +378,7 @@ export async function setReservationStatus(hotelId: string, reservationId: strin
     if (wasActive !== isActive) {
       await recomputeAvailability(hotelId, current.roomTypeId, current.checkIn, current.checkOut, tx);
     }
-    await enqueueHotelChannelSyncs(tx, hotelId);
+    if (options.enqueueChannelSync !== false) await enqueueHotelChannelSyncs(tx, hotelId);
     return { reservation: current, updated: next, changed: true };
   }, { timeout: 15_000 });
   if (!changed) return updated;

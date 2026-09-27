@@ -31,6 +31,7 @@ import type { RoomVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { MAX_NIGHTLY_PRICE, MIN_NIGHTLY_PRICE } from "@/lib/pricing";
+import type { AppLocale } from "@/lib/locale";
 
 type RoomDraft = {
   id?: string;
@@ -55,10 +56,12 @@ export function RoomsGrid({
   rooms,
   roomTypes,
   addButtonOnly = false,
+  locale = "ru",
 }: {
   rooms: RoomVM[];
   roomTypes: string[];
   addButtonOnly?: boolean;
+  locale?: AppLocale;
 }) {
   const [draft, setDraft] = useState<RoomDraft | null>(null);
   const [deleteRoom, setDeleteRoom] = useState<RoomVM | null>(null);
@@ -112,7 +115,7 @@ export function RoomsGrid({
 
   const addButton = (
     <Button onClick={openCreate}>
-      <Plus /> Добавить номер
+      <Plus /> {locale === "kk" ? "Юнит қосу" : "Добавить юнит"}
     </Button>
   );
 

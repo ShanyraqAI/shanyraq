@@ -87,6 +87,7 @@ export async function createReservationAction(input: unknown): Promise<ActionRes
         const tempPlan = await db.ratePlan.create({
           data: {
             hotelId,
+            rentalPropertyId: room.rentalPropertyId,
             roomTypeId: room.roomTypeId,
             name: `Базовый — ${room.roomType.name}`,
             basePrice: room.roomType.basePrice,

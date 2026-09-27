@@ -87,7 +87,7 @@ async function main() {
   // Type-level guard: with every physical unit booked, the type reports sold
   // out and further channel demand would be refused before assignment.
   const otherStdRoom = await db.room.create({
-    data: { hotelId: hotel.id, number: "999", floor: 9, roomTypeId: standard.id },
+    data: { hotelId: hotel.id, rentalPropertyId: standard.rentalPropertyId, number: "999", floor: 9, roomTypeId: standard.id },
   });
   await createReservation({
     hotelId: hotel.id,

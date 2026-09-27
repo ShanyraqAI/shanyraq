@@ -18,7 +18,7 @@ export async function importReservationRows(hotelId: string, rows: ReservationIm
       if (!plan) {
         const hotel = await db.hotel.findUniqueOrThrow({ where: { id: hotelId }, select: { currency: true } });
         plan = await db.ratePlan.create({
-          data: { hotelId, roomTypeId: room.roomTypeId, name: `Базовый — ${room.roomType.name}`, basePrice: room.roomType.basePrice, currency: hotel.currency },
+          data: { hotelId, rentalPropertyId: room.rentalPropertyId, roomTypeId: room.roomTypeId, name: `Базовый — ${room.roomType.name}`, basePrice: room.roomType.basePrice, currency: hotel.currency },
           select: { id: true },
         });
       }

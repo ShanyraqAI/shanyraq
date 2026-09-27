@@ -26,6 +26,7 @@ import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { sendPasswordResetCode, sendRegistrationCode } from "@/lib/email";
 import { prepareProfileImage } from "@/lib/profile-image";
 import { recordAnalyticsEvent, recordAnalyticsEventSafely } from "@/lib/analytics/service";
+import { createDefaultRentalProperty } from "@/lib/rental-properties";
 
 const EMAIL_CODE_TTL_MS = 10 * 60_000;
 const EMAIL_CODE_RESEND_MS = 60_000;
@@ -78,6 +79,7 @@ async function createAccount(
       country: "Казахстан",
     },
   });
+  await createDefaultRentalProperty(tx, hotel);
   await tx.membership.create({
     data: { organizationId: organization.id, userId: user.id, hotelId: hotel.id, role: "OWNER", accessLevel: "FULL" },
   });

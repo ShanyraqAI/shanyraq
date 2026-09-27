@@ -38,6 +38,7 @@ import { guestDisplayId, reservationDisplayId, type ReservationVM } from "@/lib/
 import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
 import { t } from "@/lib/i18n";
+import type { AppLocale } from "@/lib/locale";
 
 export interface GuestRow {
   id: string;
@@ -57,9 +58,11 @@ interface Props {
   guests: GuestRow[];
   reservations: ReservationVM[]; // full list to derive history per guest
   initialSelectedId?: string | null;
+  locale?: AppLocale;
 }
 
-export function GuestsTable({ guests, reservations, initialSelectedId = null }: Props) {
+export function GuestsTable({ guests, reservations, initialSelectedId = null, locale = "ru" }: Props) {
+  const kk = locale === "kk";
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [editOpen, setEditOpen] = useState(false);
@@ -114,12 +117,12 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t.guests.searchPlaceholder}
+            placeholder={kk ? "Аты, телефоны немесе ЖСН бойынша іздеу" : t.guests.searchPlaceholder}
             className="pl-8"
           />
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => setCreateOpen(true)}><Plus className="size-4" /> Добавить гостя</Button>
+          <Button size="sm" onClick={() => setCreateOpen(true)}><Plus className="size-4" /> {kk ? "Қонақ қосу" : "Добавить гостя"}</Button>
         </div>
       </div>
 
@@ -176,7 +179,7 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null }: 
             </TableBody>
           </Table>
         </div>
-        <div className="grid gap-2 sm:hidden">{filtered.map((guest) => <button key={guest.id} type="button" onClick={() => setSelectedId(guest.id)} className="flex min-h-16 items-center gap-3 rounded-xl border bg-card p-3 text-left shadow-xs"><span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">{guest.fullName.slice(0, 1)}</span><span className="min-w-0 flex-1"><span className="block truncate font-medium">{guest.fullName}</span><span className="block truncate text-xs text-muted-foreground">{guest.phone ?? guest.email ?? guestDisplayId(guest.sequenceNumber)}</span></span><span className="text-xs tabular-nums text-muted-foreground">{guest.reservationCount} брон.</span></button>)}{filtered.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">{t.guests.searchEmpty}</p> : null}</div>
+        <div className="grid gap-2 sm:hidden">{filtered.map((guest) => <button key={guest.id} type="button" onClick={() => setSelectedId(guest.id)} className="flex min-h-16 items-center gap-3 rounded-xl border bg-card p-3 text-left shadow-xs"><span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">{guest.fullName.slice(0, 1)}</span><span className="min-w-0 flex-1"><span className="block truncate font-medium">{guest.fullName}</span><span className="block truncate text-xs text-muted-foreground">{guest.phone ?? guest.email ?? guestDisplayId(guest.sequenceNumber)}</span></span><span className="text-xs tabular-nums text-muted-foreground">{guest.reservationCount} {kk ? "бронь" : "брон."}</span></button>)}{filtered.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">{kk ? "Ештеңе табылмады." : t.guests.searchEmpty}</p> : null}</div>
         </>
       )}
 

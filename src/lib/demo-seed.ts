@@ -12,6 +12,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { assertDisposableDatabase } from "@/lib/security/database-safety";
 import { encryptChannelCredentials } from "@/lib/security/credentials";
+import { createDefaultRentalProperty } from "@/lib/rental-properties";
 
 // ---------------------------------------------------------------------------
 // Date helpers (UTC-midnight convention, mirrors src/lib/dates.ts)
@@ -81,6 +82,7 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
       currency: "KZT",
     },
   });
+  const rentalProperty = await createDefaultRentalProperty(db, hotel);
   await db.membership.create({
     data: { organizationId: org.id, userId: demoUser.id, hotelId: hotel.id, role: "OWNER", accessLevel: "FULL" },
   });
@@ -88,6 +90,7 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
   const standard = await db.roomType.create({
     data: {
       hotelId: hotel.id,
+      rentalPropertyId: rentalProperty.id,
       name: "Стандарт",
       description: "Уютный номер 22 м² с видом на город, рабочим столом и тропическим душем.",
       capacity: 2,
@@ -98,6 +101,7 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
   const deluxe = await db.roomType.create({
     data: {
       hotelId: hotel.id,
+      rentalPropertyId: rentalProperty.id,
       name: "Делюкс",
       description: "Просторный номер 34 м² с кроватью king-size, креслом для отдыха и мини-баром.",
       capacity: 3,
@@ -108,6 +112,7 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
   const suite = await db.roomType.create({
     data: {
       hotelId: hotel.id,
+      rentalPropertyId: rentalProperty.id,
       name: "Люкс",
       description: "Угловой люкс 58 м² с гостиной, панорамными окнами и кофемашиной.",
       capacity: 4,
@@ -129,7 +134,7 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
   ];
   const rooms: Record<string, string> = {};
   for (const r of roomData) {
-    const created = await db.room.create({ data: { hotelId: hotel.id, ...r } });
+    const created = await db.room.create({ data: { hotelId: hotel.id, rentalPropertyId: rentalProperty.id, ...r } });
     rooms[r.number] = created.id;
   }
 
@@ -173,7 +178,7 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
     breakfast: boolean,
   ) {
     return db.ratePlan.create({
-      data: { hotelId: hotel.id, roomTypeId, name, basePrice, refundable, breakfastIncluded: breakfast, currency: "KZT" },
+      data: { hotelId: hotel.id, rentalPropertyId: rentalProperty.id, roomTypeId, name, basePrice, refundable, breakfastIncluded: breakfast, currency: "KZT" },
     });
   }
   const standardRate = await makePlan("Базовый тариф", standard.id, 25000, true, false);
@@ -295,6 +300,7 @@ export async function seedDemoData(db: PrismaClient): Promise<void> {
     await db.reservation.create({
       data: {
         hotelId: hotel.id,
+        rentalPropertyId: rentalProperty.id,
         guestId: G(tplt.guest),
         roomId: rooms[tplt.room],
         roomTypeId: tplt.roomTypeId,

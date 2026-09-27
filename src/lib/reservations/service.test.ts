@@ -11,10 +11,11 @@ test("PostgreSQL: concurrent creates/moves, boundaries, statuses and tenant isol
   try {
     await db.organization.create({ data: { id, name: "Automated reservation regression check" } }); created = true;
     const hotel = await db.hotel.create({ data: { id, orgId: id, name: "Test fixture", slug: id } });
-    const type = await db.roomType.create({ data: { hotelId: id, name: "Test", capacity: 2, basePrice: 100 } });
-    const rooms = await Promise.all(["1", "2", "3"].map(number => db.room.create({ data: { hotelId: id, roomTypeId: type.id, number } })));
+    const property = await db.rentalProperty.create({ data: { organizationId: id, hotelId: id, internalName: hotel.name, publicName: hotel.name, inventoryMode: "GROUPED_UNITS" } });
+    const type = await db.roomType.create({ data: { hotelId: id, rentalPropertyId: property.id, name: "Test", capacity: 2, basePrice: 100 } });
+    const rooms = await Promise.all(["1", "2", "3"].map(number => db.room.create({ data: { hotelId: id, rentalPropertyId: property.id, roomTypeId: type.id, number } })));
     const guest = await db.guest.create({ data: { hotelId: id, fullName: "Test fixture" } });
-    const plan = await db.ratePlan.create({ data: { hotelId: id, roomTypeId: type.id, name: "Test", basePrice: 100 } });
+    const plan = await db.ratePlan.create({ data: { hotelId: id, rentalPropertyId: property.id, roomTypeId: type.id, name: "Test", basePrice: 100 } });
     const input = { hotelId: hotel.id, guestId: guest.id, roomId: rooms[0].id, ratePlanId: plan.id, checkIn: "2030-01-01", checkOut: "2030-01-03", adults: 1, children: 0, sourceChannel: "direct" };
     await t.test("two simultaneous creates save exactly one booking", async () => {
       const results = await Promise.allSettled([createReservation(input), createReservation(input)]);

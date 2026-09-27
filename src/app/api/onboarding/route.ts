@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/tenant";
+import { syncDefaultRentalProperty } from "@/lib/rental-properties";
 
 const hotelDetailsSchema = z.object({
   action: z.literal("save-hotel"),
@@ -51,6 +52,8 @@ export async function POST(request: Request) {
           data: { name: data.hotelName, city: data.city, country: data.country, propertyType: data.propertyType, language: data.language, timezone: data.timezone, currency: data.currency },
         });
         if (updated.count !== 1) throw new Error("Hotel unavailable during onboarding");
+        const hotel = await tx.hotel.findUniqueOrThrow({ where: { id: user.hotelId! } });
+        await syncDefaultRentalProperty(tx, hotel);
         const current = await tx.productExperience.findUnique({
           where: { userId_hotelId: { userId: user.id, hotelId: user.hotelId! } },
           select: { setupStep: true },

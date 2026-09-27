@@ -39,6 +39,7 @@ export async function createRatePlanAction(input: unknown): Promise<ActionResult
     const plan = await db.ratePlan.create({
       data: {
         hotelId,
+        rentalPropertyId: roomType.rentalPropertyId,
         roomTypeId: data.roomTypeId,
         name: data.name,
         basePrice: data.basePrice,
@@ -84,7 +85,15 @@ export async function bulkUpdateRatesAction(input: unknown): Promise<ActionResul
     }
     const previousRates = dates.length ? await db.rate.findMany({
       where: { ratePlanId: plan.id, date: { in: dates } },
-      select: { price: true },
+      select: {
+        price: true,
+        minStay: true,
+        minStayType: true,
+        maxStay: true,
+        stopSell: true,
+        closedToArrival: true,
+        closedToDeparture: true,
+      },
     }) : [];
     const previousPrices = [...new Set(previousRates.map((rate) => Number(rate.price)))];
     if (previousRates.length < dates.length) previousPrices.push(Number(plan.basePrice));
@@ -92,8 +101,26 @@ export async function bulkUpdateRatesAction(input: unknown): Promise<ActionResul
       for (const date of dates) {
         await tx.rate.upsert({
           where: { ratePlanId_date: { ratePlanId: plan.id, date } },
-          create: { ratePlanId: plan.id, date, price: data.price },
-          update: { price: data.price },
+          create: {
+            ratePlanId: plan.id,
+            date,
+            price: data.price,
+            minStay: data.minStay,
+            minStayType: data.minStayType,
+            maxStay: data.maxStay,
+            stopSell: data.stopSell,
+            closedToArrival: data.closedToArrival,
+            closedToDeparture: data.closedToDeparture,
+          },
+          update: {
+            price: data.price,
+            minStay: data.minStay,
+            minStayType: data.minStayType,
+            maxStay: data.maxStay,
+            stopSell: data.stopSell,
+            closedToArrival: data.closedToArrival,
+            closedToDeparture: data.closedToDeparture,
+          },
         });
       }
       await enqueueHotelChannelSyncs(tx, hotelId);
@@ -104,7 +131,25 @@ export async function bulkUpdateRatesAction(input: unknown): Promise<ActionResul
       from: data.from,
       to: data.to,
       days: updated,
-    }, { price: previousPrices.length === 1 ? previousPrices[0] : previousPrices.sort((a, b) => a - b).join("–") }, { price: data.price });
+    }, {
+      price: previousPrices.length === 1 ? previousPrices[0] : previousPrices.sort((a, b) => a - b).join("–"),
+      restrictions: previousRates.length === 1 ? {
+        minStay: previousRates[0].minStay,
+        minStayType: previousRates[0].minStayType,
+        maxStay: previousRates[0].maxStay,
+        stopSell: previousRates[0].stopSell,
+        closedToArrival: previousRates[0].closedToArrival,
+        closedToDeparture: previousRates[0].closedToDeparture,
+      } : "mixed",
+    }, {
+      price: data.price,
+      minStay: data.minStay,
+      minStayType: data.minStayType,
+      maxStay: data.maxStay,
+      stopSell: data.stopSell,
+      closedToArrival: data.closedToArrival,
+      closedToDeparture: data.closedToDeparture,
+    });
     await recordCurrentUserEvent("rate_updated", { type: "RatePlan", id: plan.id });
     revalidatePath("/dashboard/rates");
     revalidatePath("/dashboard/channels");

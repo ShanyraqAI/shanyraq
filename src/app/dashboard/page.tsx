@@ -20,6 +20,8 @@ import { QuickActions } from "@/components/dashboard/quick-actions";
 import { DesktopOnly } from "@/components/dashboard/desktop-only";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { getRequestLocale } from "@/lib/locale-server";
+import { mobileCopy, type AppLocale } from "@/lib/locale";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,8 @@ export default async function DashboardPage() {
   await requireSectionAccess("OVERVIEW");
   const hotelId = await getCurrentHotelId();
   const hotel = await db.hotel.findUniqueOrThrow({ where: { id: hotelId } });
+  const locale = await getRequestLocale(hotel.language);
+  const mobile = mobileCopy[locale];
   const day = todayInTimeZone(hotel.timezone);
   const [user, stats, recent, channelHealth, roomTypes, roomsRaw, ratePlansRaw, guestsRaw] = await Promise.all([
     getCurrentUser(), getDashboardStats(hotelId, day, hotel.timezone), getRecentReservations(hotelId, 20),
@@ -43,35 +47,35 @@ export default async function DashboardPage() {
   const waitingArrivals = stats.arrivalsToday.filter((reservation) => !["CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"].includes(reservation.status)).length;
   const unusualArrivals = stats.arrivalsToday
     .filter((reservation) => !["CANCELLED", "NO_SHOW", "CHECKED_OUT"].includes(reservation.status) && (reservation.checkInTime < "14:00" || reservation.checkInTime > "20:00"))
-    .map((reservation) => ({ label: `${reservation.checkInTime < "14:00" ? "Ранний" : "Поздний"} заезд · ${reservation.checkInTime}`, room: reservation.room.number, guest: reservation.guest.fullName, href: `/dashboard/reservations?reservation=${reservation.id}` }));
+    .map((reservation) => ({ label: `${locale === "kk" ? (reservation.checkInTime < "14:00" ? "Ерте келу" : "Кеш келу") : (reservation.checkInTime < "14:00" ? "Ранний заезд" : "Поздний заезд")} · ${reservation.checkInTime}`, room: reservation.room.number, guest: reservation.guest.fullName, href: `/dashboard/reservations?reservation=${reservation.id}` }));
   const unusualDepartures = stats.departuresToday
     .filter((reservation) => !["CANCELLED", "NO_SHOW"].includes(reservation.status) && reservation.checkOutTime !== "12:00")
-    .map((reservation) => ({ label: `${reservation.checkOutTime < "12:00" ? "Ранний" : "Поздний"} выезд · ${reservation.checkOutTime}`, room: reservation.room.number, guest: reservation.guest.fullName, href: `/dashboard/reservations?reservation=${reservation.id}` }));
+    .map((reservation) => ({ label: `${locale === "kk" ? (reservation.checkOutTime < "12:00" ? "Ерте кету" : "Кеш кету") : (reservation.checkOutTime < "12:00" ? "Ранний выезд" : "Поздний выезд")} · ${reservation.checkOutTime}`, room: reservation.room.number, guest: reservation.guest.fullName, href: `/dashboard/reservations?reservation=${reservation.id}` }));
   const attentionItems = [
     ...unusualDepartures,
     ...unusualArrivals,
-    ...(stats.roomsUnavailable ? [{ label: `${stats.roomsUnavailable} ${roomWord(stats.roomsUnavailable)} на обслуживании`, room: "Номера", guest: "", href: "/dashboard/rooms" }] : []),
-    ...(stats.roomsCleaning ? [{ label: `${stats.roomsCleaning} ${roomWord(stats.roomsCleaning)} требуют уборки`, room: "Номера", guest: "", href: "/dashboard/rooms" }] : []),
-    ...(waitingArrivals ? [{ label: `${waitingArrivals} ожидают заселения`, room: "Заезды", guest: "Сегодня", href: "/dashboard/reservations" }] : []),
+    ...(stats.roomsUnavailable ? [{ label: locale === "kk" ? `${stats.roomsUnavailable} юнит жөндеуде` : `${stats.roomsUnavailable} ${roomWord(stats.roomsUnavailable)} на обслуживании`, room: mobile.dashboard.units, guest: "", href: "/dashboard/rooms" }] : []),
+    ...(stats.roomsCleaning ? [{ label: locale === "kk" ? `${stats.roomsCleaning} юнитті жинау керек` : `${stats.roomsCleaning} ${roomWord(stats.roomsCleaning)} требуют уборки`, room: mobile.dashboard.units, guest: "", href: "/dashboard/rooms" }] : []),
+    ...(waitingArrivals ? [{ label: locale === "kk" ? `${waitingArrivals} қонақ қоныстануды күтуде` : `${waitingArrivals} ожидают заселения`, room: mobile.dashboard.arrivals, guest: mobile.dashboard.today, href: "/dashboard/reservations" }] : []),
   ].slice(0, 5);
 
   return <div className="space-y-5">
     <section className="space-y-5 md:hidden" aria-label="Оперативный обзор">
-      <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Сегодня, {formatMediumDate(day)}</p><h1 className="mt-1 text-xl font-semibold tracking-tight">{greeting(hotel.timezone)}{user?.firstName ? `, ${user.firstName}` : ""}</h1></div>
-      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm" aria-label="Показатели на сегодня">
+      <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{mobile.dashboard.today}, {formatMediumDate(day)}</p><h1 className="mt-1 text-xl font-semibold tracking-tight">{greeting(hotel.timezone, locale)}{user?.firstName ? `, ${user.firstName}` : ""}</h1></div>
+      <div className="mobile-income-card overflow-hidden rounded-2xl border bg-card shadow-sm" aria-label={mobile.dashboard.today}>
         <div className="grid grid-cols-4 divide-x border-b text-center">
-          <MobileMetric value={formatPercent(stats.occupancyTonight)} label="Загрузка" />
-          <MobileMetric value={String(stats.arrivalsToday.length)} label="Заезды" />
-          <MobileMetric value={String(stats.departuresToday.length)} label="Выезды" />
-          <MobileMetric value={String(stats.availableRoomsTonight)} label="Свободно" />
+          <MobileMetric value={formatPercent(stats.occupancyTonight)} label={mobile.dashboard.occupancy} />
+          <MobileMetric value={String(stats.arrivalsToday.length)} label={mobile.dashboard.arrivals} />
+          <MobileMetric value={String(stats.departuresToday.length)} label={mobile.dashboard.departures} />
+          <MobileMetric value={String(stats.availableRoomsTonight)} label={mobile.dashboard.available} />
         </div>
-        <p className="px-3 py-2 text-xs text-muted-foreground">{stats.occupiedTonight} из {stats.totalRooms} номеров заняты сегодня</p>
+        <p className="px-3 py-2 text-xs text-muted-foreground">{mobile.dashboard.occupied(stats.occupiedTonight, stats.totalRooms)}</p>
       </div>
-      <section className="overflow-hidden rounded-2xl border bg-card shadow-sm"><div className="flex items-center justify-between border-b px-4 py-3"><h2 className="font-semibold">Требует внимания</h2><span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold tabular-nums">{attentionItems.length}</span></div>
-        {attentionItems.length ? <div className="divide-y">{attentionItems.map((item) => <Link key={`${item.href}-${item.label}`} href={item.href} className="flex min-h-14 items-center gap-3 px-4 py-2.5 active:bg-secondary/60"><span className="size-2 shrink-0 rounded-full bg-amber-500" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{item.room}{item.guest ? ` · ${item.guest}` : ""}</span><span className="block truncate text-xs text-muted-foreground">{item.label}</span></span><span className="text-muted-foreground">›</span></Link>)}</div> : <p className="px-4 py-5 text-sm text-muted-foreground">На сегодня срочных задач нет.</p>}
+      <section className="overflow-hidden rounded-2xl border bg-card shadow-sm"><div className="flex items-center justify-between border-b px-4 py-3"><h2 className="font-semibold">{mobile.dashboard.attention}</h2><span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold tabular-nums">{attentionItems.length}</span></div>
+        {attentionItems.length ? <div className="divide-y">{attentionItems.map((item) => <Link key={`${item.href}-${item.label}`} href={item.href} className="flex min-h-14 items-center gap-3 px-4 py-2.5 active:bg-secondary/60"><span className="size-2 shrink-0 rounded-full bg-amber-500" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{item.room}{item.guest ? ` · ${item.guest}` : ""}</span><span className="block truncate text-xs text-muted-foreground">{item.label}</span></span><span className="text-muted-foreground">›</span></Link>)}</div> : <p className="px-4 py-5 text-sm text-muted-foreground">{mobile.dashboard.noUrgent}</p>}
       </section>
-      <QuickActions mobile rooms={rooms} ratePlans={ratePlans} guests={guests} hotelCurrency={hotel.currency} canCreateReservation={permissions.includes("RESERVATIONS")} canOpenCalendar={permissions.includes("CALENDAR")} canOpenGuests={permissions.includes("GUESTS")} canOpenRooms={permissions.includes("ROOMS")} />
-      <section className="overflow-hidden rounded-2xl border bg-card"><div className="flex items-center justify-between border-b px-4 py-3"><h2 className="font-semibold">Заезды сегодня</h2><Link href="/dashboard/reservations" className="text-xs font-medium text-primary">Все →</Link></div>{stats.arrivalsToday.length ? stats.arrivalsToday.slice(0, 4).map((reservation) => <Link key={reservation.id} href={`/dashboard/reservations?reservation=${reservation.id}`} className="flex min-h-13 items-center justify-between gap-3 border-b px-4 py-2.5 text-sm last:border-b-0"><span className="min-w-0"><span className="block truncate font-medium">{reservation.guest.fullName}</span><span className="block text-xs text-muted-foreground">№ {reservation.room.number} · {reservation.checkInTime}</span></span><ReservationStatusBadge status={reservation.status as never} /></Link>) : <p className="px-4 py-5 text-sm text-muted-foreground">Сегодня заездов нет.</p>}</section>
+      <QuickActions mobile locale={locale} rooms={rooms} ratePlans={ratePlans} guests={guests} hotelCurrency={hotel.currency} canCreateReservation={permissions.includes("RESERVATIONS")} canOpenCalendar={permissions.includes("CALENDAR")} canOpenGuests={permissions.includes("GUESTS")} canOpenRooms={permissions.includes("ROOMS")} />
+      <section className="overflow-hidden rounded-2xl border bg-card"><div className="flex items-center justify-between border-b px-4 py-3"><h2 className="font-semibold">{mobile.dashboard.arrivalsToday}</h2><Link href="/dashboard/reservations" className="text-xs font-medium text-primary">{mobile.dashboard.all}</Link></div>{stats.arrivalsToday.length ? stats.arrivalsToday.slice(0, 4).map((reservation) => <Link key={reservation.id} href={`/dashboard/reservations?reservation=${reservation.id}`} className="flex min-h-13 items-center justify-between gap-3 border-b px-4 py-2.5 text-sm last:border-b-0"><span className="min-w-0"><span className="block truncate font-medium">{reservation.guest.fullName}</span><span className="block text-xs text-muted-foreground">{mobile.calendar.unit} {reservation.room.number} · {reservation.checkInTime}</span></span><ReservationStatusBadge status={reservation.status as never} /></Link>) : <p className="px-4 py-5 text-sm text-muted-foreground">{mobile.dashboard.noArrivals}</p>}</section>
     </section>
     <DesktopOnly><div className="space-y-5"><PageHeader title={user?.firstName ? `${greeting(hotel.timezone)}, ${user.firstName}` : greeting(hotel.timezone)} description={`${hotel.name} · ${formatMediumDate(day)}`}>
       {PRODUCT_AVAILABILITY.channels ? <SyncAllButton /> : null}
@@ -160,5 +164,5 @@ function MetricVisual({ icon: Icon, caption }: { icon: typeof CalendarCheck2; ca
 function TodayList({ title, href, icon: Icon, rows, empty }: { title: string; href: string; icon: typeof CalendarCheck2; rows: Awaited<ReturnType<typeof getDashboardStats>>["arrivalsToday"]; empty: string }) {
   return <Card className="overflow-hidden shadow-sm"><div className="flex items-center justify-between border-b px-5 py-4"><h2 className="flex items-center gap-2 font-semibold"><Icon className="size-4 text-primary" /> {title}</h2><Link href={href} className="text-xs font-medium text-primary hover:underline">Все →</Link></div>{rows.length ? <Table><TableBody>{rows.slice(0, 4).map((reservation) => <TableRow key={reservation.id}><TableCell className="font-medium">{reservation.guest.fullName}<span className="mt-0.5 block text-xs font-normal text-muted-foreground">№ {reservation.room.number} · {reservation.roomType.name}</span></TableCell><TableCell className="hidden 2xl:table-cell"><ChannelLabel channel={reservation.sourceChannel} /></TableCell><TableCell className="hidden text-right 2xl:table-cell"><ReservationStatusBadge status={reservation.status as never} /></TableCell></TableRow>)}</TableBody></Table> : <div className="flex min-h-36 items-center justify-center px-5 text-sm text-muted-foreground">{empty}</div>}</Card>;
 }
-function greeting(timeZone: string): string { const hour = Number(new Intl.DateTimeFormat("ru-RU", { timeZone, hour: "2-digit", hour12: false }).format(new Date())); if (hour < 12) return "Доброе утро"; if (hour < 18) return "Добрый день"; return "Добрый вечер"; }
+function greeting(timeZone: string, locale: AppLocale = "ru"): string { const hour = Number(new Intl.DateTimeFormat("ru-RU", { timeZone, hour: "2-digit", hour12: false }).format(new Date())); if (locale === "kk") return hour < 12 ? "Қайырлы таң" : hour < 18 ? "Қайырлы күн" : "Қайырлы кеш"; if (hour < 12) return "Доброе утро"; if (hour < 18) return "Добрый день"; return "Добрый вечер"; }
 function roomWord(value: number): string { return value === 1 ? "номер" : value < 5 ? "номера" : "номеров"; }

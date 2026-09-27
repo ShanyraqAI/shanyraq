@@ -207,6 +207,12 @@ export const bulkRateUpdateSchema = z
     price: z.coerce.number()
       .min(MIN_NIGHTLY_PRICE, "Цена за ночь должна быть не меньше 1 000 ₸")
       .max(MAX_NIGHTLY_PRICE, "Цена за ночь должна быть не больше 999 000 ₸"),
+    minStay: z.coerce.number().int("Минимальный срок должен быть целым числом").min(1).max(730),
+    minStayType: z.enum(["ARRIVAL", "THROUGH"]),
+    maxStay: z.union([z.coerce.number().int().min(1).max(730), z.null()]),
+    stopSell: z.boolean(),
+    closedToArrival: z.boolean(),
+    closedToDeparture: z.boolean(),
     weekendsOnly: z.boolean().default(false),
   })
   .refine((v) => v.to >= v.from, {
@@ -216,6 +222,10 @@ export const bulkRateUpdateSchema = z
   .refine((v) => diffDays(parseISODate(v.from), parseISODate(v.to)) <= 366, {
     message: "За один раз можно изменить тариф максимум на 366 дней",
     path: ["to"],
+  })
+  .refine((v) => v.maxStay === null || v.maxStay >= v.minStay, {
+    message: "Максимальный срок не может быть меньше минимального",
+    path: ["maxStay"],
   });
 
 export const upsertGuestSchema = z.object({
