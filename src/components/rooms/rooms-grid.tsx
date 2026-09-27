@@ -129,13 +129,13 @@ export function RoomsGrid({
           action={<Button onClick={openCreate}><Plus /> Добавить первый номер</Button>}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4">
           {rooms.map((room) => (
-            <div key={room.id} className="group relative flex flex-col overflow-hidden rounded-xl border border-primary/10 bg-card p-3 shadow-sm sm:min-h-48 sm:bg-gradient-to-br sm:from-card sm:via-card sm:to-primary/[0.035] sm:p-4 sm:transition-[border-color,box-shadow,transform] sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:border-primary/25 sm:hover:shadow-md">
+            <div key={room.id} className="sh-mobile-card group relative flex flex-col overflow-hidden p-3 sm:min-h-48 sm:rounded-xl sm:border-primary/10 sm:bg-gradient-to-br sm:from-card sm:via-card sm:to-primary/[0.035] sm:p-4 sm:transition-[border-color,box-shadow,transform] sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:border-primary/25 sm:hover:shadow-md">
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-primary/65 via-chart-2/35 to-transparent" />
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/10">
+                  <div className={`flex size-9 shrink-0 items-center justify-center rounded-xl ring-1 ${room.status === "CLEANING" ? "bg-[#fff0d8] text-[#c6892c] ring-[#f3dfbd]" : room.status === "MAINTENANCE" || room.status === "OUT_OF_ORDER" ? "bg-[#fee7e4] text-[#df655d] ring-[#f3d1cd]" : room.guestTonight ? "bg-[#e5edfb] text-[#5087d7] ring-[#d5e1f6]" : "bg-[#ddf2ea] text-[#14836a] ring-[#cbe7dd]"}`}>
                     <BedDouble className="size-4" />
                   </div>
                   <div className="min-w-0 leading-tight">
@@ -160,7 +160,7 @@ export function RoomsGrid({
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              <div className="mt-1 flex items-center justify-between gap-2 pl-[46px] sm:hidden">{room.guestTonight && room.status === "AVAILABLE" ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Занят</span> : <RoomStatusBadge status={room.status} />}{room.guestTonight ? <span className="truncate text-xs text-muted-foreground">{room.guestTonight}</span> : null}</div>
+              <div className="mt-1 flex items-center justify-between gap-2 pl-[46px] sm:hidden"><span className={`rounded-full px-2.5 py-1 text-[9px] font-bold ${room.status === "CLEANING" ? "bg-[#fff0d8] text-[#c6892c]" : room.status === "MAINTENANCE" || room.status === "OUT_OF_ORDER" ? "bg-[#fee7e4] text-[#df655d]" : room.guestTonight ? "bg-[#e5edfb] text-[#5087d7]" : "bg-[#ddf2ea] text-[#14836a]"}`}>{room.status === "CLEANING" ? (locale === "kk" ? "Жинау" : "Уборка") : room.status === "MAINTENANCE" || room.status === "OUT_OF_ORDER" ? (locale === "kk" ? "Жөндеу" : "Ремонт") : room.guestTonight ? (locale === "kk" ? "Бос емес" : "Занят") : (locale === "kk" ? "Дайын" : "Готово")}</span>{room.guestTonight ? <span className="truncate text-[10px] text-muted-foreground">{room.guestTonight}</span> : <span className="truncate text-[10px] text-muted-foreground">{room.floor} {locale === "kk" ? "қабат" : "этаж"}</span>}</div>
               <div className="mt-4 hidden grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 text-sm sm:grid">
                 <span className="text-muted-foreground">Этаж</span><span className="min-w-12 text-right tabular-nums">{room.floor}</span>
                 <span className="text-muted-foreground">Вместимость</span><span className="min-w-12 text-right tabular-nums">{room.capacity ?? 1}</span>

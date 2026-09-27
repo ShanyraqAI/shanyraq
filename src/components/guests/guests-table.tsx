@@ -118,10 +118,10 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null, lo
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={kk ? "Аты, телефоны немесе ЖСН бойынша іздеу" : t.guests.searchPlaceholder}
-            className="pl-8"
+            className="h-11 rounded-xl border-[#e7e9e0] bg-white pl-8 text-xs sm:h-9 sm:rounded-md"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden items-center gap-2 sm:flex">
           <Button size="sm" onClick={() => setCreateOpen(true)}><Plus className="size-4" /> {kk ? "Қонақ қосу" : "Добавить гостя"}</Button>
         </div>
       </div>
@@ -179,7 +179,7 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null, lo
             </TableBody>
           </Table>
         </div>
-        <div className="grid gap-2 sm:hidden">{filtered.map((guest) => <button key={guest.id} type="button" onClick={() => setSelectedId(guest.id)} className="flex min-h-16 items-center gap-3 rounded-xl border bg-card p-3 text-left shadow-xs"><span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">{guest.fullName.slice(0, 1)}</span><span className="min-w-0 flex-1"><span className="block truncate font-medium">{guest.fullName}</span><span className="block truncate text-xs text-muted-foreground">{guest.phone ?? guest.email ?? guestDisplayId(guest.sequenceNumber)}</span></span><span className="text-xs tabular-nums text-muted-foreground">{guest.reservationCount} {kk ? "бронь" : "брон."}</span></button>)}{filtered.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">{kk ? "Ештеңе табылмады." : t.guests.searchEmpty}</p> : null}</div>
+        <div className="space-y-2 sm:hidden"><div className="flex items-center justify-between"><h2 className="sh-mobile-section-title">{kk ? "Соңғылар" : "Недавние"}</h2><span className="text-[10px] font-bold text-[#07866b]">{kk ? "Сегменттер" : "Сегменты"}</span></div>{filtered.map((guest, index) => <button key={guest.id} type="button" onClick={() => setSelectedId(guest.id)} className="sh-mobile-card flex min-h-[68px] w-full items-center gap-3 p-3 text-left"><span className={`grid size-9 shrink-0 place-items-center rounded-full text-xs font-extrabold ${index % 4 === 0 ? "bg-[#ddf2ea] text-[#14846b]" : index % 4 === 1 ? "bg-[#e4edfb] text-[#5187d7]" : index % 4 === 2 ? "bg-[#fbefd8] text-[#c2872e]" : "bg-[#fbe3e1] text-[#df645d]"}`}>{guest.sequenceNumber ?? index + 1}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-extrabold text-[#303c35]">{guest.fullName}</span><span className="mt-0.5 block truncate text-[9px] text-[#969c95]">{guest.phone ?? guest.email ?? guestDisplayId(guest.sequenceNumber)}</span><span className="mt-1 block text-[9px] text-[#777f78]">{guest.reservationCount} {kk ? "сапар" : "поездок"}{guest.reservationCount > 1 ? <b className="ml-1 text-[#07866b]">· {kk ? "Тұрақты қонақ" : "Постоянный гость"}</b> : null}</span></span><span className="text-[#adb2ac]">›</span></button>)}{filtered.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">{kk ? "Ештеңе табылмады." : t.guests.searchEmpty}</p> : null}<Button onClick={() => setCreateOpen(true)} className="sh-mobile-primary mt-2 w-full"><Plus className="size-4" />{kk ? "Қонақ қосу" : "Добавить гостя"}</Button></div>
         </>
       )}
 

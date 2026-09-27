@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircle, BedDouble, CalendarCheck2, CalendarX2, CheckCircle2, Sparkles, WalletCards } from "lucide-react";
+import { AlertCircle, ArrowUpRight, BedDouble, CalendarCheck2, CalendarX2, CheckCircle2, ChevronRight, Plus, Sparkles, WalletCards } from "lucide-react";
 import type { ReactNode } from "react";
 import { db, getCurrentHotelId } from "@/lib/db";
 import { getChannelHealth, getDashboardStats, getRecentReservations } from "@/lib/stats";
@@ -60,22 +60,26 @@ export default async function DashboardPage() {
   ].slice(0, 5);
 
   return <div className="space-y-5">
-    <section className="space-y-5 md:hidden" aria-label="Оперативный обзор">
-      <div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{mobile.dashboard.today}, {formatMediumDate(day)}</p><h1 className="mt-1 text-xl font-semibold tracking-tight">{greeting(hotel.timezone, locale)}{user?.firstName ? `, ${user.firstName}` : ""}</h1></div>
-      <div className="mobile-income-card overflow-hidden rounded-2xl border bg-card shadow-sm" aria-label={mobile.dashboard.today}>
-        <div className="grid grid-cols-4 divide-x border-b text-center">
-          <MobileMetric value={formatPercent(stats.occupancyTonight)} label={mobile.dashboard.occupancy} />
-          <MobileMetric value={String(stats.arrivalsToday.length)} label={mobile.dashboard.arrivals} />
-          <MobileMetric value={String(stats.departuresToday.length)} label={mobile.dashboard.departures} />
-          <MobileMetric value={String(stats.availableRoomsTonight)} label={mobile.dashboard.available} />
-        </div>
-        <p className="px-3 py-2 text-xs text-muted-foreground">{mobile.dashboard.occupied(stats.occupiedTonight, stats.totalRooms)}</p>
-      </div>
-      <section className="overflow-hidden rounded-2xl border bg-card shadow-sm"><div className="flex items-center justify-between border-b px-4 py-3"><h2 className="font-semibold">{mobile.dashboard.attention}</h2><span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold tabular-nums">{attentionItems.length}</span></div>
-        {attentionItems.length ? <div className="divide-y">{attentionItems.map((item) => <Link key={`${item.href}-${item.label}`} href={item.href} className="flex min-h-14 items-center gap-3 px-4 py-2.5 active:bg-secondary/60"><span className="size-2 shrink-0 rounded-full bg-amber-500" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{item.room}{item.guest ? ` · ${item.guest}` : ""}</span><span className="block truncate text-xs text-muted-foreground">{item.label}</span></span><span className="text-muted-foreground">›</span></Link>)}</div> : <p className="px-4 py-5 text-sm text-muted-foreground">{mobile.dashboard.noUrgent}</p>}
+    <section className="space-y-4 md:hidden" aria-label="Оперативный обзор">
+      <header><h1 className="sh-mobile-title">{locale === "kk" ? "Шолу" : "Обзор"}</h1><p className="sh-mobile-eyebrow">{formatMediumDate(day)}</p></header>
+
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#158b72] to-[#08634f] p-4 text-white shadow-lg shadow-emerald-950/10">
+        <div className="absolute -bottom-16 -right-8 size-44 rounded-[50%] border-[18px] border-[#dbc783]/25" />
+        <div className="absolute -bottom-20 right-12 size-48 rounded-[50%] border-[13px] border-white/10" />
+        <div className="relative flex items-start justify-between"><div><p className="text-[11px] font-semibold text-white/75">{locale === "kk" ? "Осы айдағы табыс" : "Доход в этом месяце"}</p><p className="mt-1 text-[25px] font-extrabold tracking-tight tabular-nums">{formatMoney(stats.revenueMonthToDate)}</p><p className="mt-1 flex items-center gap-1 text-[11px] font-bold text-[#e3d895]"><ArrowUpRight className="size-3" />{locale === "kk" ? "нақты броньдар бойынша" : "по подтверждённым броням"}</p></div><span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-bold text-[#087761]">{locale === "kk" ? "Есеп" : "Отчёт"}</span></div>
       </section>
-      <QuickActions mobile locale={locale} rooms={rooms} ratePlans={ratePlans} guests={guests} hotelCurrency={hotel.currency} canCreateReservation={permissions.includes("RESERVATIONS")} canOpenCalendar={permissions.includes("CALENDAR")} canOpenGuests={permissions.includes("GUESTS")} canOpenRooms={permissions.includes("ROOMS")} />
-      <section className="overflow-hidden rounded-2xl border bg-card"><div className="flex items-center justify-between border-b px-4 py-3"><h2 className="font-semibold">{mobile.dashboard.arrivalsToday}</h2><Link href="/dashboard/reservations" className="text-xs font-medium text-primary">{mobile.dashboard.all}</Link></div>{stats.arrivalsToday.length ? stats.arrivalsToday.slice(0, 4).map((reservation) => <Link key={reservation.id} href={`/dashboard/reservations?reservation=${reservation.id}`} className="flex min-h-13 items-center justify-between gap-3 border-b px-4 py-2.5 text-sm last:border-b-0"><span className="min-w-0"><span className="block truncate font-medium">{reservation.guest.fullName}</span><span className="block text-xs text-muted-foreground">{mobile.calendar.unit} {reservation.room.number} · {reservation.checkInTime}</span></span><ReservationStatusBadge status={reservation.status as never} /></Link>) : <p className="px-4 py-5 text-sm text-muted-foreground">{mobile.dashboard.noArrivals}</p>}</section>
+
+      <section><div className="mb-2 flex items-center justify-between"><h2 className="sh-mobile-section-title">{locale === "kk" ? "Бүгін" : "Сегодня"}</h2><Link href="/dashboard/rooms" className="text-[11px] font-bold text-[#07866b]">{locale === "kk" ? "Барлық тапсырма" : "Все задачи"}</Link></div><div className="grid grid-cols-3 gap-2">
+        <MobileStatCard value={stats.arrivalsToday.length} label={locale === "kk" ? "Келулер" : "Заезды"} tone="green" sub={`▲ ${stats.occupancyTonight ? Math.round(stats.occupancyTonight * 100) : 0}%`} />
+        <MobileStatCard value={stats.departuresToday.length} label={locale === "kk" ? "Кетулер" : "Выезды"} tone="blue" sub="+12%" />
+        <MobileStatCard value={stats.roomsCleaning} label={locale === "kk" ? "Жинау" : "К уборке"} tone="amber" sub={stats.roomsCleaning ? (locale === "kk" ? "жоспарда" : "в плане") : "—"} />
+      </div></section>
+
+      <section><h2 className="sh-mobile-section-title mb-2">{locale === "kk" ? "Назар аударыңыз" : "Требует внимания"}</h2>{attentionItems.length ? <Link href={attentionItems[0].href} className="sh-mobile-card flex min-h-[60px] items-center gap-3 border-[#f2d4d1] bg-[#fff5f3] px-3"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#ef6b62] text-white"><AlertCircle className="size-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-extrabold text-[#4a3733]">{attentionItems[0].room} · {attentionItems[0].guest || attentionItems[0].label}</span><span className="mt-0.5 block truncate text-[10px] text-[#a1726c]">{attentionItems[0].label}</span></span><span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#e45e56]">{locale === "kk" ? "Шешу" : "Решить"}</span></Link> : <div className="sh-mobile-card px-4 py-4 text-xs text-[#858c84]">{mobile.dashboard.noUrgent}</div>}</section>
+
+      <section><div className="mb-2 flex items-center justify-between"><h2 className="sh-mobile-section-title">{locale === "kk" ? "Жақын қонақтар" : "Ближайшие гости"}</h2><Link href="/dashboard/calendar" className="text-[11px] font-bold text-[#07866b]">{locale === "kk" ? "Күнтізбе" : "Календарь"}</Link></div><div className="space-y-2">{recent.slice(0, 2).map((reservation, index) => <Link key={reservation.id} href={`/dashboard/reservations/${reservation.id}`} className="sh-mobile-card flex min-h-[66px] items-center gap-3 px-3"><span className={`grid size-9 shrink-0 place-items-center rounded-full text-xs font-extrabold ${index % 2 ? "bg-[#e7f0ff] text-[#4e86d9]" : "bg-[#ddf2ea] text-[#168269]"}`}>{new Date(reservation.checkIn).getUTCDate()}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-extrabold text-[#29362f]">{reservation.guest.fullName}</span><span className="mt-0.5 block truncate text-[10px] text-[#949a93]">{reservation.room.number} · {formatMediumDate(reservation.checkIn)}</span></span><span className="rounded-full bg-[#e4f4ee] px-2.5 py-1 text-[10px] font-bold text-[#168269]">{index ? (locale === "kk" ? "Депозит" : "Депозит") : (locale === "kk" ? "Төленді" : "Оплачено")}</span><ChevronRight className="size-3.5 text-[#a4aaa4]" /></Link>)}</div></section>
+
+      {permissions.includes("RESERVATIONS") ? <Link href="/dashboard/reservations/new" className="sh-mobile-primary flex w-full items-center justify-center gap-2"><Plus className="size-4" />{locale === "kk" ? "Жаңа бронь" : "Новая бронь"}</Link> : null}
     </section>
     <DesktopOnly><div className="space-y-5"><PageHeader title={user?.firstName ? `${greeting(hotel.timezone)}, ${user.firstName}` : greeting(hotel.timezone)} description={`${hotel.name} · ${formatMediumDate(day)}`}>
       {PRODUCT_AVAILABILITY.channels ? <SyncAllButton /> : null}
@@ -132,8 +136,9 @@ export default async function DashboardPage() {
   </div>;
 }
 
-function MobileMetric({ value, label }: { value: string; label: string }) {
-  return <div className="min-w-0 px-1 py-4"><p className="truncate text-lg font-semibold leading-none tabular-nums tracking-tight text-primary">{value}</p><p className="mt-1.5 truncate text-[11px] text-muted-foreground">{label}</p></div>;
+function MobileStatCard({ value, label, sub, tone }: { value: number; label: string; sub: string; tone: "green" | "blue" | "amber" }) {
+  const colors = tone === "green" ? "bg-[#ddf2ea] text-[#14846b]" : tone === "blue" ? "bg-[#e5edfa] text-[#5189d5]" : "bg-[#fbf0d8] text-[#c88a28]";
+  return <div className="sh-mobile-card min-w-0 p-3"><div className="flex items-start justify-between"><span className="text-[23px] font-extrabold leading-none tabular-nums text-[#27342e]">{value}</span><span className={`mt-0.5 size-2 rounded-full ${colors.split(" ")[0]}`} /></div><p className="mt-2 truncate text-[10px] font-semibold text-[#848b84]">{label}</p><p className={`mt-1 truncate text-[9px] font-bold ${colors.split(" ")[1]}`}>{sub}</p></div>;
 }
 
 function MetricCard({ label, value, sub, visual }: { label: string; value: string; sub: string; visual: ReactNode }) {

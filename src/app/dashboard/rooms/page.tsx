@@ -60,12 +60,15 @@ export default async function RoomsPage() {
     guestTonight: guestByRoom.get(r.id) ?? null,
   }));
   const populatedRoomTypes = roomTypes.filter((type) => type.rooms.length > 0);
+  const readyRooms = rooms.filter((room) => room.status === "AVAILABLE" && !room.guestTonight).length;
+  const readiness = rooms.length ? Math.round(readyRooms / rooms.length * 100) : 0;
 
   return (
     <div className="space-y-6">
-      <PageHeader title={locale === "kk" ? "Нысандар мен юниттер" : "Объекты и юниты"} description={locale === "kk" ? "Орналастыру қорының дайындығы мен ағымдағы күйі." : t.rooms.description}>
+      <div className="hidden sm:block"><PageHeader title={locale === "kk" ? "Нысандар мен юниттер" : "Объекты и юниты"} description={locale === "kk" ? "Орналастыру қорының дайындығы мен ағымдағы күйі." : t.rooms.description}>
         <RoomsGrid rooms={[]} roomTypes={roomTypes.map((type) => type.name)} addButtonOnly locale={locale} />
-      </PageHeader>
+      </PageHeader></div>
+      <div className="space-y-3 sm:hidden"><header><h1 className="sh-mobile-title">{locale === "kk" ? "Юниттер" : "Юниты"}</h1><p className="sh-mobile-eyebrow">{rooms.length} {locale === "kk" ? "нысан" : "объектов"} · {readyRooms} {locale === "kk" ? "дайын" : "готовы"}</p></header><div className="sh-mobile-card p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] font-semibold text-[#929991]">{locale === "kk" ? "Бүгінгі дайындық" : "Готовность сегодня"}</p><p className="mt-1 text-2xl font-extrabold tracking-tight text-[#25322c]">{readyRooms} / {rooms.length}</p></div><b className="text-sm text-[#07866b]">{readiness}%</b></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-[#e8ebe4]"><div className="h-full rounded-full bg-[#07866b]" style={{ width: `${Math.max(4, readiness)}%` }} /></div></div><div className="flex gap-1.5 overflow-x-auto pb-1"><span className="sh-mobile-chip bg-[#07866b] text-white">{locale === "kk" ? "Барлығы" : "Все"} {rooms.length}</span><span className="sh-mobile-chip">{locale === "kk" ? "Дайын" : "Готовы"} {readyRooms}</span><span className="sh-mobile-chip">{locale === "kk" ? "Жинау" : "Уборка"} {rooms.filter((room) => room.status === "CLEANING").length}</span><span className="sh-mobile-chip">{locale === "kk" ? "Жөндеу" : "Ремонт"} {rooms.filter((room) => ["MAINTENANCE", "OUT_OF_ORDER"].includes(room.status)).length}</span></div></div>
 
       {/* Room type summary cards */}
       <div className="hidden grid-cols-1 gap-4 sm:grid md:grid-cols-3">
@@ -113,7 +116,7 @@ export default async function RoomsPage() {
 
       {/* All rooms by floor */}
       <section>
-        <h2 className="mb-3 text-base font-semibold">{locale === "kk" ? "Барлық юниттер" : "Все юниты"}</h2>
+        <h2 className="mb-3 hidden text-base font-semibold sm:block">{locale === "kk" ? "Барлық юниттер" : "Все юниты"}</h2>
         <RoomsGrid rooms={rooms} roomTypes={roomTypes.map((type) => type.name)} locale={locale} />
       </section>
     </div>

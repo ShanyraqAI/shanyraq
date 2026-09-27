@@ -39,13 +39,16 @@ export default async function GuestsPage({ searchParams }: { searchParams: Promi
       lastChannel: last?.channel ?? null,
     };
   });
+  const repeatGuests = rows.filter((guest) => guest.reservationCount > 1).length;
+  const repeatRate = rows.length ? Math.round(repeatGuests / rows.length * 100) : 0;
 
   return (
     <div>
-      <PageHeader
+      <div className="hidden sm:block"><PageHeader
         title={locale === "kk" ? "Қонақтар" : t.guests.title}
         description={locale === "kk" ? "Қонақ профилі, байланыстары және сапарлар тарихы." : t.guests.description}
-      />
+      /></div>
+      <div className="mb-4 space-y-3 sm:hidden"><header><h1 className="sh-mobile-title">{locale === "kk" ? "Қонақтар" : "Гости"}</h1><p className="sh-mobile-eyebrow">{rows.length} {locale === "kk" ? "профиль" : "профилей"}</p></header><div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#138a70] to-[#08634f] p-4 text-white shadow-lg"><div className="absolute -bottom-14 -right-10 size-36 rounded-full border-[15px] border-[#dac785]/25" /><div className="relative flex items-center justify-between"><div><p className="text-[10px] font-semibold text-white/70">{locale === "kk" ? "Қайта келген қонақтар" : "Повторные гости"}</p><p className="mt-1 text-[25px] font-extrabold">{repeatRate}%</p><p className="mt-1 text-[9px] font-bold text-[#e5d894]">{repeatGuests} {locale === "kk" ? "қонақ қайта оралды" : "гостей вернулись"}</p></div><span className="rounded-full bg-white px-3 py-2 text-[10px] font-black text-[#087861]">CRM</span></div></div></div>
       <GuestsTable guests={rows} reservations={reservations} initialSelectedId={initialSelectedId} locale={locale} />
     </div>
   );

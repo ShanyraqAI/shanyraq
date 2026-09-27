@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, MoreHorizontal } from "lucide-react";
+import Link from "next/link";
+import { Plus, Search, MoreHorizontal, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -36,7 +37,7 @@ import { setReservationStatusAction } from "@/server/actions/reservations";
 import { findSelectedReservation } from "@/lib/reservations/calendar-selection";
 import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
 import type { ReservationStatus } from "@/lib/constants";
-import { formatMoney } from "@/lib/utils";
+import { cn, formatMoney } from "@/lib/utils";
 import { t, channelLabel } from "@/lib/i18n";
 import { formatISOCompactDate } from "@/lib/dates";
 import { reservationDisplayId } from "@/lib/types";
@@ -52,15 +53,19 @@ interface Props {
   initialSelectedId?: string | null;
   initialCreateOpen?: boolean;
   locale?: AppLocale;
+  initialStatus?: string;
+  initialChannel?: string;
+  initialDebt?: boolean;
 }
 
 const STATUSES: ReservationStatus[] = ["PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"];
 
-export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency, todayISO, initialSelectedId = null, initialCreateOpen = false, locale = "ru" }: Props) {
+export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency, todayISO, initialSelectedId = null, initialCreateOpen = false, locale = "ru", initialStatus = "all", initialChannel = "all", initialDebt = false }: Props) {
+  const router = useRouter();
   const copy = mobileCopy[locale].reservations;
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [channel, setChannel] = useState("all");
+  const [status, setStatus] = useState(initialStatus);
+  const [channel, setChannel] = useState(initialChannel);
   const [period, setPeriod] = useState<"all" | "today" | "arrivals" | "departures">("all");
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [createOpen, setCreateOpen] = useState(initialCreateOpen);
@@ -76,6 +81,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
       if (period === "departures" && r.checkOut !== todayISO) return false;
       if (status !== "all" && r.status !== status) return false;
       if (channel !== "all" && r.channel !== channel) return false;
+      if (initialDebt && r.paymentMethod === "ONLINE") return false;
       if (!q) return true;
       return (
         r.guestName.toLowerCase().includes(q) ||
@@ -84,7 +90,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
         r.id.toLowerCase().includes(q.toLowerCase())
       );
     });
-  }, [reservations, query, status, channel, period, todayISO]);
+  }, [reservations, query, status, channel, period, todayISO, initialDebt]);
 
   const stats = useMemo(
     () => ({
@@ -93,19 +99,33 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
     }),
     [filtered],
   );
+  const tomorrowISO = useMemo(() => {
+    const date = new Date(`${todayISO}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + 1);
+    return date.toISOString().slice(0, 10);
+  }, [todayISO]);
+  const mobileGroups = useMemo(() => {
+    const sorted = [...filtered].sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+    return [
+      { key: "today", title: locale === "kk" ? "Бүгін" : "Сегодня", rows: sorted.filter((row) => row.checkIn === todayISO || (row.checkIn < todayISO && row.checkOut > todayISO)) },
+      { key: "tomorrow", title: locale === "kk" ? "Ертең" : "Завтра", rows: sorted.filter((row) => row.checkIn === tomorrowISO) },
+      { key: "later", title: locale === "kk" ? "Кейін" : "Позже", rows: sorted.filter((row) => row.checkIn > tomorrowISO) },
+    ].filter((group) => group.rows.length > 0);
+  }, [filtered, locale, todayISO, tomorrowISO]);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full sm:w-auto">
+        <div className="relative w-[calc(100%-78px)] sm:w-auto">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={copy.search}
-            className="w-full pl-8 sm:w-[240px]"
+            className="h-11 w-full rounded-xl border-[#e7e9e0] bg-white pl-8 text-xs sm:h-9 sm:w-[240px] sm:rounded-md"
           />
         </div>
+        <Link href="/dashboard/reservations/filters" className="flex h-11 items-center gap-1 rounded-xl bg-white px-3 text-[10px] font-bold text-[#4d5852] ring-1 ring-[#e7e9e0] sm:hidden"><SlidersHorizontal className="size-3.5" />{locale === "kk" ? "Сүзгі" : "Фильтры"}</Link>
         <div className="hidden sm:block"><Select value={status} onValueChange={setStatus}>
           <SelectTrigger size="sm" className="w-full sm:w-[170px]">
             <SelectValue />
@@ -133,8 +153,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           </SelectContent>
         </Select></div>
 
-        <div className="grid w-full grid-cols-4 gap-1 rounded-xl bg-secondary p-1 sm:hidden">{([ ["today", copy.today], ["arrivals", copy.arrivals], ["departures", copy.departures], ["all", copy.all] ] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setPeriod(value)} aria-pressed={period === value} className="min-h-10 rounded-lg px-1 text-xs font-medium aria-pressed:bg-card aria-pressed:text-primary aria-pressed:shadow-sm">{label}</button>)}</div>
-        <details className="w-full sm:hidden"><summary className="cursor-pointer text-xs font-medium text-muted-foreground">{copy.filters}</summary><div className="grid grid-cols-2 gap-2 pt-2"><Select value={status} onValueChange={setStatus}><SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{copy.allStatuses}</SelectItem>{STATUSES.map((item) => <SelectItem key={item} value={item}>{t.statuses.reservation[item]}</SelectItem>)}</SelectContent></Select><Select value={channel} onValueChange={setChannel}><SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{copy.allChannels}</SelectItem>{channelsPresent.map((item) => <SelectItem key={item} value={item}>{channelLabel(item)}</SelectItem>)}</SelectContent></Select></div></details>
+        <div className="flex w-full gap-1.5 overflow-x-auto pb-1 sm:hidden">{([ ["all", `${copy.all} ${reservations.length}`], ["arrivals", `${copy.arrivals} ${reservations.filter((item) => item.checkIn === todayISO).length}`], ["departures", `${copy.departures} ${reservations.filter((item) => item.checkOut === todayISO).length}`], ["today", locale === "kk" ? "Бүгін" : "Сегодня"] ] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setPeriod(value)} aria-pressed={period === value} className="sh-mobile-chip shrink-0 aria-pressed:bg-[#07866b] aria-pressed:text-white">{label}</button>)}</div>
 
         <div className="flex w-full flex-wrap items-center gap-3 text-sm text-muted-foreground xl:ml-auto xl:w-auto">
           <div className="flex items-center gap-3">
@@ -233,13 +252,10 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
             </TableBody>
           </Table>
         </div>
-        <div className="grid gap-2 sm:hidden">
-          {filtered.slice(0, 100).map((r) => <button key={r.id} type="button" onClick={() => setSelectedId(r.id)} className="min-w-0 rounded-xl border bg-card px-3 py-2.5 text-left shadow-xs">
-            <span className="flex items-start justify-between gap-2"><span className="min-w-0 truncate font-semibold">{r.guestName}</span><span className="shrink-0 font-mono text-xs text-muted-foreground">{reservationDisplayId(r.sequenceNumber)}</span></span>
-            <span className="mt-1 block text-sm text-muted-foreground">{copy.unit} {r.roomNumber} · {formatISOCompactDate(r.checkIn)} → {formatISOCompactDate(r.checkOut)}</span>
-            <span className="mt-2 flex items-center justify-between gap-2"><ReservationStatusBadge status={r.status} /><span className="shrink-0 text-xs font-semibold tabular-nums">{formatMoney(r.totalAmount)}</span></span>
-          </button>)}
-          {filtered.length === 0 ? <p className="rounded-xl border bg-card py-8 text-center text-sm text-muted-foreground">{t.filters.noMatch}</p> : null}
+        <div className="space-y-4 sm:hidden">
+          {mobileGroups.map((group) => <section key={group.key}><h2 className="sh-mobile-section-title mb-2">{group.title}</h2><div className="space-y-2">{group.rows.map((r, index) => <button key={r.id} type="button" onClick={() => router.push(`/dashboard/reservations/${r.id}`)} className="sh-mobile-card block w-full min-w-0 px-3 py-3 text-left"><span className="flex items-start gap-3"><span className={cn("grid size-9 shrink-0 place-items-center rounded-full text-xs font-extrabold", index % 3 === 0 ? "bg-[#ddf2ea] text-[#14846b]" : index % 3 === 1 ? "bg-[#e4edfb] text-[#5187d7]" : "bg-[#fbefd8] text-[#c2872e]")}>{new Date(`${r.checkIn}T00:00:00Z`).getUTCDate()}</span><span className="min-w-0 flex-1"><span className="flex items-start justify-between gap-2"><span className="truncate text-xs font-extrabold text-[#2d3a33]">{r.guestName}</span><span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[9px] font-bold", r.status === "CHECKED_IN" ? "bg-[#def2eb] text-[#17826a]" : r.status === "CHECKED_OUT" ? "bg-[#e5effe] text-[#4c83d1]" : "bg-[#e5f3ee] text-[#17826a]")}>{r.status === "CHECKED_IN" ? (locale === "kk" ? "Келді" : "Заезд") : r.status === "CHECKED_OUT" ? (locale === "kk" ? "Кетті" : "Выезд") : (locale === "kk" ? "Расталды" : "Заезд")}</span></span><span className="mt-1 block truncate text-[10px] text-[#8f968f]">{r.roomNumber} · {formatISOCompactDate(r.checkIn)}—{formatISOCompactDate(r.checkOut)}</span></span></span><span className="mt-2 flex items-center justify-between border-t border-[#f0f1eb] pt-2 text-[9px]"><span className="text-[#959b94]">{r.checkInTime}</span><span className={cn("font-bold", r.totalAmount > 0 ? "text-[#16826a]" : "text-[#ed665e]")}>{formatMoney(r.totalAmount)}</span></span></button>)}</div></section>)}
+          {filtered.length === 0 ? <p className="sh-mobile-card py-10 text-center text-xs text-[#929991]">{t.filters.noMatch}</p> : null}
+          <Link href="/dashboard/reservations/new" className="fixed right-4 z-40 grid size-12 place-items-center rounded-full bg-[#07866b] text-white shadow-xl sm:hidden" style={{ bottom: "calc(4.8rem + env(safe-area-inset-bottom))" }} aria-label={copy.newBooking}><Plus className="size-5" /></Link>
         </div>
         </>
       )}

@@ -10,7 +10,7 @@ import { mobileCopy } from "@/lib/locale";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReservationsPage({ searchParams }: { searchParams: Promise<{ reservation?: string | string[]; new?: string | string[] }> }) {
+export default async function ReservationsPage({ searchParams }: { searchParams: Promise<{ reservation?: string | string[]; new?: string | string[]; status?: string | string[]; channel?: string | string[]; debt?: string | string[] }> }) {
   await requireSectionAccess("RESERVATIONS");
   const hotelId = await getCurrentHotelId();
   const params = await searchParams;
@@ -62,10 +62,11 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
 
   return (
     <div>
-      <PageHeader
+      <div className="hidden sm:block"><PageHeader
         title={copy.title}
         description={copy.description}
-      />
+      /></div>
+      <header className="mb-4 sm:hidden"><h1 className="sh-mobile-title">{copy.title}</h1><p className="sh-mobile-eyebrow">{reservations.length} {locale === "kk" ? "белсенді бронь" : "активных броней"}</p></header>
       <ReservationsTable
         reservations={reservations.map(toReservationVM)}
         rooms={rooms}
@@ -76,6 +77,9 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
         initialSelectedId={initialSelectedId}
         initialCreateOpen={params.new === "1"}
         locale={locale}
+        initialStatus={typeof params.status === "string" ? params.status : "all"}
+        initialChannel={typeof params.channel === "string" ? params.channel : "all"}
+        initialDebt={params.debt === "1"}
       />
     </div>
   );
