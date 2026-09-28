@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { triggerChannexBookingPoll } from "@/lib/channels/channex/booking-sync";
+import { channelSyncEnabled } from "@/lib/channels/runtime-policy";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -14,6 +15,7 @@ function authorized(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!channelSyncEnabled()) return new Response("Not Found", { status: 404 });
   if (!authorized(request)) return new Response("Unauthorized", { status: 401 });
   let body: unknown;
   try {

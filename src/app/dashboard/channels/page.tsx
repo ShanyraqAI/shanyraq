@@ -13,6 +13,11 @@ export const dynamic = "force-dynamic";
 export default async function ChannelsPage() {
   await requireSectionAccess("FULL");
   const hotelId = await getCurrentHotelId();
+  const apiConfigured = Boolean(process.env.CHANNEX_STAGING_API_KEY?.trim());
+  const webhookConfigured = Boolean(
+    process.env.CHANNEX_WEBHOOK_URL?.trim() && process.env.CHANNEX_WEBHOOK_SECRET?.trim(),
+  );
+  const recoveryCronConfigured = Boolean(process.env.CRON_SECRET?.trim());
 
   const [channelsRaw, connections, roomTypes, ratePlansRaw, rentalProperties] = await Promise.all([
     db.channel.findMany({ orderBy: [{ isInternal: "asc" }, { name: "asc" }] }),
@@ -51,6 +56,8 @@ export default async function ChannelsPage() {
     if (roomTypeCount === 0) prerequisites.push("добавьте тип размещения");
     if (roomCount === 0) prerequisites.push("добавьте хотя бы одну единицу размещения");
     if (ratePlanCount === 0) prerequisites.push("добавьте хотя бы один тариф");
+    if (!webhookConfigured) prerequisites.push("настройте публичный URL и секрет webhook Channex");
+    if (!recoveryCronConfigured) prerequisites.push("настройте CRON_SECRET для резервной обработки");
     const readyRoomTypes = channexProperty?.roomTypeMappings.filter((item) => item.provisioningStatus === "PROVISIONED").length ?? 0;
     const readyRatePlans = channexProperty?.ratePlanMappings.filter((item) => item.provisioningStatus === "PROVISIONED").length ?? 0;
     return {
@@ -64,7 +71,7 @@ export default async function ChannelsPage() {
       roomTypes: { ready: readyRoomTypes, total: roomTypeCount },
       ratePlans: { ready: readyRatePlans, total: ratePlanCount },
       lastError: channexProperty?.lastErrorMessage ?? null,
-      apiConfigured: Boolean(process.env.CHANNEX_STAGING_API_KEY?.trim()),
+      apiConfigured,
       prerequisites,
     };
   });
@@ -121,7 +128,7 @@ export default async function ChannelsPage() {
         <SyncAllButton />
       </PageHeader>
       <p className="rounded-lg border bg-secondary/40 p-3 text-sm text-muted-foreground">
-        Подключение Channex ниже создаёт только структуру в тестовой среде. Остальные карточки каналов пока используют тестовые адаптеры.
+        Channex создаёт тестовую структуру, отправляет остатки, цены и ограничения и принимает бронирования. Остальные карточки каналов пока используют тестовые адаптеры.
       </p>
       <div className="grid gap-4 xl:grid-cols-2">
         {channexProperties.map((channex) => (

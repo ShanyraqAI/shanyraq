@@ -7,6 +7,7 @@ import { requireSessionHotelId } from "@/server/guards";
 import { fail, ok, type ActionResult } from "@/server/types";
 import { z } from "zod";
 import { wakeChannelSyncWorker } from "@/server/channel-sync";
+import { channelSyncEnabled } from "@/lib/channels/runtime-policy";
 
 const rentalPropertyIdSchema = z.string().trim().min(1).max(200);
 
@@ -16,6 +17,7 @@ export async function provisionChannexStagingAction(rentalPropertyIdInput: unkno
   ratePlans: number;
 }>> {
   try {
+    if (!channelSyncEnabled()) return fail("Интеграция с каналами не включена для этого окружения.");
     const parsed = rentalPropertyIdSchema.safeParse(rentalPropertyIdInput);
     if (!parsed.success) return fail("Некорректный объект размещения.");
     const hotelId = await requireSessionHotelId();

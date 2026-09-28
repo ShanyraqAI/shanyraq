@@ -6,7 +6,7 @@
  * feature only after its release gate has been completed.
  */
 export const PRODUCT_AVAILABILITY = {
-  channels: false,
+  channels: process.env.NEXT_PUBLIC_CHANNELS_ENABLED === "true",
   billing: false,
 } as const;
 
