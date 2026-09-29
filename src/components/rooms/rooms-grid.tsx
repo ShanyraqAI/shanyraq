@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BedDouble, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -57,11 +57,13 @@ export function RoomsGrid({
   roomTypes,
   addButtonOnly = false,
   locale = "ru",
+  highlightRoomId,
 }: {
   rooms: RoomVM[];
   roomTypes: string[];
   addButtonOnly?: boolean;
   locale?: AppLocale;
+  highlightRoomId?: string;
 }) {
   const [draft, setDraft] = useState<RoomDraft | null>(null);
   const [deleteRoom, setDeleteRoom] = useState<RoomVM | null>(null);
@@ -83,6 +85,11 @@ export function RoomsGrid({
       status: room.status,
     });
   }
+
+  useEffect(() => {
+    if (!highlightRoomId) return;
+    document.getElementById(`room-${highlightRoomId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightRoomId]);
 
   async function saveRoom() {
     if (!draft) return;
@@ -115,7 +122,7 @@ export function RoomsGrid({
 
   const addButton = (
     <Button onClick={openCreate}>
-      <Plus /> {locale === "kk" ? "Юнит қосу" : "Добавить юнит"}
+      <Plus /> {locale === "kk" ? "Пәтер қосу" : "Добавить квартиру"}
     </Button>
   );
 
@@ -131,7 +138,7 @@ export function RoomsGrid({
       ) : (
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4">
           {rooms.map((room) => (
-            <div key={room.id} className="sh-mobile-card group relative flex flex-col overflow-hidden p-3 sm:min-h-48 sm:rounded-xl sm:border-primary/10 sm:bg-gradient-to-br sm:from-card sm:via-card sm:to-primary/[0.035] sm:p-4 sm:transition-[border-color,box-shadow,transform] sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:border-primary/25 sm:hover:shadow-md">
+            <div id={`room-${room.id}`} key={room.id} className={`sh-mobile-card group relative flex flex-col overflow-hidden p-3 transition-shadow sm:min-h-48 sm:rounded-xl sm:border-primary/10 sm:bg-gradient-to-br sm:from-card sm:via-card sm:to-primary/[0.035] sm:p-4 sm:transition-[border-color,box-shadow,transform] sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:border-primary/25 sm:hover:shadow-md ${highlightRoomId === room.id ? "ring-2 ring-[#07866b] shadow-lg shadow-emerald-900/10" : ""}`}>
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-primary/65 via-chart-2/35 to-transparent" />
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">
@@ -174,17 +181,17 @@ export function RoomsGrid({
       )}
 
       <Dialog open={Boolean(draft)} onOpenChange={(open) => !open && setDraft(null)}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[90dvh] w-[calc(100%-1rem)] overflow-y-auto rounded-3xl border-0 bg-[#f8faf7] p-5 sm:max-w-lg sm:rounded-xl sm:border sm:bg-background sm:p-6">
           <DialogHeader>
-            <DialogTitle>{draft?.id ? "Редактировать номер" : "Добавить номер"}</DialogTitle>
-            <DialogDescription>Номер принадлежит только текущему отелю.</DialogDescription>
+            <DialogTitle className="text-xl font-extrabold tracking-tight">{draft?.id ? `Квартира ${draft.number}` : "Новая квартира"}</DialogTitle>
+            <DialogDescription>{draft?.id ? "Измените основные параметры и сохраните обновления." : "Добавьте квартиру, чтобы открыть её в календаре и бронированиях."}</DialogDescription>
           </DialogHeader>
           {draft ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Название или номер"><Input value={draft.number} onChange={(e) => setDraft({ ...draft, number: e.target.value })} placeholder="101 или Роза" /></Field>
+              <Field label="Номер квартиры"><Input value={draft.number} onChange={(e) => setDraft({ ...draft, number: e.target.value })} placeholder="Например, 101" className="h-11 rounded-xl bg-white" /></Field>
               <Field label="Этаж"><Input type="number" value={draft.floor} onChange={(e) => setDraft({ ...draft, floor: e.target.value })} /></Field>
-              <Field label="Тип номера">
-                <Input list="room-type-options" value={draft.roomTypeName} onChange={(e) => setDraft({ ...draft, roomTypeName: e.target.value })} placeholder="Стандарт" />
+              <Field label="Тип квартиры">
+                <Input list="room-type-options" value={draft.roomTypeName} onChange={(e) => setDraft({ ...draft, roomTypeName: e.target.value })} placeholder="Стандарт" className="h-11 rounded-xl bg-white" />
                 <datalist id="room-type-options">{roomTypes.map((name) => <option key={name} value={name} />)}</datalist>
               </Field>
               <Field label="Вместимость"><Input type="number" min="1" value={draft.capacity} onChange={(e) => setDraft({ ...draft, capacity: e.target.value })} /></Field>
@@ -200,8 +207,8 @@ export function RoomsGrid({
               </Field>
             </div>
           ) : null}
-          <DialogFooter showCloseButton>
-            <Button onClick={() => void saveRoom()} disabled={pending}>{pending ? "Сохранение..." : "Сохранить"}</Button>
+          <DialogFooter showCloseButton className="sticky bottom-0 -mx-5 -mb-5 mt-2 bg-[#f8faf7] p-4 sm:static sm:mx-0 sm:mb-0 sm:bg-transparent sm:p-0">
+            <Button className="h-11 w-full rounded-xl sm:w-auto" onClick={() => void saveRoom()} disabled={pending}>{pending ? "Сохраняем…" : "Сохранить изменения"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

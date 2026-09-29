@@ -32,7 +32,6 @@ import {
 import { ReservationStatusBadge, ChannelLabel } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/page-header";
 import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
-import { ReservationFormDialog } from "@/components/reservations/reservation-form-dialog";
 import { setReservationStatusAction } from "@/server/actions/reservations";
 import { findSelectedReservation } from "@/lib/reservations/calendar-selection";
 import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
@@ -51,7 +50,6 @@ interface Props {
   hotelCurrency: string;
   todayISO: string;
   initialSelectedId?: string | null;
-  initialCreateOpen?: boolean;
   locale?: AppLocale;
   initialStatus?: string;
   initialChannel?: string;
@@ -60,7 +58,7 @@ interface Props {
 
 const STATUSES: ReservationStatus[] = ["PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"];
 
-export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency, todayISO, initialSelectedId = null, initialCreateOpen = false, locale = "ru", initialStatus = "all", initialChannel = "all", initialDebt = false }: Props) {
+export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency, todayISO, initialSelectedId = null, locale = "ru", initialStatus = "all", initialChannel = "all", initialDebt = false }: Props) {
   const router = useRouter();
   const copy = mobileCopy[locale].reservations;
   const [query, setQuery] = useState("");
@@ -68,7 +66,6 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
   const [channel, setChannel] = useState(initialChannel);
   const [period, setPeriod] = useState<"all" | "today" | "arrivals" | "departures">("all");
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
-  const [createOpen, setCreateOpen] = useState(initialCreateOpen);
   const selected = findSelectedReservation(reservations, selectedId);
 
   const channelsPresent = useMemo(() => Array.from(new Set(reservations.map((r) => r.channel))), [reservations]);
@@ -167,9 +164,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-1.5 size-4" /> <span className="sm:hidden">{copy.newBooking}</span><span className="hidden sm:inline">{t.reservations.newButton}</span>
-            </Button>
+            <Button asChild size="sm" className="hidden sm:inline-flex" aria-label={copy.newBooking} title={copy.newBooking}><Link href="/dashboard/reservations/new"><Plus className="size-4" /><span className="hidden md:inline">{t.reservations.newButton}</span></Link></Button>
           </div>
         </div>
       </div>
@@ -180,9 +175,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           title={t.reservations.emptyTitle}
           description={t.reservations.emptyDescription}
           action={
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              {t.reservations.createButton}
-            </Button>
+            <Button asChild size="sm"><Link href="/dashboard/reservations/new"><Plus className="mr-1.5 size-4" />{t.reservations.createButton}</Link></Button>
           }
         />
       ) : (
@@ -253,7 +246,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           </Table>
         </div>
         <div className="space-y-4 sm:hidden">
-          {mobileGroups.map((group) => <section key={group.key}><h2 className="sh-mobile-section-title mb-2">{group.title}</h2><div className="space-y-2">{group.rows.map((r, index) => <button key={r.id} type="button" onClick={() => router.push(`/dashboard/reservations/${r.id}`)} className="sh-mobile-card block w-full min-w-0 px-3 py-3 text-left"><span className="flex items-start gap-3"><span className={cn("grid size-9 shrink-0 place-items-center rounded-full text-xs font-extrabold", index % 3 === 0 ? "bg-[#ddf2ea] text-[#14846b]" : index % 3 === 1 ? "bg-[#e4edfb] text-[#5187d7]" : "bg-[#fbefd8] text-[#c2872e]")}>{new Date(`${r.checkIn}T00:00:00Z`).getUTCDate()}</span><span className="min-w-0 flex-1"><span className="flex items-start justify-between gap-2"><span className="truncate text-xs font-extrabold text-[#2d3a33]">{r.guestName}</span><span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[9px] font-bold", r.status === "CHECKED_IN" ? "bg-[#def2eb] text-[#17826a]" : r.status === "CHECKED_OUT" ? "bg-[#e5effe] text-[#4c83d1]" : "bg-[#e5f3ee] text-[#17826a]")}>{r.status === "CHECKED_IN" ? (locale === "kk" ? "Келді" : "Заезд") : r.status === "CHECKED_OUT" ? (locale === "kk" ? "Кетті" : "Выезд") : (locale === "kk" ? "Расталды" : "Заезд")}</span></span><span className="mt-1 block truncate text-[10px] text-[#8f968f]">{r.roomNumber} · {formatISOCompactDate(r.checkIn)}—{formatISOCompactDate(r.checkOut)}</span></span></span><span className="mt-2 flex items-center justify-between border-t border-[#f0f1eb] pt-2 text-[9px]"><span className="text-[#959b94]">{r.checkInTime}</span><span className={cn("font-bold", r.totalAmount > 0 ? "text-[#16826a]" : "text-[#ed665e]")}>{formatMoney(r.totalAmount)}</span></span></button>)}</div></section>)}
+          {mobileGroups.map((group) => <section key={group.key}><h2 className="sh-mobile-section-title mb-2">{group.title}</h2><div className="space-y-2">{group.rows.map((r, index) => { const statusPresentation = reservationStatusPresentation(r.status, locale); return <button key={r.id} type="button" onClick={() => router.push(`/dashboard/reservations/${r.id}`)} className="sh-mobile-card block w-full min-w-0 px-3 py-3 text-left"><span className="flex items-start gap-3"><span className={cn("grid size-9 shrink-0 place-items-center rounded-full text-xs font-extrabold", index % 3 === 0 ? "bg-[#ddf2ea] text-[#14846b]" : index % 3 === 1 ? "bg-[#e4edfb] text-[#5187d7]" : "bg-[#fbefd8] text-[#c2872e]")}>{new Date(`${r.checkIn}T00:00:00Z`).getUTCDate()}</span><span className="min-w-0 flex-1"><span className="flex items-start justify-between gap-2"><span className="truncate text-xs font-extrabold text-[#2d3a33]">{r.guestName}</span><span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[9px] font-bold", statusPresentation.className)}>{statusPresentation.label}</span></span><span className="mt-1 block truncate text-[10px] text-[#8f968f]">{r.roomNumber} · {formatISOCompactDate(r.checkIn)}—{formatISOCompactDate(r.checkOut)}</span></span></span><span className="mt-2 flex items-center justify-between border-t border-[#f0f1eb] pt-2 text-[9px]"><span className="text-[#959b94]">{r.checkInTime}</span><span className={cn("font-bold", r.totalAmount > 0 ? "text-[#16826a]" : "text-[#ed665e]")}>{formatMoney(r.totalAmount)}</span></span></button>; })}</div></section>)}
           {filtered.length === 0 ? <p className="sh-mobile-card py-10 text-center text-xs text-[#929991]">{t.filters.noMatch}</p> : null}
           <Link href="/dashboard/reservations/new" className="fixed right-4 z-40 grid size-12 place-items-center rounded-full bg-[#07866b] text-white shadow-xl sm:hidden" style={{ bottom: "calc(4.8rem + env(safe-area-inset-bottom))" }} aria-label={copy.newBooking}><Plus className="size-5" /></Link>
         </div>
@@ -274,17 +267,21 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
         />
       )}
 
-      <ReservationFormDialog
-        mode="create"
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        rooms={rooms}
-        ratePlans={ratePlans}
-        guests={guests}
-        hotelCurrency={hotelCurrency}
-      />
     </div>
   );
+}
+
+function reservationStatusPresentation(status: ReservationStatus, locale: AppLocale) {
+  const labels: Record<ReservationStatus, [string, string, string]> = {
+    PENDING: ["Ожидает", "Күтуде", "bg-[#fff1d7] text-[#a66b0a]"],
+    CONFIRMED: ["Подтверждена", "Расталды", "bg-[#def2e9] text-[#13765f]"],
+    CHECKED_IN: ["Заселён", "Келді", "bg-[#dcecff] text-[#376bb0]"],
+    CHECKED_OUT: ["Выселен", "Кетті", "bg-[#eee7fb] text-[#7253a5]"],
+    CANCELLED: ["Отменена", "Бас тартылды", "bg-[#fde5e2] text-[#b84b42]"],
+    NO_SHOW: ["Не заехал", "Келмеді", "bg-[#f0e6e2] text-[#855b4b]"],
+  };
+  const [ru, kk, className] = labels[status];
+  return { label: locale === "kk" ? kk : ru, className };
 }
 
 function ResAction({

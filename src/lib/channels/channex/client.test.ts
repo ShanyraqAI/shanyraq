@@ -299,6 +299,11 @@ test("parses the booking revision feed without retaining guarantee data", async 
         ota_name: "Booking.com",
         status: "new",
         currency: "KZT",
+        amount: "50000.00",
+        ota_commission: "7500.00",
+        payment_collect: "ota",
+        payment_type: "credit_card",
+        services: [{ name: "Завтрак", type: "Meal", total_price: "3000", excluded: false, room_index: 0 }],
         arrival_hour: "14:00",
         notes: "Поздний заезд",
         guarantee: { card_number: "4111111111111111" },
@@ -317,6 +322,11 @@ test("parses the booking revision feed without retaining guarantee data", async 
   }), { status: 200 });
   const revisions = await createChannexClient({ environment: "staging", fetchImpl }).listBookingRevisionFeed("property-1");
   assert.equal(revisions[0].rooms[0].amount, 50_000);
+  assert.equal(revisions[0].amount, 50_000);
+  assert.equal(revisions[0].otaCommission, 7_500);
+  assert.equal(revisions[0].paymentCollect, "ota");
+  assert.equal(revisions[0].services[0].totalPrice, 3_000);
+  assert.equal(revisions[0].services[0].roomIndex, 0);
   assert.equal(revisions[0].customer.name, "Aruzhan");
   assert.equal("guarantee" in revisions[0], false);
   assert.equal(JSON.stringify(revisions).includes("4111111111111111"), false);

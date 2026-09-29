@@ -159,6 +159,66 @@ export async function upsertRoomAction(input: unknown): Promise<ActionResult<{ i
   }
 }
 
+const onboardingApartmentsSchema = z.object({
+  firstNumber: z.string().trim().min(1).max(80),
+  count: z.coerce.number().int().min(1).max(100),
+  floor: z.coerce.number().int().min(-20).max(300),
+  capacity: z.coerce.number().int().min(1).max(30),
+  basePrice: z.coerce.number().min(1_000).max(999_000),
+});
+
+export async function createOnboardingApartmentsAction(input: unknown): Promise<ActionResult<{ count: number }>> {
+  try {
+    const parsed = onboardingApartmentsSchema.safeParse(input);
+    if (!parsed.success) return fail(firstZodError(parsed.error));
+    const hotelId = await requireSessionHotelId({ permission: "ROOMS" });
+    const data = parsed.data;
+    const created = await db.$transaction(async (tx) => {
+      const hotel = await tx.hotel.findUniqueOrThrow({ where: { id: hotelId }, select: { name: true } });
+      const rentalProperty = await tx.rentalProperty.findFirst({ where: { hotelId }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true } });
+      if (!rentalProperty) throw new Error("Для квартирного профиля не найдено рабочее пространство.");
+
+      const roomTypeName = "Апартаменты";
+      const roomType = await tx.roomType.upsert({
+        where: { hotelId_name: { hotelId, name: roomTypeName } },
+        create: { hotelId, rentalPropertyId: rentalProperty.id, name: roomTypeName, capacity: data.capacity, basePrice: data.basePrice },
+        update: { capacity: data.capacity, basePrice: data.basePrice },
+        select: { id: true, rentalPropertyId: true },
+      });
+      await tx.ratePlan.upsert({
+        where: { hotelId_name: { hotelId, name: `${hotel.name} · базовый` } },
+        create: { hotelId, rentalPropertyId: roomType.rentalPropertyId, roomTypeId: roomType.id, name: `${hotel.name} · базовый`, basePrice: data.basePrice, currency: "KZT" },
+        update: { roomTypeId: roomType.id, rentalPropertyId: roomType.rentalPropertyId, basePrice: data.basePrice, currency: "KZT" },
+      });
+      const existing = new Set((await tx.room.findMany({ where: { hotelId }, select: { number: true } })).map((room) => room.number.toLocaleLowerCase("ru-RU")));
+      const suffix = data.firstNumber.match(/^(.*?)(\d+)$/);
+      const prefix = suffix?.[1] ?? `${data.firstNumber} `;
+      let nextNumber = suffix ? Number(suffix[2]) : 1;
+      const numbers: string[] = [];
+      while (numbers.length < data.count) {
+        const candidate = suffix ? `${prefix}${nextNumber}` : data.count === 1 ? data.firstNumber : `${prefix}${nextNumber}`;
+        nextNumber += 1;
+        const normalized = candidate.toLocaleLowerCase("ru-RU");
+        if (existing.has(normalized)) continue;
+        existing.add(normalized);
+        numbers.push(candidate);
+      }
+      for (let index = 0; index < data.count; index++) await assertRoomCapacity(tx, hotelId);
+      await tx.room.createMany({ data: numbers.map((number, index) => ({ hotelId, rentalPropertyId: roomType.rentalPropertyId, roomTypeId: roomType.id, number, floor: data.floor, status: "AVAILABLE", sortOrder: index })) });
+      await recomputeExistingAvailability(hotelId, [roomType.id], tx);
+      await enqueueHotelChannelSyncs(tx, hotelId);
+      const firstRoom = await tx.room.findFirstOrThrow({ where: { hotelId, number: numbers[0] }, select: { id: true } });
+      return { count: numbers.length, firstNumber: numbers[0], firstRoomId: firstRoom.id, hotelName: hotel.name };
+    }, { timeout: 30_000 });
+    await writeAudit(hotelId, "room.created", "Room", created.firstRoomId, { number: created.firstNumber }, undefined, { count: created.count, source: "onboarding" });
+    wakeChannelSyncWorker();
+    revalidateRoomConsumers();
+    return ok({ count: created.count }, `${created.count} квартир добавлено в «${created.hotelName}»`);
+  } catch (error) {
+    return fail(toErrorMessage(error));
+  }
+}
+
 export async function deleteRoomAction(input: unknown): Promise<ActionResult> {
   try {
     const parsed = deleteRoomSchema.safeParse(input);

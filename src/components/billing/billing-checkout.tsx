@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { BILLING_PLANS } from "@/lib/billing/policy";
 import { checkPaymentAction, createCheckoutAction } from "@/server/actions/billing";
 
-export function BillingCheckout({ enabled, testMode, roomCount, currentPlan }: { enabled: boolean; testMode: boolean; roomCount: number; currentPlan: string | null }) {
-  const [planId, setPlanId] = useState(currentPlan ?? BILLING_PLANS.find((plan) => plan.rooms >= roomCount)?.id ?? "business");
+export function BillingCheckout({ enabled, testMode, roomCount, currentPlan, initialPlan }: { enabled: boolean; testMode: boolean; roomCount: number; currentPlan: string | null; initialPlan?: string | null }) {
+  const defaultPlan = currentPlan ?? (initialPlan && BILLING_PLANS.some((item) => item.id === initialPlan && item.rooms >= roomCount) ? initialPlan : null) ?? BILLING_PLANS.find((plan) => plan.rooms >= roomCount)?.id ?? "business";
+  const [planId, setPlanId] = useState(defaultPlan);
   const [months, setMonths] = useState(1);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -36,8 +37,8 @@ export function BillingCheckout({ enabled, testMode, roomCount, currentPlan }: {
       <legend className="sr-only">Тариф и период</legend>
       <div className="grid gap-3 sm:grid-cols-3">{BILLING_PLANS.map((item) => <label key={item.id} className={`cursor-pointer rounded-lg border p-4 ${planId === item.id ? "border-primary bg-accent" : "bg-background"}`}>
         <input type="radio" name="billing-plan" value={item.id} checked={planId === item.id} onChange={() => { setPlanId(item.id); setConsent(false); }} disabled={item.rooms < roomCount || Boolean(currentPlan && currentPlan !== item.id)} className="mr-2 accent-primary" />
-        <span className="font-medium">{item.name}</span><span className="mt-2 block text-sm text-muted-foreground">До {item.rooms} номеров</span>
-        <span className="mt-1 block text-sm">{new Intl.NumberFormat("ru-KZ").format(item.monthlyKzt)} ₸ / месяц</span>
+        <span className="font-medium">{item.name}</span><span className="mt-2 block text-sm text-muted-foreground">{item.range}</span>
+        <span className="mt-1 block text-sm">{new Intl.NumberFormat("ru-KZ").format(item.monthlyKzt)} ₸ / месяц</span><span className="mt-1 block text-xs text-muted-foreground">{item.description}</span>
       </label>)}</div>
       <label className="block space-y-2 text-sm"><span>Период оплаты</span><select className="h-10 w-full rounded-md border bg-background px-3" value={months} onChange={(event) => { setMonths(Number(event.target.value)); setConsent(false); }}>
         <option value={1}>Месяц</option><option value={12}>Год — по цене 10 месяцев</option>

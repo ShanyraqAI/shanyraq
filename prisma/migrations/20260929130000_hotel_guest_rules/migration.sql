@@ -1,0 +1,4 @@
+ALTER TABLE "Hotel"
+  ADD COLUMN "defaultCheckInTime" TEXT NOT NULL DEFAULT '14:00',
+  ADD COLUMN "defaultCheckOutTime" TEXT NOT NULL DEFAULT '12:00',
+  ADD COLUMN "houseRules" TEXT NOT NULL DEFAULT '';

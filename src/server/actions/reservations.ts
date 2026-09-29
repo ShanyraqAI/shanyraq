@@ -66,6 +66,9 @@ export async function createReservationAction(input: unknown): Promise<ActionRes
 
     const room = await db.room.findFirst({ where: { id: data.roomId, hotelId }, include: { roomType: true } });
     if (!room) return fail(t.reservations.errors.roomNotFound);
+    if (data.adults + data.children > room.roomType.capacity) {
+      return fail(`В выбранном объекте можно разместить не более ${room.roomType.capacity} гостей.`);
+    }
 
     // При тарифном расчёте тариф обязателен; для ручной цены связь с тарифом не сохраняется.
     let ratePlanId = data.ratePlanId;
@@ -115,6 +118,8 @@ export async function createReservationAction(input: unknown): Promise<ActionRes
       sourceChannel: data.sourceChannel,
       notes: data.notes ?? null,
       paymentMethod: data.paymentMethod,
+      depositAmount: data.depositAmount,
+      depositCollected: data.depositCollected,
       status: "CONFIRMED",
     });
     await recordCurrentUserEvent("reservation_created", { type: "Reservation", id: reservation.id }, { source: data.sourceChannel });
@@ -149,6 +154,8 @@ export async function updateReservationAction(input: unknown): Promise<ActionRes
       manualTotalAmount: data.manualTotalAmount,
       notes: data.notes ?? null,
       paymentMethod: data.paymentMethod,
+      depositAmount: data.depositAmount,
+      depositCollected: data.depositCollected,
     });
     await recordCurrentUserEvent("reservation_updated", { type: "Reservation", id: data.id });
     if (guest.created) await recordCurrentUserEvent("guest_created", { type: "Guest", id: guest.id });
@@ -172,6 +179,42 @@ export async function setReservationStatusAction(input: unknown): Promise<Action
     );
     revalidateAll();
     return ok(undefined, t.reservations.toasts.statusChanged(t.statuses.reservation[parsed.data.status]));
+  } catch (error) {
+    return fail(toErrorMessage(error));
+  }
+}
+
+export async function returnReservationDepositAction(input: unknown): Promise<ActionResult> {
+  try {
+    const id = typeof input === "object" && input !== null && "id" in input ? String((input as { id: unknown }).id) : "";
+    if (!id || id.length > 100) return fail("Бронирование не найдено.");
+    const hotelId = await requireSessionHotelId({ permission: "RESERVATIONS" });
+    const result = await db.reservation.updateMany({
+      where: { id, hotelId, status: "CHECKED_OUT", depositAmount: { gt: 0 }, depositCollectedAt: { not: null }, depositReturnedAt: null },
+      data: { depositReturnedAt: new Date() },
+    });
+    if (!result.count) return fail("Возврат нельзя отметить: проверьте статус брони и факт получения депозита.");
+    await recordCurrentUserEvent("reservation_updated", { type: "Reservation", id }, { depositReturned: true });
+    revalidateAll();
+    return ok(undefined, "Возврат депозита отмечен.");
+  } catch (error) {
+    return fail(toErrorMessage(error));
+  }
+}
+
+export async function collectReservationDepositAction(input: unknown): Promise<ActionResult> {
+  try {
+    const id = typeof input === "object" && input !== null && "id" in input ? String((input as { id: unknown }).id) : "";
+    if (!id || id.length > 100) return fail("Бронирование не найдено.");
+    const hotelId = await requireSessionHotelId({ permission: "RESERVATIONS" });
+    const result = await db.reservation.updateMany({
+      where: { id, hotelId, status: { notIn: ["CANCELLED", "NO_SHOW"] }, depositAmount: { gt: 0 }, depositCollectedAt: null },
+      data: { depositCollectedAt: new Date(), depositReturnedAt: null },
+    });
+    if (!result.count) return fail("Получение депозита нельзя отметить для этой брони.");
+    await recordCurrentUserEvent("reservation_updated", { type: "Reservation", id }, { depositCollected: true });
+    revalidateAll();
+    return ok(undefined, "Получение депозита отмечено.");
   } catch (error) {
     return fail(toErrorMessage(error));
   }

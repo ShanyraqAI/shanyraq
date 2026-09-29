@@ -72,6 +72,9 @@ export interface ReservationVM {
   status: ReservationStatus;
   currency: string;
   totalAmount: number;
+  depositAmount?: number;
+  depositCollectedAt?: string | null;
+  depositReturnedAt?: string | null;
   channel: ChannelCode;
   externalReservationId: string | null;
   notes: string | null;
@@ -103,6 +106,9 @@ export function toReservationVM(r: ReservationWithRelations): ReservationVM {
     status: r.status as ReservationStatus,
     currency: r.currency,
     totalAmount: Number(r.totalAmount),
+    depositAmount: Number(r.depositAmount ?? 0),
+    depositCollectedAt: r.depositCollectedAt?.toISOString() ?? null,
+    depositReturnedAt: r.depositReturnedAt?.toISOString() ?? null,
     channel: r.sourceChannel as ChannelCode,
     externalReservationId: r.externalReservationId,
     notes: r.notes,

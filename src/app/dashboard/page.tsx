@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircle, ArrowUpRight, BedDouble, CalendarCheck2, CalendarX2, CheckCircle2, ChevronRight, Plus, Sparkles, WalletCards } from "lucide-react";
+import { AlertCircle, BedDouble, CalendarCheck2, CalendarX2, CheckCircle2, Sparkles, WalletCards } from "lucide-react";
 import type { ReactNode } from "react";
 import { db, getCurrentHotelId } from "@/lib/db";
 import { getChannelHealth, getDashboardStats, getRecentReservations } from "@/lib/stats";
@@ -22,6 +22,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { getRequestLocale } from "@/lib/locale-server";
 import { mobileCopy, type AppLocale } from "@/lib/locale";
+import { MobileOverview } from "@/components/dashboard/mobile-overview";
 
 export const dynamic = "force-dynamic";
 
@@ -32,13 +33,15 @@ export default async function DashboardPage() {
   const locale = await getRequestLocale(hotel.language);
   const mobile = mobileCopy[locale];
   const day = todayInTimeZone(hotel.timezone);
-  const [user, stats, recent, channelHealth, roomTypes, roomsRaw, ratePlansRaw, guestsRaw] = await Promise.all([
+  const [user, stats, recent, channelHealth, roomTypes, roomsRaw, ratePlansRaw, guestsRaw, depositFollowups, activeForConflicts] = await Promise.all([
     getCurrentUser(), getDashboardStats(hotelId, day, hotel.timezone), getRecentReservations(hotelId, 20),
     PRODUCT_AVAILABILITY.channels ? getChannelHealth(hotelId) : Promise.resolve([]),
     db.roomType.findMany({ where: { hotelId }, orderBy: { sortOrder: "asc" } }),
     db.room.findMany({ where: { hotelId }, include: { roomType: { select: { name: true } } }, orderBy: { number: "asc" } }),
     db.ratePlan.findMany({ where: { hotelId }, orderBy: { name: "asc" } }),
     db.guest.findMany({ where: { hotelId }, orderBy: { fullName: "asc" } }),
+    db.reservation.findMany({ where: { hotelId, status: "CHECKED_OUT", depositAmount: { gt: 0 }, depositCollectedAt: { not: null }, depositReturnedAt: null }, include: { room: { select: { number: true } }, guest: { select: { fullName: true } } }, orderBy: { updatedAt: "asc" }, take: 10 }),
+    db.reservation.findMany({ where: { hotelId, status: { in: ["PENDING", "CONFIRMED", "CHECKED_IN"] }, checkOut: { gt: day } }, select: { id: true, roomId: true, checkIn: true, checkOut: true, guest: { select: { fullName: true } }, room: { select: { number: true } } }, orderBy: { checkIn: "asc" }, take: 150 }),
   ]);
   const rooms: RoomVM[] = roomsRaw.map((room) => ({ id: room.id, number: room.number, floor: room.floor, status: room.status as RoomVM["status"], roomTypeId: room.roomTypeId, roomTypeName: room.roomType.name, guestTonight: null }));
   const ratePlans: RatePlanVM[] = ratePlansRaw.map((plan) => ({ id: plan.id, sequenceNumber: plan.sequenceNumber, name: plan.name, roomTypeId: plan.roomTypeId, roomTypeName: roomTypes.find((type) => type.id === plan.roomTypeId)?.name ?? "", basePrice: Number(plan.basePrice), currency: plan.currency, refundable: plan.refundable, breakfastIncluded: plan.breakfastIncluded }));
@@ -51,36 +54,39 @@ export default async function DashboardPage() {
   const unusualDepartures = stats.departuresToday
     .filter((reservation) => !["CANCELLED", "NO_SHOW"].includes(reservation.status) && reservation.checkOutTime !== "12:00")
     .map((reservation) => ({ label: `${locale === "kk" ? (reservation.checkOutTime < "12:00" ? "Ерте кету" : "Кеш кету") : (reservation.checkOutTime < "12:00" ? "Ранний выезд" : "Поздний выезд")} · ${reservation.checkOutTime}`, room: reservation.room.number, guest: reservation.guest.fullName, href: `/dashboard/reservations?reservation=${reservation.id}` }));
+  const cleaningItems = roomsRaw.filter((room) => room.status === "CLEANING").map((room) => ({ label: locale === "kk" ? "Жинау керек" : "Требуется уборка", room: room.number, guest: "", href: `/dashboard/rooms?room=${room.id}` }));
+  const maintenanceItems = roomsRaw.filter((room) => room.status === "MAINTENANCE" || room.status === "OUT_OF_ORDER").map((room) => ({ label: locale === "kk" ? "Қызмет көрсету керек" : "Требуется обслуживание", room: room.number, guest: "", href: `/dashboard/rooms?room=${room.id}` }));
+  const conflictItems: typeof unusualArrivals = [];
+  for (let index = 0; index < activeForConflicts.length; index += 1) {
+    const current = activeForConflicts[index];
+    const other = activeForConflicts.slice(index + 1).find((row) => row.roomId === current.roomId && row.checkIn < current.checkOut && row.checkOut > current.checkIn);
+    if (other) conflictItems.push({ label: locale === "kk" ? "Бронь күндері қабаттасуы мүмкін" : "Возможное пересечение броней", room: current.room.number, guest: `${current.guest.fullName} / ${other.guest.fullName}`, href: `/dashboard/reservations?reservation=${current.id}` });
+  }
+  const depositItems = depositFollowups.map((row) => ({ label: locale === "kk" ? "Қонақ кеткен соң депозит қайтарылмады" : "Депозит не возвращён после выезда", room: row.room.number, guest: row.guest.fullName, href: `/dashboard/reservations/${row.id}` }));
   const attentionItems = [
+    ...depositItems,
+    ...conflictItems,
     ...unusualDepartures,
     ...unusualArrivals,
-    ...(stats.roomsUnavailable ? [{ label: locale === "kk" ? `${stats.roomsUnavailable} юнит жөндеуде` : `${stats.roomsUnavailable} ${roomWord(stats.roomsUnavailable)} на обслуживании`, room: mobile.dashboard.units, guest: "", href: "/dashboard/rooms" }] : []),
-    ...(stats.roomsCleaning ? [{ label: locale === "kk" ? `${stats.roomsCleaning} юнитті жинау керек` : `${stats.roomsCleaning} ${roomWord(stats.roomsCleaning)} требуют уборки`, room: mobile.dashboard.units, guest: "", href: "/dashboard/rooms" }] : []),
+    ...maintenanceItems,
+    ...cleaningItems,
     ...(waitingArrivals ? [{ label: locale === "kk" ? `${waitingArrivals} қонақ қоныстануды күтуде` : `${waitingArrivals} ожидают заселения`, room: mobile.dashboard.arrivals, guest: mobile.dashboard.today, href: "/dashboard/reservations" }] : []),
-  ].slice(0, 5);
+  ].slice(0, 12);
 
   return <div className="space-y-5">
-    <section className="space-y-4 md:hidden" aria-label="Оперативный обзор">
-      <header><h1 className="sh-mobile-title">{locale === "kk" ? "Шолу" : "Обзор"}</h1><p className="sh-mobile-eyebrow">{formatMediumDate(day)}</p></header>
-
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#158b72] to-[#08634f] p-4 text-white shadow-lg shadow-emerald-950/10">
-        <div className="absolute -bottom-16 -right-8 size-44 rounded-[50%] border-[18px] border-[#dbc783]/25" />
-        <div className="absolute -bottom-20 right-12 size-48 rounded-[50%] border-[13px] border-white/10" />
-        <div className="relative flex items-start justify-between"><div><p className="text-[11px] font-semibold text-white/75">{locale === "kk" ? "Осы айдағы табыс" : "Доход в этом месяце"}</p><p className="mt-1 text-[25px] font-extrabold tracking-tight tabular-nums">{formatMoney(stats.revenueMonthToDate)}</p><p className="mt-1 flex items-center gap-1 text-[11px] font-bold text-[#e3d895]"><ArrowUpRight className="size-3" />{locale === "kk" ? "нақты броньдар бойынша" : "по подтверждённым броням"}</p></div><span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-bold text-[#087761]">{locale === "kk" ? "Есеп" : "Отчёт"}</span></div>
-      </section>
-
-      <section><div className="mb-2 flex items-center justify-between"><h2 className="sh-mobile-section-title">{locale === "kk" ? "Бүгін" : "Сегодня"}</h2><Link href="/dashboard/rooms" className="text-[11px] font-bold text-[#07866b]">{locale === "kk" ? "Барлық тапсырма" : "Все задачи"}</Link></div><div className="grid grid-cols-3 gap-2">
-        <MobileStatCard value={stats.arrivalsToday.length} label={locale === "kk" ? "Келулер" : "Заезды"} tone="green" sub={`▲ ${stats.occupancyTonight ? Math.round(stats.occupancyTonight * 100) : 0}%`} />
-        <MobileStatCard value={stats.departuresToday.length} label={locale === "kk" ? "Кетулер" : "Выезды"} tone="blue" sub="+12%" />
-        <MobileStatCard value={stats.roomsCleaning} label={locale === "kk" ? "Жинау" : "К уборке"} tone="amber" sub={stats.roomsCleaning ? (locale === "kk" ? "жоспарда" : "в плане") : "—"} />
-      </div></section>
-
-      <section><h2 className="sh-mobile-section-title mb-2">{locale === "kk" ? "Назар аударыңыз" : "Требует внимания"}</h2>{attentionItems.length ? <Link href={attentionItems[0].href} className="sh-mobile-card flex min-h-[60px] items-center gap-3 border-[#f2d4d1] bg-[#fff5f3] px-3"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#ef6b62] text-white"><AlertCircle className="size-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-extrabold text-[#4a3733]">{attentionItems[0].room} · {attentionItems[0].guest || attentionItems[0].label}</span><span className="mt-0.5 block truncate text-[10px] text-[#a1726c]">{attentionItems[0].label}</span></span><span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#e45e56]">{locale === "kk" ? "Шешу" : "Решить"}</span></Link> : <div className="sh-mobile-card px-4 py-4 text-xs text-[#858c84]">{mobile.dashboard.noUrgent}</div>}</section>
-
-      <section><div className="mb-2 flex items-center justify-between"><h2 className="sh-mobile-section-title">{locale === "kk" ? "Жақын қонақтар" : "Ближайшие гости"}</h2><Link href="/dashboard/calendar" className="text-[11px] font-bold text-[#07866b]">{locale === "kk" ? "Күнтізбе" : "Календарь"}</Link></div><div className="space-y-2">{recent.slice(0, 2).map((reservation, index) => <Link key={reservation.id} href={`/dashboard/reservations/${reservation.id}`} className="sh-mobile-card flex min-h-[66px] items-center gap-3 px-3"><span className={`grid size-9 shrink-0 place-items-center rounded-full text-xs font-extrabold ${index % 2 ? "bg-[#e7f0ff] text-[#4e86d9]" : "bg-[#ddf2ea] text-[#168269]"}`}>{new Date(reservation.checkIn).getUTCDate()}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-extrabold text-[#29362f]">{reservation.guest.fullName}</span><span className="mt-0.5 block truncate text-[10px] text-[#949a93]">{reservation.room.number} · {formatMediumDate(reservation.checkIn)}</span></span><span className="rounded-full bg-[#e4f4ee] px-2.5 py-1 text-[10px] font-bold text-[#168269]">{index ? (locale === "kk" ? "Депозит" : "Депозит") : (locale === "kk" ? "Төленді" : "Оплачено")}</span><ChevronRight className="size-3.5 text-[#a4aaa4]" /></Link>)}</div></section>
-
-      {permissions.includes("RESERVATIONS") ? <Link href="/dashboard/reservations/new" className="sh-mobile-primary flex w-full items-center justify-center gap-2"><Plus className="size-4" />{locale === "kk" ? "Жаңа бронь" : "Новая бронь"}</Link> : null}
-    </section>
+    <MobileOverview
+      locale={locale}
+      dateLabel={formatMediumDate(day)}
+      revenue={stats.revenueMonthToDate}
+      occupancyPercent={stats.occupancyTonight ? Math.round(stats.occupancyTonight * 100) : 0}
+      activeReservations={stats.activeReservations}
+      arrivals={stats.arrivalsToday.map((item) => ({ id: item.id, guest: item.guest.fullName, room: item.room.number, time: item.checkInTime }))}
+      departures={stats.departuresToday.map((item) => ({ id: item.id, guest: item.guest.fullName, room: item.room.number, time: item.checkOutTime }))}
+      cleaningCount={stats.roomsCleaning}
+      attention={attentionItems}
+      recent={recent.slice(0, 2).map((item) => ({ id: item.id, guest: item.guest.fullName, room: item.room.number, dateLabel: formatMediumDate(item.checkIn), day: new Date(item.checkIn).getUTCDate() }))}
+      canCreateReservation={permissions.includes("RESERVATIONS")}
+    />
     <DesktopOnly><div className="space-y-5"><PageHeader title={user?.firstName ? `${greeting(hotel.timezone)}, ${user.firstName}` : greeting(hotel.timezone)} description={`${hotel.name} · ${formatMediumDate(day)}`}>
       {PRODUCT_AVAILABILITY.channels ? <SyncAllButton /> : null}
     </PageHeader>
@@ -136,11 +142,6 @@ export default async function DashboardPage() {
   </div>;
 }
 
-function MobileStatCard({ value, label, sub, tone }: { value: number; label: string; sub: string; tone: "green" | "blue" | "amber" }) {
-  const colors = tone === "green" ? "bg-[#ddf2ea] text-[#14846b]" : tone === "blue" ? "bg-[#e5edfa] text-[#5189d5]" : "bg-[#fbf0d8] text-[#c88a28]";
-  return <div className="sh-mobile-card min-w-0 p-3"><div className="flex items-start justify-between"><span className="text-[23px] font-extrabold leading-none tabular-nums text-[#27342e]">{value}</span><span className={`mt-0.5 size-2 rounded-full ${colors.split(" ")[0]}`} /></div><p className="mt-2 truncate text-[10px] font-semibold text-[#848b84]">{label}</p><p className={`mt-1 truncate text-[9px] font-bold ${colors.split(" ")[1]}`}>{sub}</p></div>;
-}
-
 function MetricCard({ label, value, sub, visual }: { label: string; value: string; sub: string; visual: ReactNode }) {
   return <Card className="group relative overflow-hidden border-border/70 bg-gradient-to-br from-card via-card to-secondary/25 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md">
     <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary/75 via-chart-2/55 to-transparent" />
@@ -170,4 +171,3 @@ function TodayList({ title, href, icon: Icon, rows, empty }: { title: string; hr
   return <Card className="overflow-hidden shadow-sm"><div className="flex items-center justify-between border-b px-5 py-4"><h2 className="flex items-center gap-2 font-semibold"><Icon className="size-4 text-primary" /> {title}</h2><Link href={href} className="text-xs font-medium text-primary hover:underline">Все →</Link></div>{rows.length ? <Table><TableBody>{rows.slice(0, 4).map((reservation) => <TableRow key={reservation.id}><TableCell className="font-medium">{reservation.guest.fullName}<span className="mt-0.5 block text-xs font-normal text-muted-foreground">№ {reservation.room.number} · {reservation.roomType.name}</span></TableCell><TableCell className="hidden 2xl:table-cell"><ChannelLabel channel={reservation.sourceChannel} /></TableCell><TableCell className="hidden text-right 2xl:table-cell"><ReservationStatusBadge status={reservation.status as never} /></TableCell></TableRow>)}</TableBody></Table> : <div className="flex min-h-36 items-center justify-center px-5 text-sm text-muted-foreground">{empty}</div>}</Card>;
 }
 function greeting(timeZone: string, locale: AppLocale = "ru"): string { const hour = Number(new Intl.DateTimeFormat("ru-RU", { timeZone, hour: "2-digit", hour12: false }).format(new Date())); if (locale === "kk") return hour < 12 ? "Қайырлы таң" : hour < 18 ? "Қайырлы күн" : "Қайырлы кеш"; if (hour < 12) return "Доброе утро"; if (hour < 18) return "Добрый день"; return "Добрый вечер"; }
-function roomWord(value: number): string { return value === 1 ? "номер" : value < 5 ? "номера" : "номеров"; }

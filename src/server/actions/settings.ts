@@ -45,7 +45,7 @@ export async function saveHotelSettingsAction(input: unknown): Promise<ActionRes
 
     const previous = await db.hotel.findUniqueOrThrow({
       where: { id: currentHotelId },
-      select: { name: true, address: true, city: true, country: true, timezone: true, currency: true },
+      select: { name: true, address: true, city: true, country: true, timezone: true, currency: true, defaultCheckInTime: true, defaultCheckOutTime: true, houseRules: true },
     });
     const next = {
       name: data.name,
@@ -54,6 +54,9 @@ export async function saveHotelSettingsAction(input: unknown): Promise<ActionRes
       country: data.country || null,
       timezone: data.timezone,
       currency: data.currency,
+      defaultCheckInTime: data.defaultCheckInTime,
+      defaultCheckOutTime: data.defaultCheckOutTime,
+      houseRules: data.houseRules,
     };
     await db.$transaction(async (tx) => {
       const updated = await tx.hotel.update({

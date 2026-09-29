@@ -5,6 +5,7 @@ import { requireOnboardingComplete } from "@/lib/auth/session";
 import { getCurrentHotel } from "@/lib/tenant";
 import { DesktopSidebar } from "@/components/layout/app-sidebar";
 import { MobileAppShell } from "@/components/layout/mobile-app-shell";
+import { MobileContextBack } from "@/components/layout/mobile-context-back";
 import { db } from "@/lib/db";
 import { avatarDisplayUrl } from "@/lib/avatar";
 import Link from "next/link";
@@ -86,6 +87,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </Link>
           )}
           {subscription && <BillingBanner endsAt={accessUntil(subscription).toISOString()} paid={Boolean(subscription.paidUntil)} initiallyExpired={isExpired(subscription)} />}
+          <MobileContextBack locale={locale} />
           {children}
         </main>
       </div>

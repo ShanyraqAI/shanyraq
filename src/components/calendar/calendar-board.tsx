@@ -4,7 +4,7 @@ import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Clock3, Loader2, StickyNote, X, ZoomIn, ZoomOut } from "lucide-react";
+import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Clock3, Loader2, StickyNote, X } from "lucide-react";
 import { ACTIVE_RESERVATION_STATUSES } from "@/lib/constants";
 import { reservationMatchesCalendarSearch } from "@/lib/reservations/calendar-search";
 import { calendarStayPosition, calendarTimelineRange, shiftCalendarAnchor, staysOverlap, type CalendarRangeDays } from "@/lib/reservations/calendar-range";
@@ -30,9 +30,6 @@ import type { AppLocale } from "@/lib/locale";
 const ROOM_WIDTHS = { COMPACT: 160, STANDARD: 208, WIDE: 264 } as const;
 const DAY_W: Record<CalendarRangeDays, number> = { 3: 136, 7: 136, 14: 84, 30: 52 };
 
-const ZOOM_MIN = 0.75;
-const ZOOM_MAX = 2;
-const ZOOM_STEP = 0.25;
 const MOBILE_ZOOM_MAX = 4;
 const MOBILE_ZOOM_MIN = 0.6;
 
@@ -143,7 +140,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   const range = useMemo(() => calendarTimelineRange(anchorISO, rangeDays), [anchorISO, rangeDays]);
   const days = useMemo(() => eachDay(range.start, range.endExclusive), [range.start, range.endExclusive]);
   const mobileFullscreen = viewportWidth > 0 && viewportWidth < 640 && fullscreen;
-  const labelWidth = viewportWidth > 0 && viewportWidth < 640 ? Math.max(136, ROOM_WIDTHS[preferences.roomColumnWidth] - 48) : ROOM_WIDTHS[preferences.roomColumnWidth];
+  const labelWidth = viewportWidth > 0 && viewportWidth < 640 ? Math.max(76, ROOM_WIDTHS[preferences.roomColumnWidth] - 72) : ROOM_WIDTHS[preferences.roomColumnWidth];
   const fitDayWidth = mobileFullscreen ? DAY_W[rangeDays] : fullscreen && viewportWidth >= 640 ? Math.max(DAY_W[rangeDays], (viewportWidth - labelWidth - 16) / rangeDays) : DAY_W[rangeDays];
   const dayWidth = mobileFullscreen ? fitDayWidth * zoom : Math.round(fitDayWidth * zoom);
   const overview = mobileFullscreen && rangeDays === 30 && zoom < 1;
@@ -318,17 +315,6 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
     navigate(shiftCalendarAnchor(anchorISO, rangeDays, direction));
   }
 
-  function changeZoom(direction: 1 | -1) {
-    const next = Math.min(mobileFullscreen ? MOBILE_ZOOM_MAX : ZOOM_MAX, Math.max(mobileFullscreen ? MOBILE_ZOOM_MIN : ZOOM_MIN, zoom + direction * (mobileFullscreen ? 0.4 : ZOOM_STEP)));
-    if (mobileFullscreen && scrollRef.current) {
-      const element = scrollRef.current;
-      const center = element.clientWidth / 2;
-      const dayIndex = (element.scrollLeft + center - labelWidth) / dayWidth;
-      nextScrollLeft.current = Math.max(0, labelWidth + dayIndex * fitDayWidth * next - center);
-    }
-    setZoom(next);
-  }
-
   function closeFullscreen() {
     setFullscreen(false);
     setZoom(1);
@@ -351,16 +337,6 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
     const index = diffDays(range.start, parseISODate(iso));
     nextScrollLeft.current = Math.max(0, labelWidth + index * fitDayWidth * (rangeDays === 30 && zoom < 1 ? 1.5 : zoom) - labelWidth);
     requestAnimationFrame(() => { if (scrollRef.current && nextScrollLeft.current !== null) { scrollRef.current.scrollLeft = nextScrollLeft.current; nextScrollLeft.current = null; } });
-  }
-
-  function resetZoom() {
-    if (mobileFullscreen && scrollRef.current) {
-      const element = scrollRef.current;
-      const center = element.clientWidth / 2;
-      const dayIndex = (element.scrollLeft + center - labelWidth) / dayWidth;
-      nextScrollLeft.current = Math.max(0, labelWidth + dayIndex * fitDayWidth - center);
-    }
-    setZoom(1);
   }
 
   async function savePreferences(next: CalendarPreferences, silent = false): Promise<boolean> {
@@ -600,7 +576,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   );
 
   if (viewportWidth < 640 && !fullscreen) return <>
-    <MobileCalendar locale={data.locale ?? "ru"} anchorISO={anchorISO} todayISO={data.todayISO} viewportWidth={viewportWidth} rooms={visibleRooms} reservations={visibleReservations} navigating={navigating} onShift={(count) => navigate(toISODate(addDays(parseISODate(anchorISO), count)))} onToday={() => navigate(data.todayISO)} onOpen={(id) => { setSelectedId(id); setDetailsOpen(true); }} onCreate={(roomId, date) => { if (roomId && date) openQuickBooking(roomId, date); else setCreateState({ open: true }); }} onExpand={openFullscreen} />
+    <MobileCalendar locale={data.locale ?? "ru"} anchorISO={anchorISO} todayISO={data.todayISO} rangeDays={rangeDays} rooms={visibleRooms} reservations={visibleReservations} navigating={navigating} onShift={(count) => navigate(toISODate(addDays(parseISODate(anchorISO), count)))} onToday={() => navigate(data.todayISO)} onRangeChange={(days) => navigate(anchorISO, days)} onOpen={(id) => { setSelectedId(id); setDetailsOpen(true); }} onCreate={(roomId, date) => { if (roomId && date) openQuickBooking(roomId, date); else setCreateState({ open: true }); }} onExpand={openFullscreen} />
     {dialogs}
   </>;
 
@@ -634,9 +610,6 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
                 <DialogTitle className="truncate text-sm font-semibold">Календарь · {rangeDays} дней</DialogTitle>
                 <div className="hidden items-center gap-3 text-xs text-muted-foreground md:flex"><Metric label="Заезды" value={todayStats.arrivals} /><Metric label="Выезды" value={todayStats.departures} /><Metric label="Проживают" value={todayStats.staying} /></div>
                 <div className="flex shrink-0 items-center">
-                  <Button variant="ghost" size="icon-sm" onClick={() => changeZoom(-1)} disabled={zoom <= (mobileFullscreen ? MOBILE_ZOOM_MIN : ZOOM_MIN)} aria-label="Уменьшить"><ZoomOut className="size-4" /></Button>
-                  <button type="button" onClick={resetZoom} className="min-h-11 w-12 text-center text-xs tabular-nums text-muted-foreground" aria-label="Сбросить масштаб" title="Сбросить масштаб">{Math.round(zoom * 100)}%</button>
-                  <Button variant="ghost" size="icon-sm" onClick={() => changeZoom(1)} disabled={zoom >= (mobileFullscreen ? MOBILE_ZOOM_MAX : ZOOM_MAX)} aria-label="Увеличить масштаб"><ZoomIn className="size-4" /></Button>
                   <Button variant="ghost" size="icon-sm" onClick={closeFullscreen} aria-label="Закрыть"><X className="size-4" /></Button>
                 </div>
               </div>

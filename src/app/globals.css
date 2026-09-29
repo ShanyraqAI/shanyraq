@@ -163,3 +163,55 @@
     @apply font-sans;
     }
 }
+
+@keyframes shanyraq-onboarding-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes shanyraq-onboarding-sweep {
+  0%, 62% { transform: translateX(-130%); opacity: 0; }
+  70% { opacity: 0.55; }
+  88%, 100% { transform: translateX(130%); opacity: 0; }
+}
+
+.calendar-preview,
+.profile-motion-card,
+.apartment-live-card {
+  isolation: isolate;
+}
+
+.calendar-preview::after,
+.profile-motion-card::after,
+.apartment-live-card::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(110deg, transparent 20%, rgb(255 255 255 / 32%) 48%, transparent 72%);
+  transform: translateX(-130%);
+  animation: shanyraq-onboarding-sweep 5.2s ease-in-out infinite;
+}
+
+.apartment-tile-one {
+  animation: shanyraq-onboarding-float 3.7s ease-in-out infinite;
+}
+
+.apartment-tile-two {
+  animation: shanyraq-onboarding-float 4.3s ease-in-out -1.4s infinite;
+}
+
+.profile-motion-card::after {
+  animation-delay: 0.8s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendar-preview::after,
+  .profile-motion-card::after,
+  .apartment-live-card::after,
+  .apartment-tile-one,
+  .apartment-tile-two {
+    animation: none;
+  }
+}

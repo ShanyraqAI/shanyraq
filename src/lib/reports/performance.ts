@@ -27,10 +27,25 @@ export type DailyPerformance = {
 };
 
 export function parseReportFilters(
-  input: { from?: string | string[]; to?: string | string[]; source?: string | string[] },
+  input: { from?: string | string[]; to?: string | string[]; month?: string | string[]; source?: string | string[] },
   today: Date,
 ): ReportFilters {
   const defaultFrom = addDays(today, -29);
+  const monthText = typeof input.month === "string" ? input.month : "";
+  const monthMatch = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(monthText);
+  if (monthMatch) {
+    const year = Number(monthMatch[1]);
+    const monthIndex = Number(monthMatch[2]) - 1;
+    const monthStart = new Date(Date.UTC(year, monthIndex, 1));
+    const monthEnd = new Date(Date.UTC(year, monthIndex + 1, 0));
+    if (monthStart <= today) {
+      const from = monthStart;
+      const to = monthEnd > today ? today : monthEnd;
+      const sourceText = typeof input.source === "string" ? input.source.trim() : "";
+      const source = sourceText && sourceText !== "all" && /^[a-zA-Z0-9_-]{1,50}$/.test(sourceText) ? sourceText : null;
+      return { from, to, source };
+    }
+  }
   const fromText = typeof input.from === "string" ? input.from : "";
   const toText = typeof input.to === "string" ? input.to : "";
   const parsedFrom = isISODate(fromText) ? parseISODate(fromText) : defaultFrom;

@@ -85,6 +85,7 @@ export async function POST(request: Request) {
     }
 
     await db.$transaction([
+      db.hotel.updateMany({ where: { id: user.hotelId, orgId: user.organizationId }, data: { propertyType: "Апартаменты", country: "Казахстан", currency: "KZT", timezone: "Asia/Almaty" } }),
       db.user.update({ where: { id: user.id }, data: { onboardingCompleted: true } }),
       db.productExperience.upsert({
         where: { userId_hotelId: { userId: user.id, hotelId: user.hotelId } },

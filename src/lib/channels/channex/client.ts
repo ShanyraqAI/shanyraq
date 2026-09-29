@@ -131,6 +131,11 @@ export interface ChannexBookingRevisionPayload {
   currency: string;
   notes: string | null;
   insertedAt: string | null;
+  amount: number | null;
+  otaCommission: number | null;
+  paymentCollect: "property" | "ota" | null;
+  paymentType: string | null;
+  services: Array<{ name: string; type: string; totalPrice: number; excluded: boolean | null; roomIndex: number | null }>;
 }
 
 export interface ChannexWebhookSummary {
@@ -139,6 +144,12 @@ export interface ChannexWebhookSummary {
   callbackUrl: string;
   eventMask: string;
   isActive: boolean;
+}
+
+export interface ChannexOneTimeTokenInput {
+  property_id: string;
+  username: string;
+  group_id?: string;
 }
 
 export class ChannexApiError extends Error {
@@ -195,6 +206,7 @@ export interface ChannexClient {
     is_active: true;
     send_data: true;
   }): Promise<{ id: string }>;
+  createOneTimeToken(input: ChannexOneTimeTokenInput): Promise<{ token: string }>;
 }
 
 export interface CreateChannexClientOptions {
@@ -486,6 +498,16 @@ function parseBookingRevision(value: unknown): ChannexBookingRevisionPayload {
     currency: requiredString(attributes.currency).toUpperCase(),
     notes: optionalString(attributes.notes),
     insertedAt: optionalString(attributes.inserted_at),
+    amount: attributes.amount === undefined || attributes.amount === null ? null : nonNegativeNumber(attributes.amount),
+    otaCommission: attributes.ota_commission === undefined || attributes.ota_commission === null ? null : nonNegativeNumber(attributes.ota_commission),
+    paymentCollect: attributes.payment_collect === "property" || attributes.payment_collect === "ota" ? attributes.payment_collect : null,
+    paymentType: optionalString(attributes.payment_type),
+    services: Array.isArray(attributes.services) ? attributes.services.flatMap((service) => {
+      if (!service || typeof service !== "object") return [];
+      const item = service as Record<string, unknown>;
+      const roomIndex = item.room_index === undefined || item.room_index === null ? null : Math.trunc(nonNegativeNumber(item.room_index));
+      return [{ name: optionalString(item.name) ?? "Услуга", type: optionalString(item.type) ?? "unknown", totalPrice: nonNegativeNumber(item.total_price ?? 0), excluded: typeof item.excluded === "boolean" ? item.excluded : null, roomIndex }];
+    }) : [],
   };
 }
 
@@ -521,6 +543,15 @@ function parseWebhook(value: unknown): ChannexWebhookSummary {
     eventMask: requiredString(attributes.event_mask),
     isActive: attributes.is_active === true,
   };
+}
+
+function parseOneTimeToken(value: unknown): { token: string } {
+  if (!value || typeof value !== "object") throw invalidResponse();
+  const data = (value as { data?: unknown }).data;
+  if (!data || typeof data !== "object") throw invalidResponse();
+  const token = (data as { token?: unknown }).token;
+  if (typeof token !== "string" || !token.trim()) throw invalidResponse();
+  return { token };
 }
 
 function invalidResponse() {
@@ -720,6 +751,9 @@ export function createChannexClient(options: CreateChannexClientOptions): Channe
     },
     async createWebhook(input) {
       return parseCreatedId(await post("webhooks", { webhook: input }));
+    },
+    async createOneTimeToken(input) {
+      return parseOneTimeToken(await post("auth/one_time_token", { one_time_token: input }));
     },
   };
 }

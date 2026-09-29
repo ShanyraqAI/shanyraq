@@ -7,7 +7,7 @@ import { MAX_NIGHTLY_PRICE, MIN_NIGHTLY_PRICE } from "@/lib/pricing";
 // Domain enums (string unions — portable across SQLite/PostgreSQL)
 // ---------------------------------------------------------------------------
 
-export const CHANNEL_CODES = ["booking", "ostrovok", "krisha", "direct"] as const;
+export const CHANNEL_CODES = ["booking", "airbnb", "ostrovok", "krisha", "direct"] as const;
 export type ChannelCode = (typeof CHANNEL_CODES)[number];
 
 export const RESERVATION_STATUSES = ["PENDING", "CONFIRMED", "CANCELLED", "CHECKED_IN", "CHECKED_OUT", "NO_SHOW"] as const;
@@ -34,6 +34,11 @@ export const CHANNEL_META: Record<ChannelCode, { name: string; description: stri
     name: "Booking.com",
     description: "Глобальный канал с максимальным охватом путешественников.",
     color: "#003580",
+  },
+  airbnb: {
+    name: "Airbnb",
+    description: "Международная площадка для краткосрочной аренды жилья.",
+    color: "#ff385c",
   },
   ostrovok: {
     name: "Ostrovok",
@@ -83,6 +88,8 @@ export const createReservationSchema = z
     checkInTime: hotelTime.default("14:00"),
     checkOutTime: hotelTime.default("12:00"),
     paymentMethod: z.enum(["ONLINE", "CASH"]).nullable().optional(),
+    depositAmount: z.coerce.number().min(0).max(1_000_000_000).default(0),
+    depositCollected: z.coerce.boolean().default(false),
     adults: z.coerce.number().int().min(1).max(10),
     children: z.coerce.number().int().min(0).max(10).default(0),
     ...pricingFields,
@@ -116,6 +123,8 @@ export const updateReservationSchema = z
     checkInTime: hotelTime.default("14:00"),
     checkOutTime: hotelTime.default("12:00"),
     paymentMethod: z.enum(["ONLINE", "CASH"]).nullable().optional(),
+    depositAmount: z.coerce.number().min(0).max(1_000_000_000).optional(),
+    depositCollected: z.coerce.boolean().optional(),
     adults: z.coerce.number().int().min(1).max(10),
     children: z.coerce.number().int().min(0).max(10).default(0),
     ...pricingFields,
@@ -197,6 +206,9 @@ export const hotelSettingsSchema = z.object({
   country: z.string().trim().max(120).optional(),
   timezone: z.string().trim().min(1).max(64),
   currency: z.enum(["KZT", "USD", "EUR"]),
+  defaultCheckInTime: hotelTime.default("14:00"),
+  defaultCheckOutTime: hotelTime.default("12:00"),
+  houseRules: z.string().trim().max(4000).default(""),
 });
 
 export const bulkRateUpdateSchema = z

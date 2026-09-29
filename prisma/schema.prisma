@@ -197,6 +197,9 @@ model Hotel {
   country      String?
   timezone     String       @default("Asia/Almaty")
   currency     String       @default("KZT")
+  defaultCheckInTime  String @default("14:00")
+  defaultCheckOutTime String @default("12:00")
+  houseRules         String @default("")
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   memberships  Membership[]
@@ -206,6 +209,8 @@ model Hotel {
   rooms               Room[]
   guests              Guest[]
   reservations        Reservation[]
+  channelCommissionSettings ChannelCommissionSetting[]
+  financialOperations FinancialOperation[]
   ratePlans           RatePlan[]
   availability        Availability[]
   connections         ChannelConnection[]
@@ -228,6 +233,9 @@ model Hotel {
   calendarPreferences CalendarPreference[]
   guestNotes          GuestNote[]
   generatedDocuments  GeneratedDocument[]
+  ttlockConnection    TTLockConnection?
+  ttlockLocks         TTLockLock[]
+  ttlockPasscodes     TTLockPasscode[]
 
   @@unique([id, orgId])
 }
@@ -259,6 +267,7 @@ model RentalProperty {
   ratePlans         RatePlan[]
   channexProperties ChannexProperty[]
   channexSyncJobs   ChannexSyncJob[]
+  financialOperations FinancialOperation[]
 
   @@unique([id, hotelId])
   @@unique([id, hotelId, organizationId])
@@ -549,6 +558,7 @@ model Room {
   rentalProperty RentalProperty @relation(fields: [rentalPropertyId, hotelId], references: [id, hotelId], onDelete: Restrict)
   roomType       RoomType       @relation(fields: [roomTypeId, rentalPropertyId, hotelId], references: [id, rentalPropertyId, hotelId], onDelete: Restrict)
   reservations   Reservation[]
+  ttlockLock     TTLockLock?
 
   @@unique([hotelId, number])
   @@unique([id, hotelId])
@@ -615,8 +625,20 @@ model Reservation {
   pricingMode           String   @default("RATE_PLAN") // RATE_PLAN | MANUAL
   currency              String   @default("KZT")
   totalAmount           Decimal  @db.Decimal(14, 2)
+  depositAmount         Decimal  @default(0) @db.Decimal(14, 2)
+  depositCollectedAt    DateTime?
+  depositReturnedAt     DateTime?
   notes                 String?
   paymentMethod         String? // ONLINE | CASH; nullable for older reservations
+  channelBookingAmount  Decimal? @db.Decimal(14, 2)
+  otaCommissionAmount   Decimal? @db.Decimal(14, 2)
+  otaCommissionSource   String? // CHANNEX | ESTIMATED
+  commissionRateSnapshot Decimal? @db.Decimal(7, 4)
+  commissionFixedSnapshot Decimal? @db.Decimal(14, 2)
+  paymentCollect        String? // property | ota; null means unknown
+  paymentType           String?
+  financialServices     Json?
+  financialComponentsSource String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -629,6 +651,8 @@ model Reservation {
   generatedDocuments  GeneratedDocument[]
   channexBookings     ChannexBooking[]
   channexBookingLinks ChannexBookingReservation[]
+  ttlockPasscodes     TTLockPasscode[]
+  financialOperations FinancialOperation[]
 
   @@unique([id, hotelId])
   @@unique([id, rentalPropertyId, hotelId])
@@ -638,6 +662,92 @@ model Reservation {
   @@index([hotelId, status])
   @@index([roomId, checkIn, checkOut])
   @@index([rentalPropertyId, hotelId])
+}
+
+// Manual OTA fee settings are applied only to future imported revisions and snapshotted per booking.
+model ChannelCommissionSetting {
+  id          String   @id @default(cuid())
+  hotelId     String
+  sourceChannel String
+  ratePercent Decimal  @default(0) @db.Decimal(7, 4)
+  fixedFee    Decimal  @default(0) @db.Decimal(14, 2)
+  currency    String   @default("KZT")
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  hotel       Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  @@unique([hotelId, sourceChannel])
+  @@index([hotelId])
+}
+
+model FinancialOperation {
+  id                String   @id @default(cuid())
+  organizationId    String
+  hotelId           String
+  rentalPropertyId  String
+  reservationId     String
+  amount            Decimal  @db.Decimal(14, 2)
+  currency          String
+  occurredAt        DateTime
+  status            String   @default("COMPLETED") // COMPLETED | PENDING | FAILED
+  method            String // CASH | CARD | BANK_TRANSFER | OTA | VCC | OTHER
+  type              String // PAYMENT | REFUND | EXPENSE
+  source            String   @default("MANUAL") // MANUAL | IMPORT | CHANNEX
+  externalKey       String?
+  description       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  hotel             Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  reservation       Reservation @relation(fields: [reservationId, rentalPropertyId, hotelId], references: [id, rentalPropertyId, hotelId], onDelete: Cascade)
+  rentalProperty    RentalProperty @relation(fields: [rentalPropertyId, hotelId, organizationId], references: [id, hotelId, organizationId], onDelete: Cascade)
+  @@unique([hotelId, externalKey])
+  @@index([organizationId, hotelId, occurredAt])
+  @@index([reservationId, hotelId, type, status])
+}
+
+model TTLockConnection {
+  id                   String   @id @default(cuid())
+  hotelId              String   @unique
+  credentials          String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  hotel                Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  @@index([hotelId])
+}
+
+model TTLockLock {
+  id          String   @id @default(cuid())
+  hotelId     String
+  roomId      String   @unique
+  lockId      String
+  lockName    String
+  lockAlias   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  hotel       Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  passcodes   TTLockPasscode[]
+  @@unique([hotelId, lockId])
+  @@index([hotelId])
+}
+
+model TTLockPasscode {
+  id               String   @id @default(cuid())
+  hotelId          String
+  lockId           String
+  reservationId    String?
+  keyboardPwdId    String
+  code             String
+  name             String
+  startsAt         DateTime
+  endsAt           DateTime
+  status           String   @default("ACTIVE")
+  createdAt        DateTime @default(now())
+  hotel            Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  lock             TTLockLock @relation(fields: [lockId], references: [id], onDelete: Cascade)
+  reservation      Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  @@unique([lockId, keyboardPwdId])
+  @@index([hotelId, startsAt, endsAt])
+  @@index([reservationId])
 }
 
 // ---------------------------------------------------------------------------

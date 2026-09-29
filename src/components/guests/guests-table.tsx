@@ -39,6 +39,7 @@ import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
 import { t } from "@/lib/i18n";
 import type { AppLocale } from "@/lib/locale";
+import { whatsappHref } from "@/lib/whatsapp";
 
 export interface GuestRow {
   id: string;
@@ -99,6 +100,7 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null, lo
   }, [guests, query]);
 
   const selected = guests.find((g) => g.id === selectedId) ?? null;
+  const selectedWhatsApp = selected ? whatsappHref(selected.phone, kk ? `Сәлеметсіз бе, ${selected.fullName}!` : `Здравствуйте, ${selected.fullName}!`) : null;
   const history = useMemo(
     () =>
       selected
@@ -200,9 +202,11 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null, lo
                 </DialogDescription>
               </DialogHeader>
 
+              {selected.phone ? <div className="flex flex-wrap gap-2"><Button asChild variant="outline" size="sm"><a href={`tel:${selected.phone}`}><Phone className="size-4" />{kk ? "Қоңырау шалу" : "Позвонить"}</a></Button>{selectedWhatsApp ? <Button asChild size="sm" className="bg-[#25D366] text-white hover:bg-[#1fb75a]"><a href={selectedWhatsApp} target="_blank" rel="noopener noreferrer"><MessageCircle className="size-4" />WhatsApp</a></Button> : null}</div> : null}
+
               <div className="space-y-2 rounded-xl bg-secondary/30 p-3 sm:hidden">
                 <p className="text-sm font-medium">{selected.phone ?? "Телефон не указан"}</p>
-                {selected.phone ? <div className="grid grid-cols-2 gap-2"><Button asChild variant="outline" size="sm" className="h-10"><a href={`tel:${selected.phone}`}><Phone className="size-4" />Позвонить</a></Button><Button asChild variant="outline" size="sm" className="h-10"><a href={`https://wa.me/${selected.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer"><MessageCircle className="size-4" />WhatsApp</a></Button></div> : null}
+                {selected.phone ? <div className="grid grid-cols-2 gap-2"><Button asChild variant="outline" size="sm" className="h-10"><a href={`tel:${selected.phone}`}><Phone className="size-4" />{kk ? "Қоңырау" : "Позвонить"}</a></Button>{selectedWhatsApp ? <Button asChild variant="outline" size="sm" className="h-10 border-[#25D366]/40 text-[#158542]"><a href={selectedWhatsApp} target="_blank" rel="noopener noreferrer"><MessageCircle className="size-4" />WhatsApp</a></Button> : null}</div> : null}
                 <div className="flex flex-wrap items-center gap-2 text-xs"><span className="text-muted-foreground">Последнее проживание:</span>{history[0] ? <ReservationStatusBadge status={history[0].status} /> : <span>Нет бронирований</span>}</div>
                 {selected.notes ? <p className="line-clamp-2 text-xs text-muted-foreground">{selected.notes}</p> : null}
                 <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>Редактировать гостя</Button>

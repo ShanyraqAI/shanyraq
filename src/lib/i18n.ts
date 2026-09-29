@@ -591,6 +591,7 @@ export function pluralize(n: number, one: string, few: string, many: string): st
 
 const CHANNEL_LABELS: Record<ChannelCode, string> = {
   booking: "Booking.com",
+  airbnb: "Airbnb",
   ostrovok: "Ostrovok",
   krisha: "Krisha",
   direct: "Прямые брони",

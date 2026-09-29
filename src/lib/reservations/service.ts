@@ -167,6 +167,8 @@ export interface CreateReservationParams {
   status?: ReservationStatus;
   notes?: string | null;
   paymentMethod?: "ONLINE" | "CASH" | null;
+  depositAmount?: number;
+  depositCollected?: boolean;
   /** Channel-originated imports must not recursively trigger another pull. */
   enqueueChannelSync?: boolean;
 }
@@ -196,6 +198,7 @@ export async function createReservation(params: CreateReservationParams) {
         checkInTime: params.checkInTime ?? "14:00", checkOutTime: params.checkOutTime ?? "12:00",
         adults: params.adults, children: params.children, status: params.status ?? "CONFIRMED", pricingMode,
         currency: price.currency, totalAmount: price.total, notes: params.notes ?? null, paymentMethod: params.paymentMethod ?? null,
+        depositAmount: params.depositAmount ?? 0, depositCollectedAt: params.depositCollected && (params.depositAmount ?? 0) > 0 ? new Date() : null,
       },
     });
     await recomputeAvailability(params.hotelId, room.roomTypeId, checkIn, checkOut, tx);
@@ -251,6 +254,8 @@ export interface UpdateReservationParams {
   manualCurrency?: string;
   notes?: string | null;
   paymentMethod?: "ONLINE" | "CASH" | null;
+  depositAmount?: number;
+  depositCollected?: boolean;
   enqueueChannelSync?: boolean;
 }
 
@@ -285,6 +290,8 @@ export async function updateReservationDetails(params: UpdateReservationParams) 
         checkIn, checkOut, checkInTime: params.checkInTime ?? "14:00", checkOutTime: params.checkOutTime ?? "12:00",
         adults: params.adults, children: params.children, pricingMode,
         currency: price.currency, totalAmount: price.total, notes: params.notes ?? null, paymentMethod: params.paymentMethod === undefined ? existing.paymentMethod : params.paymentMethod,
+        ...(params.depositAmount !== undefined ? { depositAmount: params.depositAmount } : {}),
+        ...(params.depositCollected !== undefined ? { depositCollectedAt: params.depositCollected && (params.depositAmount ?? Number(existing.depositAmount)) > 0 ? (existing.depositCollectedAt ?? new Date()) : null } : {}),
       },
     });
     await recomputeAvailability(params.hotelId, existing.roomTypeId, existing.checkIn, existing.checkOut, tx);

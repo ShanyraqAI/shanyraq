@@ -51,3 +51,20 @@ test("future report periods fall back to the latest completed range", () => {
   assert.equal(future.to.toISOString(), today.toISOString());
   assert.equal(future.source, "direct");
 });
+
+test("month report filters select the full past month and stop the current month at today", () => {
+  const today = parseISODate("2026-09-16");
+  const month = parseReportFilters({ month: "2026-09" }, today);
+  assert.equal(month.from.toISOString(), parseISODate("2026-09-01").toISOString());
+  assert.equal(month.to.toISOString(), today.toISOString());
+  const previous = parseReportFilters({ month: "2026-08" }, today);
+  assert.equal(previous.from.toISOString(), parseISODate("2026-08-01").toISOString());
+  assert.equal(previous.to.toISOString(), parseISODate("2026-08-31").toISOString());
+});
+
+test("a future month cannot be selected", () => {
+  const today = parseISODate("2026-09-16");
+  const future = parseReportFilters({ month: "2026-10" }, today);
+  assert.equal(future.to.toISOString(), today.toISOString());
+  assert.equal(future.from.toISOString(), parseISODate("2026-08-18").toISOString());
+});

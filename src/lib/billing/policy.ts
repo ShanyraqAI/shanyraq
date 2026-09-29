@@ -2,13 +2,17 @@ export const DAY_MS = 86_400_000;
 export const TRIAL_MS = 14 * DAY_MS;
 
 export const BILLING_PLANS = [
-  { id: "start", name: "Start", monthlyKzt: 9900, rooms: 3 },
-  { id: "pro", name: "Pro", monthlyKzt: 19900, rooms: 15 },
-  { id: "business", name: "Business", monthlyKzt: 39900, rooms: 50 },
+  { id: "start", name: "Start", monthlyKzt: 2990, rooms: 3, range: "До 3 квартир", description: "Календарь и бронирования" },
+  { id: "pro", name: "Pro", monthlyKzt: 9990, rooms: 15, range: "От 3 до 15 квартир", description: "Для растущего портфеля" },
+  { id: "business", name: "Business", monthlyKzt: 14990, rooms: 50, range: "До 50 квартир", description: "Интеграции Booking.com и Airbnb" },
 ] as const;
 
 export function billingPlan(id: string) {
   return BILLING_PLANS.find((plan) => plan.id === id);
+}
+
+export function remainingTrialDays(trialEndsAt: Date, now = new Date()): number {
+  return Math.max(0, Math.min(14, Math.ceil((trialEndsAt.getTime() - now.getTime()) / DAY_MS)));
 }
 
 export class BillingError extends Error {}

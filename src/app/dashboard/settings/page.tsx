@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { BarChart3, BedDouble, BellRing, Building2, ChevronLeft, ChevronRight, FileText, LogOut, RadioTower, ShieldCheck, UserRound, UsersRound, type LucideIcon } from "lucide-react";
+import { BarChart3, BedDouble, BellRing, Building2, ChevronLeft, ChevronRight, FileText, LogOut, RadioTower, ShieldCheck, UserRound, UsersRound, Clock3, type LucideIcon } from "lucide-react";
 import { AccountForm } from "@/components/account/account-form";
 import { PageHeader } from "@/components/shared/page-header";
 import { AccessManagement } from "@/components/settings/access-management";
@@ -18,7 +18,7 @@ import { signOutAction } from "@/server/actions/auth";
 import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
-type Section = "company" | "profile" | "access" | "notifications" | "documents";
+type Section = "company" | "profile" | "access" | "notifications" | "documents" | "stay" | "rules";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ section?: string | string[] }> }) {
   await requireSectionAccess("FULL");
@@ -33,7 +33,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     getDocumentProfile(user.organizationId!),
     db.room.count({ where: { roomType: { hotelId } } }),
   ]);
-  const data = { hotel, user, memberships, invitations, notificationMembership, documentProfile };
+  const data = { hotel, user, memberships, invitations, notificationMembership, documentProfile, locale };
 
   return <>
     <div className="lg:hidden">
@@ -67,10 +67,13 @@ function MobileSettings({ locale, hotelName, roomCount, memberCount }: { locale:
   return <div className="space-y-5">
     <header><h1 className="sh-mobile-title">{kk ? "Баптаулар" : "Настройки"}</h1><p className="sh-mobile-eyebrow mt-1">{hotelName}</p></header>
     <Group title={kk ? "Басқару" : "Управление"}>
-      <Row href="/dashboard/settings?section=company" icon={Building2} title="Компания" subtitle={kk ? "Деректемелер, уақыт белдеуі" : "Реквизиты, часовой пояс"} />
+      <Row href="/dashboard/settings?section=company" icon={Building2} title={kk ? "Компания" : "Компания"} subtitle={kk ? "Нысан және бизнес деректері" : "Профиль объекта и бизнеса"} />
       <Row href="/dashboard/rooms" icon={BedDouble} title={kk ? "Нысандар мен бөлмелер" : "Объекты и номера"} subtitle={`${roomCount} ${kk ? "белсенді" : "активных"}`} />
       <Row href="/dashboard/settings?section=access" icon={UsersRound} title={kk ? "Команда және рөлдер" : "Команда и роли"} subtitle={`${memberCount} ${kk ? "қызметкер" : "сотрудников"}`} />
-      <Row href="/dashboard/settings?section=documents" icon={FileText} title={kk ? "Тұру ережелері" : "Правила проживания"} subtitle={kk ? "Кіру, шығу, құжаттар" : "Заезд, выезд, документы"} />
+      <Row href="/dashboard/settings?section=documents" icon={FileText} title={kk ? "Құжат деректемелері" : "Реквизиты документов"} subtitle={kk ? "Бизнес деректері және қол қоюшы" : "Данные компании и подписанта"} />
+      <Row href="/dashboard/settings?section=rules" icon={FileText} title={kk ? "Тұру ережелері" : "Правила проживания"} subtitle={kk ? "Нұсқаулар қонақтарға" : "Инструкции для гостей"} />
+      <Row href="/dashboard/settings?section=stay" icon={Clock3} title={kk ? "Заезд и выезд" : "Заезд и выезд"} subtitle={kk ? "Уақыт әдепкі мәні" : "Время по умолчанию"} />
+      <Row href="/dashboard/settings?section=stay" icon={Clock3} title={kk ? "Заезд и выезд" : "Заезд и выезд"} subtitle={kk ? "Время и памятка для гостя" : "Время и памятка для гостя"} />
     </Group>
     <Group title={kk ? "Сатылымдар" : "Продажи"}>
       <Row href="/dashboard/channels" icon={RadioTower} title={kk ? "Арналар" : "Каналы"} subtitle="Booking.com, Airbnb +2" />
@@ -86,21 +89,25 @@ function Group({ title, children }: { title: string; children: ReactNode }) { re
 function Row({ href, icon: Icon, title, subtitle }: { href: string; icon: LucideIcon; title: string; subtitle: string }) { return <Link href={href} className="flex items-center gap-3 px-4 py-3.5 active:bg-primary/5"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="size-[18px]" /></span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{title}</span><span className="block truncate text-xs text-muted-foreground">{subtitle}</span></span><ChevronRight className="size-4 text-muted-foreground" /></Link>; }
 
 type Data = {
-  hotel: { name: string; address: string | null; city: string | null; country: string | null; timezone: string; currency: string };
+  hotel: { name: string; address: string | null; city: string | null; country: string | null; timezone: string; currency: string; language: string; defaultCheckInTime: string; defaultCheckOutTime: string; houseRules: string };
   user: Awaited<ReturnType<typeof requireUser>>;
   memberships: Array<{ id: string; role: string; accessLevel: string; permissions: string[] | null; user: { fullName: string; email: string | null } }>;
   invitations: Array<{ id: string; email: string; accessLevel: string; permissions: string[] | null; expiresAt: Date }>;
   notificationMembership: { newReservationEmail: boolean; dailyDigestEmail: boolean; digestHour: number };
   documentProfile: Awaited<ReturnType<typeof getDocumentProfile>>;
+  locale: "ru" | "kk";
 };
 
 function SectionContent({ section, data }: { section: Section; data: Data }) {
-  if (section === "company") return <Panel icon={Building2} title="Данные объекта" description="Основная информация, которую видят сотрудники и подключённые каналы."><SettingsForm initial={data.hotel} /></Panel>;
-  if (section === "profile") return <Panel icon={UserRound} title="Личный профиль" description="Ваши контактные данные и изображение профиля."><AccountForm initial={{ firstName: data.user.firstName, lastName: data.user.lastName, avatarUrl: isManagedAvatar(data.user.avatarUrl) ? "" : data.user.avatarUrl ?? "", email: data.user.email, phone: data.user.phone }} /></Panel>;
-  if (section === "access") return <Panel icon={ShieldCheck} title="Команда и доступ" description="Роли сотрудников и разрешения внутри этого объекта."><AccessManagement initialMembers={data.memberships.map((m) => ({ id: m.id, name: m.user.fullName, email: m.user.email ?? "—", permissions: resolveHotelPermissions(m), role: m.role }))} pendingInvitations={data.invitations.map((i) => ({ id: i.id, email: i.email, permissions: resolveHotelPermissions(i), expiresAt: i.expiresAt.toISOString() }))} canManage={data.user.role === "OWNER"} /></Panel>;
-  if (section === "notifications") return <Panel icon={BellRing} title="Уведомления" description="Выберите, какие события получать за пределами приложения."><NotificationPreferences initial={data.notificationMembership} emailAvailable={Boolean(data.user.email)} /></Panel>;
-  return <Panel icon={FileText} title="Реквизиты для документов" description="Данные владельца автоматически подставляются при генерации."><DocumentProfileForm initial={data.documentProfile ?? EMPTY_DOCUMENT_PROFILE} canManage={data.user.role === "OWNER"} /></Panel>;
+  const kk = data.locale === "kk";
+  if (section === "company") return <Panel icon={Building2} title={kk ? "Компания" : "Компания и объект"} description={kk ? "Жұмыс кеңістігінің атауы, мекенжайы және негізгі деректері." : "Название, адрес и основные данные рабочего пространства."}><SettingsForm initial={data.hotel} /></Panel>;
+  if (section === "profile") return <Panel icon={UserRound} title={kk ? "Жеке профиль" : "Личный профиль"} description={kk ? "Байланыс деректеріңіз және профиль суреті." : "Ваши контактные данные и изображение профиля."}><AccountForm locale={data.locale} initial={{ firstName: data.user.firstName, lastName: data.user.lastName, avatarUrl: isManagedAvatar(data.user.avatarUrl) ? `/api/avatar/${data.user.id}` : data.user.avatarUrl ?? "", email: data.user.email, phone: data.user.phone }} /></Panel>;
+  if (section === "access") return <Panel icon={ShieldCheck} title={kk ? "Команда және қолжетімділік" : "Команда и доступ"} description={kk ? "Қызметкерлердің рөлдері мен осы нысандағы рұқсаттары." : "Роли сотрудников и разрешения внутри этого объекта."}><AccessManagement initialMembers={data.memberships.map((m) => ({ id: m.id, name: m.user.fullName, email: m.user.email ?? "—", permissions: resolveHotelPermissions(m), role: m.role }))} pendingInvitations={data.invitations.map((i) => ({ id: i.id, email: i.email, permissions: resolveHotelPermissions(i), expiresAt: i.expiresAt.toISOString() }))} canManage={data.user.role === "OWNER"} /></Panel>;
+  if (section === "notifications") return <Panel icon={BellRing} title={kk ? "Хабарландырулар" : "Уведомления"} description={kk ? "Қолданбадан тыс қандай оқиғаларды алу керегін таңдаңыз." : "Выберите, какие события получать за пределами приложения."}><NotificationPreferences initial={data.notificationMembership} emailAvailable={Boolean(data.user.email)} /></Panel>;
+  if (section === "stay") return <Panel icon={Clock3} title={kk ? "Заезд и выезд" : "Заезд и выезд"} description={kk ? "Әдепкі келу және кету уақытын белгілеңіз." : "Установите время заезда и выезда по умолчанию."}><SettingsForm initial={data.hotel} section="stay" /></Panel>;
+  if (section === "rules") return <Panel icon={FileText} title={kk ? "Тұру ережелері" : "Правила проживания"} description={kk ? "Қонақтарға арналған ортақ нұсқауларды сақтаңыз." : "Сохраните общие инструкции, которые нужно сообщать гостям."}><SettingsForm initial={data.hotel} section="rules" /></Panel>;
+  return <Panel icon={FileText} title={kk ? "Құжат деректемелері" : "Реквизиты для документов"} description={kk ? "Құжат жасағанда иесінің деректері автоматты түрде қойылады." : "Данные владельца автоматически подставляются при генерации."}><DocumentProfileForm initial={data.documentProfile ?? EMPTY_DOCUMENT_PROFILE} canManage={data.user.role === "OWNER"} /></Panel>;
 }
 
 function Panel({ icon: Icon, title, description, children }: { icon: LucideIcon; title: string; description: string; children: ReactNode }) { return <section className="space-y-4"><header className="flex items-start gap-3 px-1"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="size-5" /></span><div><h2 className="font-semibold">{title}</h2><p className="mt-0.5 text-sm text-muted-foreground">{description}</p></div></header>{children}</section>; }
-function isSection(value: string | undefined): value is Section { return value === "company" || value === "profile" || value === "access" || value === "notifications" || value === "documents"; }
+function isSection(value: string | undefined): value is Section { return value === "company" || value === "profile" || value === "access" || value === "notifications" || value === "documents" || value === "stay" || value === "rules"; }

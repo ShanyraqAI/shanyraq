@@ -24,10 +24,14 @@ export interface HotelSettingsValues {
   country: string | null;
   timezone: string;
   currency: string;
+  defaultCheckInTime: string;
+  defaultCheckOutTime: string;
+  houseRules: string;
 }
 
 const TIMEZONES = [
   "Asia/Almaty",
+  "Asia/Qyzylorda",
   "Asia/Aqtobe",
   "Asia/Aqtau",
   "Asia/Oral",
@@ -39,7 +43,7 @@ const TIMEZONES = [
   "UTC",
 ];
 
-export function SettingsForm({ initial }: { initial: HotelSettingsValues }) {
+export function SettingsForm({ initial, section = "company" }: { initial: HotelSettingsValues; section?: "company" | "rules" | "stay" }) {
   const router = useRouter();
   const [values, setValues] = useState<HotelSettingsValues>(initial);
   const [saving, setSaving] = useState(false);
@@ -65,7 +69,7 @@ export function SettingsForm({ initial }: { initial: HotelSettingsValues }) {
 
   return (
     <form onSubmit={save} className="max-w-4xl space-y-5 rounded-xl border bg-card p-5 shadow-sm sm:p-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {section === "company" ? <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="hotel-name">{t.settings.form.hotelName}</Label>
           <Input id="hotel-name" value={values.name} onChange={(e) => set("name", e.target.value)} required />
@@ -113,7 +117,17 @@ export function SettingsForm({ initial }: { initial: HotelSettingsValues }) {
             </SelectContent>
           </Select>
         </div>
-      </div>
+      </div> : null}
+
+      {section !== "company" ? <div className="rounded-2xl border border-[#e6ece7] bg-[#f8faf7] p-4 sm:p-5">
+        <div className="mb-4"><h3 className="text-sm font-bold text-[#26342d]">{section === "rules" ? "Правила проживания" : "Время заезда и выезда"}</h3><p className="mt-1 text-xs text-muted-foreground">{section === "rules" ? "Правила будут видны команде при работе с гостями." : "Время по умолчанию для новых бронирований."}</p></div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {section === "stay" ? <>
+          <div className="space-y-1.5"><Label htmlFor="hotel-check-in">Заезд с</Label><Input id="hotel-check-in" type="time" value={values.defaultCheckInTime} onChange={(event) => set("defaultCheckInTime", event.target.value)} /></div>
+          <div className="space-y-1.5"><Label htmlFor="hotel-check-out">Выезд до</Label><Input id="hotel-check-out" type="time" value={values.defaultCheckOutTime} onChange={(event) => set("defaultCheckOutTime", event.target.value)} /></div>
+          </> : <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="hotel-house-rules">Правила для гостя</Label><textarea id="hotel-house-rules" value={values.houseRules} onChange={(event) => set("houseRules", event.target.value)} rows={6} maxLength={4000} placeholder="Например: не курить, соблюдать тишину после 22:00, бережно относиться к квартире." className="w-full resize-y rounded-xl border border-input bg-background px-3 py-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /></div>}
+        </div>
+      </div> : null}
 
       <div className="flex justify-end pt-2">
         <Button type="submit" disabled={saving}>

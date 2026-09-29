@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { ACTIVE_RESERVATION_STATUSES } from "@/lib/constants";
 import { parseISODate } from "@/lib/dates";
 import { db } from "@/lib/db";
@@ -123,6 +123,10 @@ async function applyRevision(property: {
     },
   });
   await db.channexBookingRevision.update({ where: { id: inboxId }, data: { bookingRecordId: booking.id } });
+  const commissionSetting = revision.otaCommission === null
+    ? await db.channelCommissionSetting.findUnique({ where: { hotelId_sourceChannel: { hotelId: property.hotelId, sourceChannel } } })
+    : null;
+  const bookingRoomAmount = revision.rooms.reduce((sum, room) => sum + room.amount, 0);
   const existingLinks = await db.channexBookingReservation.findMany({
     where: { bookingRecordId: booking.id },
     include: { reservation: true },
@@ -132,6 +136,30 @@ async function applyRevision(property: {
     for (const link of existingLinks) {
       if (isActiveReservation(link.reservation.status)) {
         await setReservationStatus(property.hotelId, link.reservationId, "CANCELLED", { enqueueChannelSync: false });
+      }
+      const roomIndex = revision.rooms.findIndex((room, indexInRevision) => (room.otaUniqueId ?? `index-${indexInRevision + 1}`) === link.roomKey);
+      const revisionRoom = roomIndex >= 0 ? revision.rooms[roomIndex] : null;
+      const share = revisionRoom && bookingRoomAmount > 0 ? revisionRoom.amount / bookingRoomAmount : existingLinks.length > 0 ? 1 / existingLinks.length : 0;
+      const commission = revision.otaCommission !== null ? revision.otaCommission * share : null;
+      if (revision.amount !== null || commission !== null || revision.services.length || revision.paymentCollect !== null || revision.paymentType !== null) {
+        await db.reservation.update({
+          where: { id: link.reservationId },
+          data: {
+            ...(revision.amount !== null && share > 0 ? { channelBookingAmount: revision.amount * share } : {}),
+            ...(commission !== null ? {
+              otaCommissionAmount: commission,
+              otaCommissionSource: revision.otaCommission !== null ? "CHANNEX" : "ESTIMATED",
+              commissionRateSnapshot: commissionSetting && revision.otaCommission === null ? commissionSetting.ratePercent : null,
+              commissionFixedSnapshot: commissionSetting && revision.otaCommission === null ? commissionSetting.fixedFee : null,
+            } : {}),
+            paymentCollect: revision.paymentCollect,
+            paymentType: revision.paymentType,
+            ...(revision.services.length ? { financialServices: revision.services.flatMap((service) => service.roomIndex !== null
+              ? service.roomIndex === roomIndex ? [{ ...service }] : []
+              : [{ ...service, totalPrice: Math.round(service.totalPrice * share * 100) / 100 }]) as unknown as Prisma.InputJsonValue } : {}),
+            financialComponentsSource: "CHANNEX",
+          },
+        });
       }
     }
     await enqueueAffectedAvailability(property, existingLinks.map((link) => ({
@@ -178,7 +206,7 @@ async function applyRevision(property: {
     const targetRoom = current?.roomTypeId === roomTypeId
       ? { id: current.roomId }
       : await findFreeRoom(property.hotelId, roomTypeId, checkIn, checkOut);
-    if (!targetRoom) throw new PublicError(`Нет свободного юнита для бронирования ${revision.otaReservationCode ?? revision.uniqueId}.`);
+    if (!targetRoom) throw new PublicError(`Нет свободного пәтера для бронирования ${revision.otaReservationCode ?? revision.uniqueId}.`);
 
     let reservationId: string;
     if (current && isActiveReservation(current.status)) {
@@ -233,6 +261,30 @@ async function applyRevision(property: {
         },
       });
     }
+    const share = bookingRoomAmount > 0 ? room.amount / bookingRoomAmount : 1 / revision.rooms.length;
+    const commission = revision.otaCommission !== null
+      ? revision.otaCommission * share
+      : commissionSetting && commissionSetting.currency === revision.currency
+        ? room.amount * Number(commissionSetting.ratePercent) / 100 + Number(commissionSetting.fixedFee) * share
+        : null;
+    await db.reservation.update({
+      where: { id: reservationId },
+      data: {
+        channelBookingAmount: revision.amount === null ? null : revision.amount * share,
+        otaCommissionAmount: commission,
+        otaCommissionSource: commission === null ? null : revision.otaCommission !== null ? "CHANNEX" : "ESTIMATED",
+        commissionRateSnapshot: commissionSetting && revision.otaCommission === null ? commissionSetting.ratePercent : null,
+        commissionFixedSnapshot: commissionSetting && revision.otaCommission === null ? commissionSetting.fixedFee : null,
+        paymentCollect: revision.paymentCollect,
+        paymentType: revision.paymentType,
+        financialServices: revision.services.length
+          ? revision.services.flatMap((service) => service.roomIndex !== null
+            ? service.roomIndex === index ? [{ ...service }] : []
+            : [{ ...service, totalPrice: Math.round(service.totalPrice * share * 100) / 100 }]) as unknown as Prisma.InputJsonValue
+          : Prisma.DbNull,
+        financialComponentsSource: "CHANNEX",
+      },
+    });
     activeReservationIds.push(reservationId);
     affected.push({ roomTypeId, checkIn, checkOut });
   }

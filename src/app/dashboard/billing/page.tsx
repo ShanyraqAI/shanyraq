@@ -3,14 +3,14 @@ import { getCurrentMembership } from "@/lib/tenant";
 import { redirect } from "next/navigation";
 import { getSubscription } from "@/lib/billing/service";
 import { billingLaunch, paymentConfig } from "@/lib/billing/config";
-import { accessUntil, billingPlan, isExpired } from "@/lib/billing/policy";
+import { accessUntil, billingPlan, isExpired, BILLING_PLANS } from "@/lib/billing/policy";
 import { BillingCheckout, PaymentStatusCheck } from "@/components/billing/billing-checkout";
 import { PageHeader } from "@/components/shared/page-header";
 
 export const dynamic = "force-dynamic";
 const dateFormat = new Intl.DateTimeFormat("ru-KZ", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Almaty" });
 
-export default async function BillingPage({ searchParams }: { searchParams: Promise<{ payment?: string }> }) {
+export default async function BillingPage({ searchParams }: { searchParams: Promise<{ payment?: string; plan?: string }> }) {
   const membership = await getCurrentMembership();
   if (!membership) redirect("/login");
   const subscription = await getSubscription(membership.organizationId);
@@ -18,6 +18,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   const owner = membership.role === "OWNER";
   const params = await searchParams;
   const requestedPayment = typeof params.payment === "string" && params.payment.length <= 50 ? params.payment : null;
+  const requestedPlan = BILLING_PLANS.some((item) => item.id === params.plan) ? params.plan! : null;
   const [roomCount, payments, payment] = await Promise.all([
     db.room.count({ where: { hotel: { orgId: membership.organizationId } } }),
     owner ? db.billingPayment.findMany({ where: { organizationId: membership.organizationId }, orderBy: { createdAt: "desc" }, take: 10, select: { id: true, amountMinor: true, status: true, testMode: true, createdAt: true } }) : [],
@@ -33,7 +34,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
       <p className="mt-2 text-sm text-muted-foreground">{subscription ? `Доступ до ${dateFormat.format(accessUntil(subscription))} (время Казахстана). После окончания данные сохраняются; изменения доступны после оплаты. Подключённые каналы не отключаем.` : "Ваш аккаунт не заблокирован. Пока подключение Freedom Pay не завершено, оплачивать доступ и вводить карту не нужно."}</p>
     </section>
     {payment && <div role="status" className="rounded-lg border bg-accent p-4 text-sm">{payment.status === "SUCCEEDED" ? payment.testMode ? "Тестовый платёж подтверждён. Реальная подписка не изменена." : "Платёж подтверждён. Доступ продлён." : payment.status === "FAILED" ? "Платёж не завершён. Деньги не подтверждены провайдером; можно попробовать оплатить снова." : "Ожидаем подтверждения Freedom Pay. Возврат на эту страницу сам по себе не означает успешную оплату. Обновите страницу через несколько секунд."}</div>}
-    {owner ? <BillingCheckout enabled={enabled} testMode={config?.mode === "test"} roomCount={roomCount} currentPlan={currentPlan} /> : <p className="text-sm text-muted-foreground">Оплатить подписку может владелец организации. Обратитесь к нему для продления доступа.</p>}
+    {owner ? <BillingCheckout enabled={enabled} testMode={config?.mode === "test"} roomCount={roomCount} currentPlan={currentPlan} initialPlan={requestedPlan} /> : <p className="text-sm text-muted-foreground">Оплатить подписку может владелец организации. Обратитесь к нему для продления доступа.</p>}
     {owner && payments.length > 0 && <section className="rounded-xl border bg-card p-6"><h2 className="mb-4 font-semibold">Последние платежи</h2><ul className="divide-y">{payments.map((item) => <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"><span>{dateFormat.format(item.createdAt)}{item.testMode ? " · Тест" : ""}</span><span>{new Intl.NumberFormat("ru-KZ").format(item.amountMinor / 100)} ₸ · {statuses[item.status] ?? "Проверяется"}</span>{item.status === "PENDING" && <PaymentStatusCheck paymentId={item.id} />}</li>)}</ul></section>}
   </div>;
 }

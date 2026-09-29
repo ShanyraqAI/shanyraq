@@ -10,7 +10,7 @@ import { mobileCopy } from "@/lib/locale";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReservationsPage({ searchParams }: { searchParams: Promise<{ reservation?: string | string[]; new?: string | string[]; status?: string | string[]; channel?: string | string[]; debt?: string | string[] }> }) {
+export default async function ReservationsPage({ searchParams }: { searchParams: Promise<{ reservation?: string | string[]; status?: string | string[]; channel?: string | string[]; debt?: string | string[] }> }) {
   await requireSectionAccess("RESERVATIONS");
   const hotelId = await getCurrentHotelId();
   const params = await searchParams;
@@ -75,7 +75,6 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
         hotelCurrency={hotel.currency}
         todayISO={toISODate(todayInTimeZone(hotel.timezone))}
         initialSelectedId={initialSelectedId}
-        initialCreateOpen={params.new === "1"}
         locale={locale}
         initialStatus={typeof params.status === "string" ? params.status : "all"}
         initialChannel={typeof params.channel === "string" ? params.channel : "all"}

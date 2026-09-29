@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { Download, FileSpreadsheet, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 type Dataset = "calendar" | "reservations" | "guests" | "reports";
-type Format = "xlsx" | "csv";
+type Format = "xlsx";
 
 const DATASET_TITLES: Record<Dataset, string> = {
   calendar: "Экспорт календаря",
@@ -75,7 +75,7 @@ export function DataExportDialog({ dataset, defaultFrom = "", defaultTo = "", de
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{DATASET_TITLES[dataset]}</DialogTitle>
-          <DialogDescription>Выберите формат файла. Excel содержит оформленную таблицу с фильтрами и закреплённой строкой заголовков.</DialogDescription>
+          <DialogDescription>Скачайте оформленную Excel-таблицу с фильтрами и закреплённой строкой заголовков.</DialogDescription>
         </DialogHeader>
         {needsRange ? (
           <div className="grid gap-3 sm:grid-cols-2">
@@ -83,14 +83,10 @@ export function DataExportDialog({ dataset, defaultFrom = "", defaultTo = "", de
             <div className="space-y-1.5"><Label htmlFor={`export-${dataset}-to`}>Дата по</Label><Input id={`export-${dataset}-to`} type="date" min={from} max={dataset === "reports" ? maxTo : undefined} value={to} onChange={(event) => setTo(event.target.value)} /></div>
           </div>
         ) : null}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button type="button" disabled={Boolean(downloading)} onClick={() => download("xlsx")} className="flex items-start gap-3 rounded-xl border p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60">
+        <div className="grid gap-3">
+          <button type="button" disabled={Boolean(downloading)} onClick={() => download("xlsx")} className="flex min-h-14 items-center gap-3 rounded-xl border p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60">
             {downloading === "xlsx" ? <Loader2 className="mt-0.5 size-5 animate-spin text-primary" /> : <FileSpreadsheet className="mt-0.5 size-5 text-primary" />}
-            <span><span className="block font-medium">Excel (.xlsx)</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">Красиво оформленная таблица для работы и печати.</span></span>
-          </button>
-          <button type="button" disabled={Boolean(downloading)} onClick={() => download("csv")} className="flex items-start gap-3 rounded-xl border p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60">
-            {downloading === "csv" ? <Loader2 className="mt-0.5 size-5 animate-spin text-primary" /> : <FileText className="mt-0.5 size-5 text-primary" />}
-            <span><span className="block font-medium">CSV (.csv)</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">Универсальный файл для Excel и других систем.</span></span>
+            <span className="font-semibold">Скачать Excel (.xlsx)</span>
           </button>
         </div>
         <p className="text-xs text-muted-foreground">В файл попадут только данные текущего отеля, к которым у вас есть доступ.</p>

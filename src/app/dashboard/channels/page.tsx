@@ -7,12 +7,19 @@ import { t } from "@/lib/i18n";
 import { requireSectionAccess } from "@/server/guards";
 import { getSyncIncidentId } from "@/lib/channels/sync-errors";
 import { ChannexProvisioningCard, type ChannexProvisioningVM } from "@/components/channels/channex-provisioning-card";
+import { getRequestLocale } from "@/lib/locale-server";
+import { mockChannelProvidersEnabled } from "@/lib/channels/runtime-policy";
+import { CreateIntegrationPropertyDialog } from "@/components/channels/create-integration-property-dialog";
+import Link from "next/link";
+import { MessageCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
 export default async function ChannelsPage() {
   await requireSectionAccess("FULL");
   const hotelId = await getCurrentHotelId();
+  const locale = await getRequestLocale();
   const apiConfigured = Boolean(process.env.CHANNEX_STAGING_API_KEY?.trim());
   const webhookConfigured = Boolean(
     process.env.CHANNEX_WEBHOOK_URL?.trim() && process.env.CHANNEX_WEBHOOK_SECRET?.trim(),
@@ -53,14 +60,15 @@ export default async function ChannelsPage() {
     const roomCount = rentalProperty.roomTypes.reduce((total, roomType) => total + roomType.rooms.length, 0);
     const ratePlanCount = rentalProperty.roomTypes.reduce((total, roomType) => total + roomType.ratePlans.length, 0);
     const prerequisites: string[] = [];
-    if (roomTypeCount === 0) prerequisites.push("добавьте тип размещения");
-    if (roomCount === 0) prerequisites.push("добавьте хотя бы одну единицу размещения");
-    if (ratePlanCount === 0) prerequisites.push("добавьте хотя бы один тариф");
-    if (!webhookConfigured) prerequisites.push("настройте публичный URL и секрет webhook Channex");
-    if (!recoveryCronConfigured) prerequisites.push("настройте CRON_SECRET для резервной обработки");
+    if (roomTypeCount === 0) prerequisites.push(locale === "kk" ? "орналастыру санатын қосыңыз" : "добавьте тип размещения");
+    if (roomCount === 0) prerequisites.push(locale === "kk" ? "кемінде бір пәтер қосыңыз" : "добавьте хотя бы одну квартиру");
+    if (ratePlanCount === 0) prerequisites.push(locale === "kk" ? "кемінде бір тариф қосыңыз" : "добавьте хотя бы один тариф");
+    if (!webhookConfigured) prerequisites.push(locale === "kk" ? "броньдарды қабылдау қызметі қолжетімсіз" : "служба приёма бронирований недоступна");
+    if (!recoveryCronConfigured) prerequisites.push(locale === "kk" ? "резервтік өңдеу қызметі қолжетімсіз" : "резервная обработка недоступна");
     const readyRoomTypes = channexProperty?.roomTypeMappings.filter((item) => item.provisioningStatus === "PROVISIONED").length ?? 0;
     const readyRatePlans = channexProperty?.ratePlanMappings.filter((item) => item.provisioningStatus === "PROVISIONED").length ?? 0;
     return {
+      locale,
       rentalPropertyId: rentalProperty.id,
       propertyName: rentalProperty.publicName,
       status: (channexProperty?.provisioningStatus ?? "NOT_STARTED") as ChannexProvisioningVM["status"],
@@ -125,21 +133,26 @@ export default async function ChannelsPage() {
         title={t.channelsPage.title}
         description={t.channelsPage.description}
       >
-        <SyncAllButton />
+        <div className="flex flex-wrap gap-2"><CreateIntegrationPropertyDialog locale={locale} /><SyncAllButton /></div>
       </PageHeader>
       <p className="rounded-lg border bg-secondary/40 p-3 text-sm text-muted-foreground">
-        Channex создаёт тестовую структуру, отправляет остатки, цены и ограничения и принимает бронирования. Остальные карточки каналов пока используют тестовые адаптеры.
+        {locale === "kk" ? "Нысанды таңдаңыз, содан кейін Booking.com, Airbnb немесе Ostrovok арнасын қосыңыз. Баға, бос орын және броньдар автоматты түрде синхрондалады." : "Выберите объект, затем подключите Booking.com, Airbnb или Ostrovok. Цены, доступность и бронирования будут синхронизироваться автоматически."}
       </p>
+      <div className="flex flex-col gap-3 rounded-xl border border-[#25D366]/25 bg-[#25D366]/[0.06] p-4 sm:flex-row sm:items-center">
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#25D366] text-white"><MessageCircle className="size-5" /></span>
+        <div className="min-w-0 flex-1"><p className="font-semibold">WhatsApp</p><p className="text-sm text-muted-foreground">{locale === "kk" ? "Қонақтың телефоны бар болса, оның карточкасынан бірден WhatsApp чатын ашуға болады." : "Если у гостя указан телефон, чат WhatsApp открывается одной кнопкой из его карточки."}</p></div>
+        <Button asChild variant="outline"><Link href="/dashboard/guests">{locale === "kk" ? "Қонақтарды ашу" : "Открыть гостей"}</Link></Button>
+      </div>
       <div className="grid gap-4 xl:grid-cols-2">
         {channexProperties.map((channex) => (
           <ChannexProvisioningCard key={channex.rentalPropertyId} value={channex} />
         ))}
       </div>
-      <ChannelCards
+      {mockChannelProvidersEnabled() ? <ChannelCards
         channels={cards}
         internalRoomTypes={roomTypes}
         internalRatePlans={internalRatePlans}
-      />
+      /> : null}
     </div>
   );
 }
