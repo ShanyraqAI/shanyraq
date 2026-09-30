@@ -6,8 +6,8 @@ import { db } from "@/lib/db";
 import { decryptSecret, encryptSecret } from "@/lib/security/credentials";
 import { requireSessionHotelId } from "@/server/guards";
 
-type Credentials = { clientId: string; clientSecret: string; username: string; password: string };
-type Token = { access_token: string; refresh_token?: string };
+type Credentials = { clientId: string; clientSecret: string; username: string; password?: string; accessToken?: string; refreshToken?: string; tokenExpiresAt?: number };
+type Token = { access_token: string; refresh_token?: string; expires_in?: number };
 const base = "https://euapi.ttlock.com";
 
 function zonedTime(date: Date, time: string, timezone: string): number {
@@ -31,12 +31,27 @@ async function credentials(hotelId: string): Promise<{ stored: Credentials; toke
   const row = await db.tTLockConnection.findUnique({ where: { hotelId } });
   if (!row) throw new Error("Сначала подключите аккаунт TTLock");
   const storedCredentials = decryptSecret<Credentials>(row.credentials);
-  const stored = {
+  let stored: Credentials = {
     ...storedCredentials,
     clientId: process.env.TTLOCK_CLIENT_ID?.trim() || storedCredentials.clientId,
     clientSecret: process.env.TTLOCK_CLIENT_SECRET?.trim() || storedCredentials.clientSecret,
   };
-  const token = await ttlock<Token>("/oauth2/token", { client_id: stored.clientId, client_secret: stored.clientSecret, username: stored.username, password: createHash("md5").update(stored.password).digest("hex"), grant_type: "password" });
+  let token: Token;
+  if (stored.accessToken && stored.tokenExpiresAt && stored.tokenExpiresAt > Date.now() + 60_000) {
+    token = { access_token: stored.accessToken, refresh_token: stored.refreshToken };
+    return { stored, token };
+  } else if (stored.refreshToken) {
+    token = await ttlock<Token>("/oauth2/token", { client_id: stored.clientId, client_secret: stored.clientSecret, refresh_token: stored.refreshToken, grant_type: "refresh_token" });
+  } else if (stored.password) {
+    token = await ttlock<Token>("/oauth2/token", { client_id: stored.clientId, client_secret: stored.clientSecret, username: stored.username, password: createHash("md5").update(stored.password).digest("hex"), grant_type: "password" });
+  } else {
+    throw new Error("Срок авторизации TTLock истёк. Подключите аккаунт повторно");
+  }
+  const tokenExpiresAt = Date.now() + (token.expires_in ?? 7_776_000) * 1000;
+  const nextRefreshToken = token.refresh_token ?? stored.refreshToken;
+  stored = { ...stored, accessToken: token.access_token, refreshToken: nextRefreshToken, tokenExpiresAt };
+  delete stored.password;
+  await db.tTLockConnection.update({ where: { id: row.id }, data: { credentials: encryptSecret(stored) } });
   return { stored, token };
 }
 
@@ -51,10 +66,11 @@ export async function saveTTLockConnectionAction(formData: FormData) {
   if (Object.values(values).some((value) => !value)) throw new Error("Заполните все поля TTLock");
   const token = await ttlock<Token>("/oauth2/token", { client_id: values.clientId, client_secret: values.clientSecret, username: values.username, password: createHash("md5").update(values.password).digest("hex"), grant_type: "password" });
   const persistedValues = process.env.TTLOCK_CLIENT_ID?.trim() && process.env.TTLOCK_CLIENT_SECRET?.trim()
-    ? { ...values, clientId: "", clientSecret: "" }
-    : values;
-  await db.tTLockConnection.upsert({ where: { hotelId }, create: { hotelId, credentials: encryptSecret(persistedValues) }, update: { credentials: encryptSecret(persistedValues) } });
-  void token;
+    ? { clientId: "", clientSecret: "", username: values.username }
+    : { clientId: values.clientId, clientSecret: values.clientSecret, username: values.username };
+  const tokenExpiresAt = Date.now() + (token.expires_in ?? 7_776_000) * 1000;
+  const connectionCredentials: Credentials = { ...persistedValues, accessToken: token.access_token, refreshToken: token.refresh_token, tokenExpiresAt };
+  await db.tTLockConnection.upsert({ where: { hotelId }, create: { hotelId, credentials: encryptSecret(connectionCredentials) }, update: { credentials: encryptSecret(connectionCredentials) } });
   revalidatePath("/dashboard/locks");
 }
 
