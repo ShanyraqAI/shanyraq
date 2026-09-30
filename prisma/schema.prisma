@@ -236,6 +236,7 @@ model Hotel {
   ttlockConnection    TTLockConnection?
   ttlockLocks         TTLockLock[]
   ttlockPasscodes     TTLockPasscode[]
+  ttlockEvents        TTLockEvent[]
 
   @@unique([id, orgId])
 }
@@ -726,7 +727,14 @@ model TTLockLock {
   hotel       Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
   room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   passcodes   TTLockPasscode[]
+  events      TTLockEvent[]
+  batteryPercent Int?
+  hasGateway  Boolean?
+  isOnline    Boolean?
+  lockState   String?
+  lastSyncedAt DateTime?
   @@unique([hotelId, lockId])
+  @@unique([id, hotelId])
   @@index([hotelId])
 }
 
@@ -748,6 +756,26 @@ model TTLockPasscode {
   @@unique([lockId, keyboardPwdId])
   @@index([hotelId, startsAt, endsAt])
   @@index([reservationId])
+}
+
+model TTLockEvent {
+  id          String   @id @default(cuid())
+  hotelId     String
+  lockRefId   String?
+  eventKey    String
+  lockId      String
+  recordType  Int?
+  success     Boolean?
+  actor       String?
+  eventAt     DateTime?
+  summary     String?
+  payload     Json
+  receivedAt  DateTime @default(now())
+  hotel       Hotel       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  lock        TTLockLock? @relation(fields: [lockRefId, hotelId], references: [id, hotelId], onDelete: Cascade)
+  @@unique([hotelId, eventKey])
+  @@index([hotelId, eventAt])
+  @@index([lockRefId, eventAt])
 }
 
 // ---------------------------------------------------------------------------
