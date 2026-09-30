@@ -1,0 +1,2 @@
+ALTER TABLE "TTLockLock"
+  ADD COLUMN IF NOT EXISTS "keyboardPwdVersion" INTEGER;
