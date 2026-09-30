@@ -11,11 +11,10 @@ export const dynamic = "force-dynamic";
 export default async function MorePage() {
   const [hotel, user, locale] = await Promise.all([getCurrentHotel(), getCurrentUser(), getRequestLocale()]);
   if (!hotel || !user) return null;
-  const [guests, rooms, cleaning, reservations] = await Promise.all([
+  const [guests, rooms, cleaning] = await Promise.all([
     db.guest.count({ where: { hotelId: hotel.id } }),
     db.room.count({ where: { hotelId: hotel.id } }),
     db.room.count({ where: { hotelId: hotel.id, status: "CLEANING" } }),
-    db.reservation.count({ where: { hotelId: hotel.id, status: { notIn: ["CANCELLED", "NO_SHOW"] } } }),
   ]);
   const kk = locale === "kk";
   const groups = [
@@ -33,7 +32,7 @@ export default async function MorePage() {
       items: [
         { href: "/dashboard/reports", icon: BarChart3, title: kk ? "Есептер" : "Отчёты", subtitle: kk ? "Табыс, жүктеме, арналар" : "Доход, загрузка, каналы" },
         { href: "/dashboard/exports", icon: FileSpreadsheet, title: kk ? "Құжаттар · Excel" : "Документы · Excel", subtitle: kk ? "Есептер мен деректерді жүктеу" : "Скачать отчёты и данные в Excel" },
-        { href: "/dashboard/reservations", icon: CreditCard, title: kk ? "Төлемдер" : "Платежи", subtitle: kk ? `${reservations} белсенді бронь` : `${reservations} активных бронирований` },
+        { href: "/dashboard/reports#payments", icon: CreditCard, title: kk ? "Төлемдер" : "Платежи", subtitle: kk ? "Төлемдер мен шығындар" : "Оплаты, возвраты и расходы" },
       ],
     },
     {

@@ -41,6 +41,7 @@ export const NAV_MAIN: NavItem[] = ALL_NAV_MAIN.filter((item) => item.visible);
 const ALL_NAV_SECONDARY: (NavItem & { visible: boolean })[] = [
   { title: "Подписка и оплата", href: "/dashboard/billing", icon: CreditCard, permission: "FULL", visible: PRODUCT_AVAILABILITY.billing },
   { title: t.nav.reports, href: "/dashboard/reports", icon: BarChart3, permission: "REPORTS", visible: true },
+  { title: t.nav.payments, href: "/dashboard/reports#payments", icon: CreditCard, permission: "REPORTS", visible: true },
   { title: t.nav.exports, href: "/dashboard/exports", icon: FileDown, permission: ["REPORTS", "CALENDAR", "RESERVATIONS", "GUESTS"], visible: true },
   { title: t.nav.settings, href: "/dashboard/settings", icon: Settings, permission: "FULL", visible: true },
   { title: "Журнал действий", href: "/dashboard/activity", icon: History, permission: "FULL", ownerOnly: true, visible: true },

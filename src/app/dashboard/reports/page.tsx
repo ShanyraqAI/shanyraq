@@ -95,7 +95,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
         <KpiCard label="RevPAR" value={money(report.summary.revpar)} sub="Выручка на доступный номер" icon={BedDouble} />
       </div>
 
-      <Card className="order-3 border-primary/15 sm:order-4">
+      <Card id="payments" className="order-3 scroll-mt-6 border-primary/15 sm:order-4">
         <CardHeader><CardTitle className="text-base">{kk ? "Қаржы бойынша брондау" : "Финансы бронирований"}</CardTitle>
           <CardDescription>{kk ? "Арна комиссиясы және төлем жазбалары. Сомалар тек бір валютада қосылады." : "Комиссия канала и записанные оплаты. Складываются только суммы в одной валюте."}</CardDescription></CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

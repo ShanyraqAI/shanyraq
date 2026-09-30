@@ -73,7 +73,6 @@ function MobileSettings({ locale, hotelName, roomCount, memberCount }: { locale:
       <Row href="/dashboard/settings?section=documents" icon={FileText} title={kk ? "Құжат деректемелері" : "Реквизиты документов"} subtitle={kk ? "Бизнес деректері және қол қоюшы" : "Данные компании и подписанта"} />
       <Row href="/dashboard/settings?section=rules" icon={FileText} title={kk ? "Тұру ережелері" : "Правила проживания"} subtitle={kk ? "Нұсқаулар қонақтарға" : "Инструкции для гостей"} />
       <Row href="/dashboard/settings?section=stay" icon={Clock3} title={kk ? "Заезд и выезд" : "Заезд и выезд"} subtitle={kk ? "Уақыт әдепкі мәні" : "Время по умолчанию"} />
-      <Row href="/dashboard/settings?section=stay" icon={Clock3} title={kk ? "Заезд и выезд" : "Заезд и выезд"} subtitle={kk ? "Время и памятка для гостя" : "Время и памятка для гостя"} />
     </Group>
     <Group title={kk ? "Сатылымдар" : "Продажи"}>
       <Row href="/dashboard/channels" icon={RadioTower} title={kk ? "Арналар" : "Каналы"} subtitle="Booking.com, Airbnb +2" />

@@ -40,7 +40,7 @@ export function MobileCalendar(props: Props) {
   const gridTemplate = `${ROOM_COLUMN}px repeat(${visibleDays}, ${DAY_COLUMN}px)`;
 
   return (
-    <div className="space-y-4 pb-2">
+    <div className="space-y-4 pb-40 sm:pb-2">
       <header><h1 className="sh-mobile-title">{copy.title}</h1><p className="sh-mobile-eyebrow">{props.locale === "kk" ? `${props.rooms.length} пәтер` : `${props.rooms.length} квартир`}</p></header>
 
       <div className="grid grid-cols-[1fr_1fr_auto] rounded-2xl bg-white p-1 shadow-sm ring-1 ring-[#e7e9e1]">
@@ -90,7 +90,7 @@ export function MobileCalendar(props: Props) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="fixed inset-x-0 bottom-[calc(4.25rem+max(env(safe-area-inset-bottom),5px))] z-40 mx-auto flex max-w-[430px] items-center justify-between gap-3 border-t border-[#e8e8df] bg-white/95 px-4 py-3 shadow-[0_-8px_24px_rgba(28,47,38,0.08)] backdrop-blur-xl">
         <button type="button" onClick={() => props.onCreate()} className="sh-mobile-primary flex min-h-11 flex-1 items-center justify-center gap-2"><Plus className="size-4" />{copy.newBooking}</button>
         <button type="button" onClick={props.onExpand} className="grid size-11 shrink-0 place-items-center rounded-2xl border border-[#dfe3da] bg-white text-[#087e67] shadow-sm" aria-label={props.locale === "kk" ? "Күнтізбені кеңейту" : "Развернуть календарь"}><Maximize2 className="size-5" /></button>
       </div>

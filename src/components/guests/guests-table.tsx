@@ -187,7 +187,7 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null, lo
 
       {/* Details modal — full-screen drawer on mobile via responsive Dialog */}
       <Dialog open={Boolean(selected)} onOpenChange={(o) => !o && setSelectedId(null)}>
-        <DialogContent className="flex max-h-[90dvh] flex-col gap-3 overflow-hidden p-4 max-sm:top-auto max-sm:bottom-0 max-sm:w-full max-sm:max-w-full max-sm:-translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:pb-[max(env(safe-area-inset-bottom),12px)] sm:max-w-xl sm:p-6">
+        <DialogContent className="flex max-h-[90dvh] flex-col gap-3 overflow-hidden p-4 max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:p-4 max-sm:pt-[max(env(safe-area-inset-top),16px)] max-sm:pb-[max(env(safe-area-inset-bottom),12px)] sm:max-w-xl sm:p-6">
           {selected && (
             <>
               <DialogHeader>
@@ -202,9 +202,9 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null, lo
                 </DialogDescription>
               </DialogHeader>
 
-              {selected.phone ? <div className="flex flex-wrap gap-2"><Button asChild variant="outline" size="sm"><a href={`tel:${selected.phone}`}><Phone className="size-4" />{kk ? "Қоңырау шалу" : "Позвонить"}</a></Button>{selectedWhatsApp ? <Button asChild size="sm" className="bg-[#25D366] text-white hover:bg-[#1fb75a]"><a href={selectedWhatsApp} target="_blank" rel="noopener noreferrer"><MessageCircle className="size-4" />WhatsApp</a></Button> : null}</div> : null}
+              {selected.phone ? <div className="hidden flex-wrap gap-2 sm:flex"><Button asChild variant="outline" size="sm"><a href={`tel:${selected.phone}`}><Phone className="size-4" />{kk ? "Қоңырау шалу" : "Позвонить"}</a></Button>{selectedWhatsApp ? <Button asChild size="sm" className="bg-[#25D366] text-white hover:bg-[#1fb75a]"><a href={selectedWhatsApp} target="_blank" rel="noopener noreferrer"><MessageCircle className="size-4" />WhatsApp</a></Button> : null}</div> : null}
 
-              <div className="space-y-2 rounded-xl bg-secondary/30 p-3 sm:hidden">
+              <div className="space-y-2 rounded-2xl border border-[#e7e9e1] bg-gradient-to-br from-[#f6faf8] to-white p-4 shadow-sm sm:hidden">
                 <p className="text-sm font-medium">{selected.phone ?? "Телефон не указан"}</p>
                 {selected.phone ? <div className="grid grid-cols-2 gap-2"><Button asChild variant="outline" size="sm" className="h-10"><a href={`tel:${selected.phone}`}><Phone className="size-4" />{kk ? "Қоңырау" : "Позвонить"}</a></Button>{selectedWhatsApp ? <Button asChild variant="outline" size="sm" className="h-10 border-[#25D366]/40 text-[#158542]"><a href={selectedWhatsApp} target="_blank" rel="noopener noreferrer"><MessageCircle className="size-4" />WhatsApp</a></Button> : null}</div> : null}
                 <div className="flex flex-wrap items-center gap-2 text-xs"><span className="text-muted-foreground">Последнее проживание:</span>{history[0] ? <ReservationStatusBadge status={history[0].status} /> : <span>Нет бронирований</span>}</div>

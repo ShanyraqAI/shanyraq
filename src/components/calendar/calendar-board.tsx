@@ -585,7 +585,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
       <div className="space-y-3">
         {!mobileFullscreen ? toolbar : null}
 
-        {!mobileFullscreen ? <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border bg-card px-3.5 py-1.5 shadow-xs" aria-label="Сводка на сегодня">
+        {!mobileFullscreen && !fullscreen ? <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border bg-card px-3.5 py-1.5 shadow-xs" aria-label="Сводка на сегодня">
           <Metric label="Заезды" value={todayStats.arrivals} />
           <Metric label="Выезды" value={todayStats.departures} />
           <Metric label="Проживают" value={todayStats.staying} />

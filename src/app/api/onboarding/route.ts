@@ -25,8 +25,18 @@ const onboardingSchema = z.discriminatedUnion("action", [
 
 function validOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
-  const configured = process.env.APP_URL ?? (process.env.NODE_ENV === "development" ? "http://localhost:3000" : "");
-  return Boolean(origin && configured && new URL(origin).origin === new URL(configured).origin);
+  if (!origin) return false;
+
+  try {
+    const requestOrigin = new URL(request.url).origin;
+    const allowedOrigins = new Set([requestOrigin]);
+    const configured = process.env.APP_URL;
+    if (configured) allowedOrigins.add(new URL(configured).origin);
+    if (process.env.NODE_ENV === "development") allowedOrigins.add("http://localhost:3000");
+    return allowedOrigins.has(new URL(origin).origin);
+  } catch {
+    return false;
+  }
 }
 
 export async function POST(request: Request) {

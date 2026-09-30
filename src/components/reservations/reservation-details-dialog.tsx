@@ -106,8 +106,8 @@ export function ReservationDetailsDialog({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="max-sm:!inset-x-0 max-sm:!top-auto max-sm:!bottom-0 max-sm:!h-auto max-sm:!max-h-[90dvh] max-sm:!w-screen max-sm:!max-w-none max-sm:rounded-t-3xl max-sm:pb-[max(env(safe-area-inset-bottom),12px)] sm:max-w-lg">
-          <SheetHeader className="border-b">
+        <SheetContent className="max-sm:!inset-0 max-sm:!h-dvh max-sm:!max-h-dvh max-sm:!w-screen max-sm:!max-w-none max-sm:!rounded-none max-sm:pb-[max(env(safe-area-inset-bottom),12px)] sm:max-w-lg">
+          <SheetHeader className="border-b bg-[#f7faf8]">
             <div className="flex items-center justify-between gap-3 pr-6">
               <SheetTitle className="text-base">
                 {t.reservations.details.title}{" "}
@@ -122,7 +122,7 @@ export function ReservationDetailsDialog({
           </SheetHeader>
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4">
-            <div className="flex items-center gap-3 rounded-lg border bg-secondary/40 p-3">
+            <div className="flex items-center gap-3 rounded-2xl border border-[#e3e9e4] bg-gradient-to-br from-[#f0f8f4] to-white p-4 shadow-sm">
               <div className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <User className="size-4" />
               </div>
