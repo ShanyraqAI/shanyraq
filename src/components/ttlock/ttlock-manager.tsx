@@ -12,7 +12,7 @@ type Reservation = { id: string; guest: string; room: string; checkIn: string; c
 type Event = { id: string; room: string; summary: string; success: boolean | null; actor: string | null; at: string };
 type Operations = { state: string; batteryPercent: number | null; isOnline: boolean | null; records: { recordType: number; success: number; username?: string; lockDate: number }[]; passcodes: { id: string; code: string; name: string; startsAt: number; endsAt: number; status: number }[] };
 
-export function TTLockManager({ connected, rooms, reservations, events }: { connected: boolean; rooms: Room[]; reservations: Reservation[]; events: Event[] }) {
+export function TTLockManager({ connected, appConfigured, rooms, reservations, events }: { connected: boolean; appConfigured: boolean; rooms: Room[]; reservations: Reservation[]; events: Event[] }) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [operations, setOperations] = useState<Record<string, Operations>>({});
   const [loading, setLoading] = useState(false);
@@ -53,10 +53,9 @@ export function TTLockManager({ connected, rooms, reservations, events }: { conn
   return <div className="grid gap-5 lg:grid-cols-2">
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="font-bold text-slate-900">Подключение TTLock</h2>
-      <p className="mt-1 text-xs leading-5 text-slate-500">Client ID и Client Secret Open Platform, затем логин и пароль аккаунта TTLock, где добавлены замки. Секреты шифруются на сервере.</p>
+      <p className="mt-1 text-xs leading-5 text-slate-500">Войдите данными аккаунта TTLock, в котором добавлены ваши замки. Пароль шифруется и хранится на сервере.</p>
       <form action={async (formData) => { try { await saveTTLockConnectionAction(formData); toast.success("TTLock подключён"); router.refresh(); } catch (e) { toast.error(e instanceof Error ? e.message : "Не удалось подключить TTLock"); } }} className="mt-4 space-y-3">
-        <input name="clientId" required placeholder="Client ID" autoComplete="off" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" />
-        <input name="clientSecret" required placeholder="Client Secret" autoComplete="new-password" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" />
+        {!appConfigured && <><p className="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">Для приложения TTLock не заданы серверные Client ID и Client Secret. Временно укажите их здесь; добавьте TTLOCK_CLIENT_ID и TTLOCK_CLIENT_SECRET в Vercel, чтобы пользователи не вводили ключи приложения.</p><input name="clientId" required placeholder="Client ID приложения" autoComplete="off" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" /><input name="clientSecret" required placeholder="Client Secret приложения" autoComplete="new-password" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" /></>}
         <input name="username" required placeholder="Логин аккаунта TTLock" autoComplete="username" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" />
         <input name="password" required type="password" placeholder="Пароль аккаунта TTLock" autoComplete="new-password" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" />
         <button className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white">{connected ? "Обновить подключение" : "Подключить TTLock"}</button>

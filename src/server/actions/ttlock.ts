@@ -30,17 +30,30 @@ async function ttlock<T>(path: string, values: Record<string, string | number>):
 async function credentials(hotelId: string): Promise<{ stored: Credentials; token: Token }> {
   const row = await db.tTLockConnection.findUnique({ where: { hotelId } });
   if (!row) throw new Error("Сначала подключите аккаунт TTLock");
-  const stored = decryptSecret<Credentials>(row.credentials);
+  const storedCredentials = decryptSecret<Credentials>(row.credentials);
+  const stored = {
+    ...storedCredentials,
+    clientId: process.env.TTLOCK_CLIENT_ID?.trim() || storedCredentials.clientId,
+    clientSecret: process.env.TTLOCK_CLIENT_SECRET?.trim() || storedCredentials.clientSecret,
+  };
   const token = await ttlock<Token>("/oauth2/token", { client_id: stored.clientId, client_secret: stored.clientSecret, username: stored.username, password: createHash("md5").update(stored.password).digest("hex"), grant_type: "password" });
   return { stored, token };
 }
 
 export async function saveTTLockConnectionAction(formData: FormData) {
   const hotelId = await requireSessionHotelId({ permission: "ROOMS" });
-  const values = { clientId: String(formData.get("clientId") ?? "").trim(), clientSecret: String(formData.get("clientSecret") ?? "").trim(), username: String(formData.get("username") ?? "").trim(), password: String(formData.get("password") ?? "") };
+  const values = {
+    clientId: process.env.TTLOCK_CLIENT_ID?.trim() || String(formData.get("clientId") ?? "").trim(),
+    clientSecret: process.env.TTLOCK_CLIENT_SECRET?.trim() || String(formData.get("clientSecret") ?? "").trim(),
+    username: String(formData.get("username") ?? "").trim(),
+    password: String(formData.get("password") ?? ""),
+  };
   if (Object.values(values).some((value) => !value)) throw new Error("Заполните все поля TTLock");
   const token = await ttlock<Token>("/oauth2/token", { client_id: values.clientId, client_secret: values.clientSecret, username: values.username, password: createHash("md5").update(values.password).digest("hex"), grant_type: "password" });
-  await db.tTLockConnection.upsert({ where: { hotelId }, create: { hotelId, credentials: encryptSecret(values) }, update: { credentials: encryptSecret(values) } });
+  const persistedValues = process.env.TTLOCK_CLIENT_ID?.trim() && process.env.TTLOCK_CLIENT_SECRET?.trim()
+    ? { ...values, clientId: "", clientSecret: "" }
+    : values;
+  await db.tTLockConnection.upsert({ where: { hotelId }, create: { hotelId, credentials: encryptSecret(persistedValues) }, update: { credentials: encryptSecret(persistedValues) } });
   void token;
   revalidatePath("/dashboard/locks");
 }
@@ -124,24 +137,29 @@ export async function assignTTLockAction(formData: FormData) {
   revalidatePath("/dashboard/locks");
 }
 
-export async function issueReservationPasscodeAction(formData: FormData) {
+export async function issueReservationPasscodeAction(formData: FormData): Promise<{ ok: true } | { ok: false; error: string }> {
   const hotelId = await requireSessionHotelId({ permission: "RESERVATIONS" });
-  const reservationId = String(formData.get("reservationId") ?? "");
-  const reservation = await db.reservation.findFirst({ where: { id: reservationId, hotelId, status: { notIn: ["CANCELLED", "NO_SHOW"] } }, include: { room: { include: { ttlockLock: true } }, guest: true } });
-  if (!reservation?.room.ttlockLock) throw new Error("К бронированию не привязан замок TTLock");
-  const existing = await db.tTLockPasscode.findFirst({ where: { hotelId, reservationId, status: "ACTIVE", endsAt: { gt: new Date() } }, select: { id: true } });
-  if (existing) throw new Error("Для этого бронирования уже создан активный TTLock-код");
-  const hotel = await db.hotel.findUniqueOrThrow({ where: { id: hotelId }, select: { timezone: true } });
-  const { stored, token } = await credentials(hotelId);
-  const lockDetails = await ttlock<{ keyboardPwdVersion?: number }>("/v3/lock/detail", { clientId: stored.clientId, accessToken: token.access_token, lockId: reservation.room.ttlockLock.lockId, date: Date.now() });
-  if (lockDetails.keyboardPwdVersion !== 4) throw new Error("Этот замок не поддерживает временные коды V4 через Open Platform TTLock");
-  const startDate = Math.ceil(zonedTime(reservation.checkIn, reservation.checkInTime, hotel.timezone) / 3_600_000) * 3_600_000;
-  const endDate = Math.floor(zonedTime(reservation.checkOut, reservation.checkOutTime, hotel.timezone) / 3_600_000) * 3_600_000;
-  if (endDate <= startDate) throw new Error("Период проживания слишком короткий для кода TTLock");
-  const name = `Shanyraq ${reservation.guest.fullName}`.slice(0, 30);
-  const generated = await ttlock<{ keyboardPwd: string }>("/v3/keyboardPwd/get", { clientId: stored.clientId, accessToken: token.access_token, lockId: reservation.room.ttlockLock.lockId, keyboardPwdVersion: 4, keyboardPwdType: 3, keyboardPwdName: name, startDate, endDate, date: Date.now() });
-  const added = await ttlock<{ keyboardPwdId: number }>("/v3/keyboardPwd/add", { clientId: stored.clientId, accessToken: token.access_token, lockId: reservation.room.ttlockLock.lockId, keyboardPwd: generated.keyboardPwd, keyboardPwdName: name, startDate, endDate, addType: 2, date: Date.now() });
-  await db.tTLockPasscode.create({ data: { hotelId, lockId: reservation.room.ttlockLock.id, reservationId, keyboardPwdId: String(added.keyboardPwdId), code: generated.keyboardPwd, name, startsAt: new Date(startDate), endsAt: new Date(endDate) } });
-  revalidatePath("/dashboard/locks");
-  revalidatePath(`/dashboard/reservations/${reservationId}`);
+  try {
+    const reservationId = String(formData.get("reservationId") ?? "");
+    const reservation = await db.reservation.findFirst({ where: { id: reservationId, hotelId, status: { notIn: ["CANCELLED", "NO_SHOW"] } }, include: { room: { include: { ttlockLock: true } }, guest: true } });
+    if (!reservation?.room.ttlockLock) return { ok: false, error: "Сначала подключите TTLock и привяжите замок к этой квартире" };
+    const existing = await db.tTLockPasscode.findFirst({ where: { hotelId, reservationId, status: "ACTIVE", endsAt: { gt: new Date() } }, select: { id: true } });
+    if (existing) return { ok: false, error: "Для этого бронирования уже создан активный TTLock-код" };
+    const hotel = await db.hotel.findUniqueOrThrow({ where: { id: hotelId }, select: { timezone: true } });
+    const { stored, token } = await credentials(hotelId);
+    const lockDetails = await ttlock<{ keyboardPwdVersion?: number }>("/v3/lock/detail", { clientId: stored.clientId, accessToken: token.access_token, lockId: reservation.room.ttlockLock.lockId, date: Date.now() });
+    if (lockDetails.keyboardPwdVersion !== 4) return { ok: false, error: "Этот замок не поддерживает временные коды V4 через TTLock Open Platform" };
+    const startDate = Math.ceil(zonedTime(reservation.checkIn, reservation.checkInTime, hotel.timezone) / 3_600_000) * 3_600_000;
+    const endDate = Math.floor(zonedTime(reservation.checkOut, reservation.checkOutTime, hotel.timezone) / 3_600_000) * 3_600_000;
+    if (endDate <= startDate) return { ok: false, error: "Период проживания слишком короткий для кода TTLock" };
+    const name = `Shanyraq ${reservation.guest.fullName}`.slice(0, 30);
+    const generated = await ttlock<{ keyboardPwd: string }>("/v3/keyboardPwd/get", { clientId: stored.clientId, accessToken: token.access_token, lockId: reservation.room.ttlockLock.lockId, keyboardPwdVersion: 4, keyboardPwdType: 3, keyboardPwdName: name, startDate, endDate, date: Date.now() });
+    const added = await ttlock<{ keyboardPwdId: number }>("/v3/keyboardPwd/add", { clientId: stored.clientId, accessToken: token.access_token, lockId: reservation.room.ttlockLock.lockId, keyboardPwd: generated.keyboardPwd, keyboardPwdName: name, startDate, endDate, addType: 2, date: Date.now() });
+    await db.tTLockPasscode.create({ data: { hotelId, lockId: reservation.room.ttlockLock.id, reservationId, keyboardPwdId: String(added.keyboardPwdId), code: generated.keyboardPwd, name, startsAt: new Date(startDate), endsAt: new Date(endDate) } });
+    revalidatePath("/dashboard/locks");
+    revalidatePath(`/dashboard/reservations/${reservationId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Не удалось создать код TTLock" };
+  }
 }
