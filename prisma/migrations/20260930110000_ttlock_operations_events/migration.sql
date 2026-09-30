@@ -1,5 +1,6 @@
 ALTER TABLE "TTLockLock"
   ADD COLUMN "batteryPercent" INTEGER,
+  ADD COLUMN "keyboardPwdVersion" INTEGER,
   ADD COLUMN "hasGateway" BOOLEAN,
   ADD COLUMN "isOnline" BOOLEAN,
   ADD COLUMN "lockState" TEXT,

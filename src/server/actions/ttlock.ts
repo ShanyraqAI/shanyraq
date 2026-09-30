@@ -48,8 +48,67 @@ export async function saveTTLockConnectionAction(formData: FormData) {
 export async function syncTTLockLocksAction() {
   const hotelId = await requireSessionHotelId({ permission: "ROOMS" });
   const { stored, token } = await credentials(hotelId);
-  const result = await ttlock<{ list?: { lockId: number; lockName: string; lockAlias?: string }[] }>("/v3/lock/list", { clientId: stored.clientId, accessToken: token.access_token, pageNo: 1, pageSize: 1000, date: Date.now() });
-  return result.list ?? [];
+  const result = await ttlock<{ list?: { lockId: number; lockName: string; lockAlias?: string; electricQuantity?: number; hasGateway?: number; keyboardPwdVersion?: number }[] }>("/v3/lock/list", { clientId: stored.clientId, accessToken: token.access_token, pageNo: 1, pageSize: 1000, date: Date.now() });
+  const devices = result.list ?? [];
+  const mapped = await db.tTLockLock.findMany({ where: { hotelId } });
+  await Promise.all(mapped.map(async (lock) => {
+    const device = devices.find((item) => String(item.lockId) === lock.lockId);
+    if (!device) return;
+    await db.tTLockLock.update({ where: { id: lock.id }, data: { lockName: device.lockName, lockAlias: device.lockAlias ?? null, batteryPercent: device.electricQuantity ?? null, keyboardPwdVersion: device.keyboardPwdVersion ?? null, hasGateway: device.hasGateway === undefined ? null : device.hasGateway === 1, lastSyncedAt: new Date() } });
+  }));
+  revalidatePath("/dashboard/locks");
+  return devices;
+}
+
+export async function getTTLockOperationsDataAction(lockRecordId: string) {
+  const hotelId = await requireSessionHotelId({ permission: "ROOMS" });
+  const lock = await db.tTLockLock.findFirst({ where: { id: lockRecordId, hotelId } });
+  if (!lock) throw new Error("Замок не найден в этом объекте");
+  const { stored, token } = await credentials(hotelId);
+  const common = { clientId: stored.clientId, accessToken: token.access_token, lockId: lock.lockId, date: Date.now() };
+  const [details, state, records, codes] = await Promise.all([
+    ttlock<{ electricQuantity?: number; hasGateway?: number; isOnline?: number; lockName?: string; lockAlias?: string }>("/v3/lock/detail", common),
+    ttlock<{ state?: number }>("/v3/lock/queryOpenState", common),
+    ttlock<{ list?: { recordType: number; success: number; username?: string; keyboardPwd?: string; lockDate: number; serverDate?: number }[] }>("/v3/lockRecord/list", { ...common, pageNo: 1, pageSize: 50, startDate: 0, endDate: 0 }),
+    ttlock<{ list?: { keyboardPwdId: number; keyboardPwd: string; keyboardPwdName?: string; startDate: number; endDate: number; status?: number }[] }>("/v3/lock/listKeyboardPwd", { ...common, pageNo: 1, pageSize: 100 }),
+  ]);
+  const lockState = state.state === 0 ? "LOCKED" : state.state === 1 ? "UNLOCKED" : "UNKNOWN";
+  await db.tTLockLock.update({ where: { id: lock.id }, data: { lockName: details.lockName ?? lock.lockName, lockAlias: details.lockAlias ?? lock.lockAlias, batteryPercent: details.electricQuantity ?? lock.batteryPercent, hasGateway: details.hasGateway === undefined ? lock.hasGateway : details.hasGateway === 1, isOnline: details.isOnline === undefined ? (details.hasGateway === undefined ? lock.isOnline : details.hasGateway === 1) : details.isOnline === 1, lockState, lastSyncedAt: new Date() } });
+  const remotePasscodes = (codes.list ?? []).filter((item) => item.startDate > 0 && item.endDate > 0 && Number.isFinite(item.startDate) && Number.isFinite(item.endDate));
+  await Promise.all(remotePasscodes.map((item) => {
+    const status = item.status === 5 || item.status === 7 || item.status === 9 ? "FAILED" : item.status === 3 || item.status === 4 || item.status === 6 || item.status === 8 ? "PENDING" : item.status === 2 || item.endDate <= Date.now() ? "EXPIRED" : "ACTIVE";
+    return db.tTLockPasscode.upsert({ where: { lockId_keyboardPwdId: { lockId: lock.id, keyboardPwdId: String(item.keyboardPwdId) } }, create: { hotelId, lockId: lock.id, keyboardPwdId: String(item.keyboardPwdId), code: item.keyboardPwd, name: item.keyboardPwdName ?? "Код TTLock", startsAt: new Date(item.startDate), endsAt: new Date(item.endDate), status }, update: { code: item.keyboardPwd, name: item.keyboardPwdName ?? "Код TTLock", startsAt: new Date(item.startDate), endsAt: new Date(item.endDate), status } });
+  }));
+  revalidatePath("/dashboard/locks");
+  return {
+    state: lockState,
+    batteryPercent: details.electricQuantity ?? lock.batteryPercent,
+    isOnline: details.isOnline === undefined ? (details.hasGateway === undefined ? lock.isOnline : details.hasGateway === 1) : details.isOnline === 1,
+    records: (records.list ?? []).map(({ keyboardPwd: _secret, ...record }) => record),
+    passcodes: remotePasscodes.map((item) => ({ id: String(item.keyboardPwdId), code: item.keyboardPwd, name: item.keyboardPwdName ?? "Код", startsAt: item.startDate, endsAt: item.endDate, status: item.status ?? 1 })),
+  };
+}
+
+export async function controlTTLockAction(lockRecordId: string, command: "lock" | "unlock") {
+  const hotelId = await requireSessionHotelId({ permission: "ROOMS" });
+  const lock = await db.tTLockLock.findFirst({ where: { id: lockRecordId, hotelId }, select: { id: true, lockId: true } });
+  if (!lock) throw new Error("Замок не найден в этом объекте");
+  const { stored, token } = await credentials(hotelId);
+  await ttlock(command === "lock" ? "/v3/lock/lock" : "/v3/lock/unlock", { clientId: stored.clientId, accessToken: token.access_token, lockId: lock.lockId, date: Date.now() });
+  await db.tTLockLock.update({ where: { id: lock.id }, data: { lockState: command === "lock" ? "LOCKED" : "UNLOCKED", lastSyncedAt: new Date() } });
+  revalidatePath("/dashboard/locks");
+  return command;
+}
+
+export async function revokeTTLockPasscodeAction(passcodeRecordId: string) {
+  const hotelId = await requireSessionHotelId({ permission: "ROOMS" });
+  const passcode = await db.tTLockPasscode.findFirst({ where: { id: passcodeRecordId, hotelId, status: "ACTIVE" }, include: { lock: true } });
+  if (!passcode) throw new Error("Активный код не найден");
+  const { stored, token } = await credentials(hotelId);
+  await ttlock("/v3/keyboardPwd/delete", { clientId: stored.clientId, accessToken: token.access_token, lockId: passcode.lock.lockId, keyboardPwdId: passcode.keyboardPwdId, deleteType: 2, date: Date.now() });
+  await db.tTLockPasscode.update({ where: { id: passcode.id }, data: { status: "REVOKED" } });
+  revalidatePath("/dashboard/locks");
+  if (passcode.reservationId) revalidatePath(`/dashboard/reservations/${passcode.reservationId}`);
 }
 
 export async function assignTTLockAction(formData: FormData) {
@@ -70,8 +129,12 @@ export async function issueReservationPasscodeAction(formData: FormData) {
   const reservationId = String(formData.get("reservationId") ?? "");
   const reservation = await db.reservation.findFirst({ where: { id: reservationId, hotelId, status: { notIn: ["CANCELLED", "NO_SHOW"] } }, include: { room: { include: { ttlockLock: true } }, guest: true } });
   if (!reservation?.room.ttlockLock) throw new Error("К бронированию не привязан замок TTLock");
+  const existing = await db.tTLockPasscode.findFirst({ where: { hotelId, reservationId, status: "ACTIVE", endsAt: { gt: new Date() } }, select: { id: true } });
+  if (existing) throw new Error("Для этого бронирования уже создан активный TTLock-код");
   const hotel = await db.hotel.findUniqueOrThrow({ where: { id: hotelId }, select: { timezone: true } });
   const { stored, token } = await credentials(hotelId);
+  const lockDetails = await ttlock<{ keyboardPwdVersion?: number }>("/v3/lock/detail", { clientId: stored.clientId, accessToken: token.access_token, lockId: reservation.room.ttlockLock.lockId, date: Date.now() });
+  if (lockDetails.keyboardPwdVersion !== 4) throw new Error("Этот замок не поддерживает временные коды V4 через Open Platform TTLock");
   const startDate = Math.ceil(zonedTime(reservation.checkIn, reservation.checkInTime, hotel.timezone) / 3_600_000) * 3_600_000;
   const endDate = Math.floor(zonedTime(reservation.checkOut, reservation.checkOutTime, hotel.timezone) / 3_600_000) * 3_600_000;
   if (endDate <= startDate) throw new Error("Период проживания слишком короткий для кода TTLock");

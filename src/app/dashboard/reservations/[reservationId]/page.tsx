@@ -19,5 +19,6 @@ export default async function ReservationDetailPage({ params }: { params: Promis
     },
   });
   if (!reservation) notFound();
-  return <MobileReservationDetail reservation={toReservationVM(reservation)} locale={locale} />;
+  const ttlockPasscode = await db.tTLockPasscode.findFirst({ where: { hotelId, reservationId, status: "ACTIVE", endsAt: { gt: new Date() } }, orderBy: { createdAt: "desc" }, select: { code: true, startsAt: true, endsAt: true } });
+  return <MobileReservationDetail reservation={toReservationVM(reservation)} locale={locale} ttlockPasscode={ttlockPasscode ? { ...ttlockPasscode, startsAt: ttlockPasscode.startsAt.toISOString(), endsAt: ttlockPasscode.endsAt.toISOString() } : null} />;
 }

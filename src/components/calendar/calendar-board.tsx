@@ -12,7 +12,6 @@ import { buildTurnaroundMap, suggestQuickBookingSlot, turnaroundMessage } from "
 import { findSelectedReservation } from "@/lib/reservations/calendar-selection";
 import { EmptyState } from "@/components/shared/page-header";
 import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
-import { ReservationFormDialog } from "@/components/reservations/reservation-form-dialog";
 import { CalendarToolbar } from "@/components/calendar/calendar-toolbar";
 import { MobileCalendar } from "@/components/calendar/mobile-calendar";
 import { Button } from "@/components/ui/button";
@@ -95,16 +94,6 @@ interface RoomGroup {
   rooms: RoomVM[];
 }
 
-interface CreateReservationState {
-  open: boolean;
-  roomId?: string;
-  date?: string;
-  checkOut?: string;
-  checkInTime?: string;
-  checkOutTime?: string;
-  contextNote?: string;
-}
-
 function normalizeSearch(value: string): string {
   return value.trim().toLocaleLowerCase("ru-RU");
 }
@@ -119,7 +108,6 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   const deferredSearch = useDeferredValue(searchQuery);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [createState, setCreateState] = useState<CreateReservationState>({ open: false });
   const [movingId, setMovingId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ roomId: string; date: string } | null>(null);
@@ -371,19 +359,8 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
       toast.error("На эту ночь номер уже забронирован.");
       return;
     }
-    const gapNotes = [
-      slot.minutesAfterPrevious === null ? null : `После предыдущего выезда: ${turnaroundMessage(slot.minutesAfterPrevious)}`,
-      slot.minutesBeforeNext === null ? null : `До следующего заезда: ${turnaroundMessage(slot.minutesBeforeNext)}`,
-    ].filter((note): note is string => Boolean(note));
-    setCreateState({
-      open: true,
-      roomId,
-      date: slot.checkIn,
-      checkOut: slot.checkOut,
-      checkInTime: slot.checkInTime,
-      checkOutTime: slot.checkOutTime,
-      contextNote: gapNotes.join(" · "),
-    });
+    const query = new URLSearchParams({ checkIn: slot.checkIn, checkOut: slot.checkOut, roomId });
+    router.push(`/dashboard/reservations/new?${query.toString()}`);
   }
 
   async function undoMove(reservation: ReservationVM) {
@@ -454,7 +431,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
       onShift={shift}
       onFiltersChange={setFilters}
       onPreferencesChange={savePreferences}
-      onCreate={() => setCreateState({ open: true })}
+      onCreate={() => router.push("/dashboard/reservations/new")}
       onFullscreen={openFullscreen}
       fullscreen={fullscreen}
     />
@@ -463,7 +440,6 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   const dialogs = (
     <>
       {selected ? <ReservationDetailsDialog reservation={selected} rooms={rooms} ratePlans={ratePlans} guests={guests} hotelCurrency={hotelCurrency} open={detailsOpen} onOpenChange={(open) => { setDetailsOpen(open); if (!open) setSelectedId(null); }} /> : null}
-      {createState.open ? <ReservationFormDialog compact mode="create" open={createState.open} onOpenChange={(open) => setCreateState((state) => ({ ...state, open }))} rooms={rooms} ratePlans={ratePlans} guests={guests} hotelCurrency={hotelCurrency} contextNote={createState.contextNote} initial={{ roomId: createState.roomId, checkIn: createState.date ?? data.todayISO, checkOut: createState.checkOut ?? toISODate(addDays(parseISODate(createState.date ?? data.todayISO), 1)), checkInTime: createState.checkInTime, checkOutTime: createState.checkOutTime }} /> : null}
     </>
   );
 
@@ -576,7 +552,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   );
 
   if (viewportWidth < 640 && !fullscreen) return <>
-    <MobileCalendar locale={data.locale ?? "ru"} anchorISO={anchorISO} todayISO={data.todayISO} rangeDays={rangeDays} rooms={visibleRooms} reservations={visibleReservations} navigating={navigating} onShift={(count) => navigate(toISODate(addDays(parseISODate(anchorISO), count)))} onToday={() => navigate(data.todayISO)} onRangeChange={(days) => navigate(anchorISO, days)} onOpen={(id) => { setSelectedId(id); setDetailsOpen(true); }} onCreate={(roomId, date) => { if (roomId && date) openQuickBooking(roomId, date); else setCreateState({ open: true }); }} onExpand={openFullscreen} />
+    <MobileCalendar locale={data.locale ?? "ru"} anchorISO={anchorISO} todayISO={data.todayISO} rangeDays={rangeDays} rooms={visibleRooms} reservations={visibleReservations} navigating={navigating} onShift={(count) => navigate(toISODate(addDays(parseISODate(anchorISO), count)))} onToday={() => navigate(data.todayISO)} onRangeChange={(days) => navigate(anchorISO, days)} onOpen={(id) => { setSelectedId(id); setDetailsOpen(true); }} onCreate={(roomId, date) => { if (roomId && date) openQuickBooking(roomId, date); else router.push("/dashboard/reservations/new"); }} onExpand={openFullscreen} />
     {dialogs}
   </>;
 

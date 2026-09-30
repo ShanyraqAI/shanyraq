@@ -729,6 +729,7 @@ model TTLockLock {
   passcodes   TTLockPasscode[]
   events      TTLockEvent[]
   batteryPercent Int?
+  keyboardPwdVersion Int?
   hasGateway  Boolean?
   isOnline    Boolean?
   lockState   String?

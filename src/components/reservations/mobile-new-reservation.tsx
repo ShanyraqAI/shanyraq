@@ -19,18 +19,21 @@ interface Props {
   guests: GuestVM[];
   ratePlans: RatePlanVM[];
   busyStays: BusyStay[];
+  initialCheckIn?: string;
+  initialCheckOut?: string;
+  initialRoomId?: string;
 }
 
-export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, defaultCheckOutTime, rooms, guests, ratePlans, busyStays }: Props) {
+export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, defaultCheckOutTime, rooms, guests, ratePlans, busyStays, initialCheckIn, initialCheckOut, initialRoomId }: Props) {
   const router = useRouter();
   const kk = locale === "kk";
   const [pending, startTransition] = useTransition();
   const [step, setStep] = useState(1);
-  const [checkIn, setCheckIn] = useState(todayISO);
-  const [checkOut, setCheckOut] = useState(() => shiftDate(todayISO, 2));
+  const [checkIn, setCheckIn] = useState(initialCheckIn ?? todayISO);
+  const [checkOut, setCheckOut] = useState(() => initialCheckOut && initialCheckOut > (initialCheckIn ?? todayISO) ? initialCheckOut : shiftDate(initialCheckIn ?? todayISO, 2));
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
-  const [roomId, setRoomId] = useState("");
+  const [roomId, setRoomId] = useState(initialRoomId ?? "");
   const [source, setSource] = useState("direct");
   const [guestId, setGuestId] = useState(guests[0]?.id ?? "new");
   const [guestName, setGuestName] = useState("");

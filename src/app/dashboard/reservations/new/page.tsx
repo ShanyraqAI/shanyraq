@@ -7,8 +7,9 @@ import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewReservationPage() {
+export default async function NewReservationPage({ searchParams }: { searchParams: Promise<{ checkIn?: string | string[]; checkOut?: string | string[]; roomId?: string | string[] }> }) {
   await requireSectionAccess("RESERVATIONS");
+  const params = await searchParams;
   const hotelId = await getCurrentHotelId();
   const [hotel, locale, roomsRaw, roomTypes, plansRaw, guestsRaw, busyReservations] = await Promise.all([
     db.hotel.findUniqueOrThrow({ where: { id: hotelId }, select: { timezone: true, defaultCheckInTime: true, defaultCheckOutTime: true } }),
@@ -26,5 +27,12 @@ export default async function NewReservationPage() {
   const rooms: RoomVM[] = roomsRaw.map((room) => ({ id: room.id, number: room.number, floor: room.floor, status: room.status as RoomVM["status"], roomTypeId: room.roomTypeId, roomTypeName: room.roomType.name, capacity: room.roomType.capacity, basePrice: Number(room.roomType.basePrice), guestTonight: null }));
   const plans: RatePlanVM[] = plansRaw.map((plan) => ({ id: plan.id, sequenceNumber: plan.sequenceNumber, name: plan.name, roomTypeId: plan.roomTypeId, roomTypeName: names.get(plan.roomTypeId) ?? "", basePrice: Number(plan.basePrice), currency: plan.currency, refundable: plan.refundable, breakfastIncluded: plan.breakfastIncluded }));
   const guests: GuestVM[] = guestsRaw.map((guest) => ({ id: guest.id, sequenceNumber: guest.sequenceNumber, fullName: guest.fullName, email: guest.email, phone: guest.phone, country: guest.country, notes: guest.notes }));
-  return <MobileNewReservation locale={locale} todayISO={toISODate(todayInTimeZone(hotel.timezone))} defaultCheckInTime={hotel.defaultCheckInTime} defaultCheckOutTime={hotel.defaultCheckOutTime} rooms={rooms} ratePlans={plans} guests={guests} busyStays={busyReservations.map((stay) => ({ roomId: stay.roomId, checkIn: toISODate(stay.checkIn), checkOut: toISODate(stay.checkOut) }))} />;
+  const todayISO = toISODate(todayInTimeZone(hotel.timezone));
+  const requestedCheckIn = typeof params.checkIn === "string" ? params.checkIn : undefined;
+  const requestedCheckOut = typeof params.checkOut === "string" ? params.checkOut : undefined;
+  const requestedRoomId = typeof params.roomId === "string" ? params.roomId : undefined;
+  const validCheckIn = requestedCheckIn && /^\d{4}-\d{2}-\d{2}$/.test(requestedCheckIn) ? requestedCheckIn : undefined;
+  const validCheckOut = requestedCheckOut && /^\d{4}-\d{2}-\d{2}$/.test(requestedCheckOut) ? requestedCheckOut : undefined;
+  const validRoomId = requestedRoomId && rooms.some((room) => room.id === requestedRoomId) ? requestedRoomId : undefined;
+  return <MobileNewReservation locale={locale} todayISO={todayISO} defaultCheckInTime={hotel.defaultCheckInTime} defaultCheckOutTime={hotel.defaultCheckOutTime} rooms={rooms} ratePlans={plans} guests={guests} busyStays={busyReservations.map((stay) => ({ roomId: stay.roomId, checkIn: toISODate(stay.checkIn), checkOut: toISODate(stay.checkOut) }))} initialCheckIn={validCheckIn} initialCheckOut={validCheckOut} initialRoomId={validRoomId} />;
 }
