@@ -6,7 +6,7 @@ import { ChevronLeft } from "lucide-react";
 import type { AppLocale } from "@/lib/locale";
 
 const parentRoutes: Array<[prefix: string, parent: string]> = [
-  ["/dashboard/exports", "/dashboard/reports"],
+  ["/dashboard/exports", "/dashboard/more"],
   ["/dashboard/channels", "/dashboard/settings"],
   ["/dashboard/rates", "/dashboard/settings"],
   ["/dashboard/billing", "/dashboard/settings"],

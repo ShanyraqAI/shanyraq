@@ -29,6 +29,15 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
   ]);
   const locale = await getRequestLocale(hotel.language);
   const copy = mobileCopy[locale].reservations;
+  const reservationsVM = reservations.map(toReservationVM);
+  const initialStatus = typeof params.status === "string" ? params.status : "all";
+  const initialChannel = typeof params.channel === "string" ? params.channel : "all";
+  const initialDebt = params.debt === "1";
+  const filteredReservationCount = reservationsVM.filter((reservation) =>
+    (initialStatus === "all" || reservation.status === initialStatus) &&
+    (initialChannel === "all" || reservation.channel === initialChannel) &&
+    (!initialDebt || reservation.paymentMethod !== "ONLINE")
+  ).length;
 
   const rooms: RoomVM[] = roomsRaw.map((r) => ({
     id: r.id,
@@ -66,9 +75,9 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
         title={copy.title}
         description={copy.description}
       /></div>
-      <header className="mb-4 sm:hidden"><h1 className="sh-mobile-title">{copy.title}</h1><p className="sh-mobile-eyebrow">{reservations.length} {locale === "kk" ? "белсенді бронь" : "активных броней"}</p></header>
+      <header className="mb-4 sm:hidden"><h1 className="sh-mobile-title">{copy.title}</h1><p className="sh-mobile-eyebrow">{filteredReservationCount} {locale === "kk" ? "бронь сүзгі бойынша" : "броней по фильтру"}</p></header>
       <ReservationsTable
-        reservations={reservations.map(toReservationVM)}
+        reservations={reservationsVM}
         rooms={rooms}
         ratePlans={ratePlans}
         guests={guests}
@@ -76,9 +85,9 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
         todayISO={toISODate(todayInTimeZone(hotel.timezone))}
         initialSelectedId={initialSelectedId}
         locale={locale}
-        initialStatus={typeof params.status === "string" ? params.status : "all"}
-        initialChannel={typeof params.channel === "string" ? params.channel : "all"}
-        initialDebt={params.debt === "1"}
+        initialStatus={initialStatus}
+        initialChannel={initialChannel}
+        initialDebt={initialDebt}
       />
     </div>
   );

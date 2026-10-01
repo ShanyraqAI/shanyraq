@@ -46,6 +46,7 @@ export interface CurrentHotel {
   country: string | null;
   timezone: string;
   currency: string;
+  createdAt: Date;
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
@@ -82,7 +83,7 @@ export async function getCurrentHotel(): Promise<CurrentHotel | null> {
   if (!membership || !membership.hotelId) return null;
   const hotel = await db.hotel.findFirst({
     where: { id: membership.hotelId, orgId: membership.organizationId },
-    select: { id: true, orgId: true, slug: true, name: true, propertyType: true, address: true, city: true, country: true, timezone: true, currency: true },
+    select: { id: true, orgId: true, slug: true, name: true, propertyType: true, address: true, city: true, country: true, timezone: true, currency: true, createdAt: true },
   });
   return hotel;
 }

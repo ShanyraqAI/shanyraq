@@ -392,6 +392,22 @@ export async function setReservationStatus(
   await writeAudit(hotelId, `reservation.${status.toLowerCase()}`, "Reservation", reservation.id, {
     reference: reservationReference(reservation.sequenceNumber, reservation.id),
   }, { status: reservation.status }, { status });
+  if (status === "CHECKED_OUT") {
+    const room = await db.room.findFirst({ where: { id: reservation.roomId, hotelId }, select: { number: true } });
+    if (room) {
+      const { createHotelNotification } = await import("@/lib/notifications/service");
+      await createHotelNotification({
+        hotelId,
+        type: "URGENT_TASK",
+        title: `Требуется уборка: номер ${room.number}`,
+        body: "Гость выехал. Подготовьте квартиру к следующему заезду.",
+        href: "/dashboard/rooms",
+        dedupeKey: `cleaning-required:${reservation.id}`,
+      }).catch((error) => {
+        console.error("Checkout cleaning notification failed", { hotelId, reservationId: reservation.id, error });
+      });
+    }
+  }
   return updated;
 }
 

@@ -67,6 +67,12 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
   const [period, setPeriod] = useState<"all" | "today" | "arrivals" | "departures">("all");
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const selected = findSelectedReservation(reservations, selectedId);
+  const activeMobileFilters = Number(status !== "all") + Number(channel !== "all") + Number(initialDebt);
+  const filterParams = new URLSearchParams();
+  if (status !== "all") filterParams.set("status", status);
+  if (channel !== "all") filterParams.set("channel", channel);
+  if (initialDebt) filterParams.set("debt", "1");
+  const filterHref = `/dashboard/reservations/filters${filterParams.size ? `?${filterParams}` : ""}`;
 
   const channelsPresent = useMemo(() => Array.from(new Set(reservations.map((r) => r.channel))), [reservations]);
 
@@ -122,7 +128,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
             className="h-11 w-full rounded-xl border-[#e7e9e0] bg-white pl-8 text-xs sm:h-9 sm:w-[240px] sm:rounded-md"
           />
         </div>
-        <Link href="/dashboard/reservations/filters" className="flex h-11 items-center gap-1 rounded-xl bg-white px-3 text-[10px] font-bold text-[#4d5852] ring-1 ring-[#e7e9e0] sm:hidden"><SlidersHorizontal className="size-3.5" />{locale === "kk" ? "Сүзгі" : "Фильтры"}</Link>
+        <Link href={filterHref} className="flex h-11 items-center gap-1 rounded-xl bg-white px-3 text-[10px] font-bold text-[#4d5852] ring-1 ring-[#e7e9e0] sm:hidden"><SlidersHorizontal className="size-3.5" />{locale === "kk" ? "Сүзгі" : "Фильтры"}{activeMobileFilters > 0 ? <span className="grid size-4 place-items-center rounded-full bg-[#07866b] text-[9px] text-white">{activeMobileFilters}</span> : null}</Link>
         <div className="hidden sm:block"><Select value={status} onValueChange={setStatus}>
           <SelectTrigger size="sm" className="w-full sm:w-[170px]">
             <SelectValue />

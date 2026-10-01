@@ -82,6 +82,7 @@ model User {
   invitationsSent          HotelInvitation[]        @relation("InvitationSender")
   auditLogs                AuditLog[]               @relation("AuditActor")
   notifications            Notification[]           @relation("NotificationRecipient")
+  pushSubscriptions        PushSubscription[]
   analyticsEvents          AnalyticsEvent[]
   productExperiences       ProductExperience[]
   supportRequests          SupportRequest[]         @relation("SupportRequester")
@@ -199,6 +200,7 @@ model Hotel {
   currency     String       @default("KZT")
   defaultCheckInTime  String @default("14:00")
   defaultCheckOutTime String @default("12:00")
+  incomeTaxRatePercent Decimal? @db.Decimal(5, 2)
   houseRules         String @default("")
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
@@ -223,6 +225,7 @@ model Hotel {
   channexSyncJobs     ChannexSyncJob[]
   channexBookingLinks ChannexBookingReservation[]
   notifications       Notification[]
+  pushSubscriptions   PushSubscription[]
   invitations         HotelInvitation[]
   organization        Organization                @relation(fields: [orgId], references: [id], onDelete: Cascade)
   analyticsEvents     AnalyticsEvent[]
@@ -1195,6 +1198,22 @@ model Notification {
 
   @@unique([hotelId, recipientUserId, dedupeKey])
   @@index([recipientUserId, hotelId, readAt, createdAt])
+}
+
+model PushSubscription {
+  id            String   @id @default(cuid())
+  hotelId       String
+  userId        String
+  endpointHash  String
+  encryptedData String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  hotel Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([hotelId, userId, endpointHash])
+  @@index([hotelId, userId])
 }
 
 model AuditLog {

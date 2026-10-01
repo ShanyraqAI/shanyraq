@@ -17,7 +17,7 @@ import { getCurrentHotel } from "@/lib/tenant";
 import { formatPercent } from "@/lib/utils";
 import { requireSectionAccess } from "@/server/guards";
 import { getRequestLocale } from "@/lib/locale-server";
-import { createFinancialOperationAction, saveChannelCommissionAction } from "@/server/actions/finance";
+import { createFinancialOperationAction, saveChannelCommissionAction, saveIncomeTaxRateAction } from "@/server/actions/finance";
 
 export const dynamic = "force-dynamic";
 
@@ -39,9 +39,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
   const currentDateText = toISODate(currentDate);
   const params = await searchParams;
   const currentMonth = `${currentDate.getUTCFullYear()}-${String(currentDate.getUTCMonth() + 1).padStart(2, "0")}`;
-  const filters = parseReportFilters({ ...params, month: params.month ?? (params.from || params.to ? undefined : currentMonth) }, currentDate);
+  const firstReportDate = new Date(Date.UTC(hotel.createdAt.getUTCFullYear(), hotel.createdAt.getUTCMonth(), 1));
+  const firstReportMonth = `${firstReportDate.getUTCFullYear()}-${String(firstReportDate.getUTCMonth() + 1).padStart(2, "0")}`;
+  const requestedMonth = typeof params.month === "string" && params.month >= firstReportMonth ? params.month : currentMonth;
+  const filters = parseReportFilters({ ...params, month: params.from || params.to ? undefined : requestedMonth }, currentDate);
   const monthValue = `${filters.from.getUTCFullYear()}-${String(filters.from.getUTCMonth() + 1).padStart(2, "0")}`;
-  const monthOptions = Array.from({ length: 24 }, (_, index) => {
+  const monthCount = Math.max(1, (currentDate.getUTCFullYear() - firstReportDate.getUTCFullYear()) * 12 + currentDate.getUTCMonth() - firstReportDate.getUTCMonth() + 1);
+  const monthOptions = Array.from({ length: monthCount }, (_, index) => {
     const date = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() - index, 1));
     return { value: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`, label: new Intl.DateTimeFormat(locale === "kk" ? "kk-KZ" : "ru-RU", { month: "long", year: "numeric", timeZone: "UTC" }).format(date) };
   });
@@ -105,8 +109,16 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
           <FinanceMetric label={kk ? "Төленді / қайтарылды" : "Оплачено / возвращено"} value={operationsLabel(report.finance.paymentsByCurrency, kk)} note={kk ? "Дереккөзі: жазылған төлемдер" : "Источник: внесённые платежи"} />
           <FinanceMetric label={kk ? "Қонақтан алу керек" : "Осталось получить от гостя"} value={report.finance.remaining === null ? (kk ? "Дерек жоқ" : "Нет данных") : money(report.finance.remaining)} note={kk ? `Объект алатын бронь: ${report.finance.receivableCount}` : `Броней с оплатой объекту: ${report.finance.receivableCount}`} />
           <FinanceMetric label={kk ? "Жазылған шығындар" : "Записанные расходы"} value={report.finance.expenses > 0 ? money(report.finance.expenses) : kk ? "Дерек жоқ" : "Нет данных"} note={kk ? "Қолмен енгізілген" : "По ручным записям"} />
-          <FinanceMetric label={kk ? "Салық / объект төлемі / таза пайда" : "Налоги / выплата объекту / чистая прибыль"} value={kk ? "Дерек жоқ" : "Нет данных"} note={kk ? "Жинау тәртібі белгісіз" : "Нет подтверждённых данных об удержании и выплатах"} />
-          <p className="text-xs text-muted-foreground sm:col-span-2 xl:col-span-4">{kk ? "Төлем арналарының жиынтығы төлемді растау болып саналмайды. Объектінің нақты төлемі қолжетімді емес." : "Способ оплаты канала не подтверждает зачисление. Фактическая выплата объекту пока недоступна."}</p>
+          <FinanceMetric label={kk ? "Таза пайда" : "Чистая прибыль"} value={report.finance.netProfitAfterTax === null ? money(report.finance.netProfitBeforeTax) : money(report.finance.netProfitAfterTax)} note={report.finance.taxRatePercent === null ? (kk ? "Салық мөлшерлемесі орнатылмаған · салыққа дейін" : "Ставка налога не задана · до налога") : (kk ? `${report.finance.taxRatePercent}% салық бағасы шегерілді` : `${report.finance.taxRatePercent}% налога вычтено по вашей ставке`)} />
+          <p className="text-xs text-muted-foreground sm:col-span-2 xl:col-span-4">{kk ? "Төлем арналарының жиынтығы төлемді растау болып саналмайды. Объектінің нақты төлемі қолжетімді емес." : "Способ оплаты канала не подтверждает зачисление. Выплата OTA и налоговые данные из Channex недоступны; прибыль рассчитывается по известной комиссии и записанным расходам."}</p>
+          {report.finance.missingCommissionCount > 0 ? <p className="text-xs font-medium text-amber-800 sm:col-span-2 xl:col-span-4">{kk ? `Комиссиясы белгісіз броньдар: ${report.finance.missingCommissionCount}. Таза табыс бағалау болып табылады.` : `Для ${report.finance.missingCommissionCount} броней комиссия не передана. Итоговая прибыль может быть выше реальной.`}</p> : null}
+        </CardContent>
+        <CardContent className="border-t pt-4">
+          <form action={saveIncomeTaxRateAction} className="flex flex-wrap items-end gap-3">
+            <label className="min-w-40 flex-1 space-y-1 text-xs text-muted-foreground">{kk ? "Салық мөлшерлемесі, %" : "Ставка налога, %"}<input name="incomeTaxRatePercent" type="number" min="0" max="100" step="0.01" defaultValue={report.finance.taxRatePercent ?? ""} placeholder={kk ? "Орнатылмаған" : "Не задана"} className="h-10 w-full rounded-lg border bg-background px-3 text-sm text-foreground" /></label>
+            <Button type="submit" variant="outline">{kk ? "Салықты сақтау" : "Сохранить ставку"}</Button>
+            <p className="basis-full text-xs text-muted-foreground">{kk ? "Өзіңіздің салық режиміңізге сай мәнді енгізіңіз. Есеп салықты осы мөлшерлеме бойынша бағалайды." : "Укажите ставку вашего налогового режима. Это оценка от выручки за период, не налоговая декларация."}</p>
+          </form>
         </CardContent>
         {report.reservationOptions.length ? <CardContent className="border-t pt-4">
           <h3 className="mb-3 text-sm font-semibold">{kk ? "Төлем, қайтару немесе шығын қосу" : "Записать оплату, возврат или расход"}</h3>
@@ -122,20 +134,20 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
           <p className="mt-2 text-xs text-muted-foreground">{kk ? "Қайтару жазылған төлемнен аспауы тиіс. Жазба ұйым мен объект шегінде сақталады." : "Возврат не может превышать записанную оплату. Запись привязана к организации и объекту."}</p>
         </CardContent> : null}
         {commissionSources.length ? <CardContent className="border-t pt-4">
-          <h3 className="mb-3 text-sm font-semibold">{kk ? "Арнаның болжамды комиссиясы" : "Оценочная комиссия канала"}</h3>
+          <h3 className="mb-3 text-sm font-semibold">{kk ? "Комиссия арнасы" : "Комиссия каналов"}</h3>
           <div className="grid gap-3 md:grid-cols-2">
             {commissionSources.map((source) => {
               const setting = report.commissionSettings.find((item) => item.sourceChannel === source);
               return <form key={source} action={saveChannelCommissionAction} className="grid grid-cols-2 items-end gap-2 rounded-lg border p-3">
                 <input type="hidden" name="sourceChannel" value={source} />
                 <p className="col-span-2 text-sm font-medium">{channelLabel(source)}</p>
-                <label className="space-y-1 text-xs text-muted-foreground">{kk ? "Пайыз" : "Ставка, %"}<input name="ratePercent" type="number" min="0" max="100" step="0.01" defaultValue={setting?.ratePercent ?? 0} className="h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" /></label>
-                <label className="space-y-1 text-xs text-muted-foreground">{kk ? `Тұрақты жинақ (${report.currency})` : `Фиксированный сбор (${report.currency})`}<input name="fixedFee" type="number" min="0" step="0.01" defaultValue={setting?.fixedFee ?? 0} className="h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" /></label>
+                <label className="space-y-1 text-xs text-muted-foreground">{kk ? "Пайыз" : "Ставка, %"}<input name="ratePercent" type="number" min="0" max="100" step="0.01" defaultValue={setting?.ratePercent ?? ""} placeholder="—" className="h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" /></label>
+                <label className="space-y-1 text-xs text-muted-foreground">{kk ? `Тұрақты жинақ (${report.currency})` : `Фиксированный сбор (${report.currency})`}<input name="fixedFee" type="number" min="0" step="0.01" defaultValue={setting?.fixedFee ?? ""} placeholder="—" className="h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" /></label>
                 <Button className="col-span-2" size="sm" type="submit">{kk ? "Сақтау" : "Сохранить ставку"}</Button>
               </form>;
             })}
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">{kk ? "Ставка қолданыстағы броньдарға көшірілмейді. Келесі Channex жаңартуы әр броньда ставка мен дереккөзді сақтайды." : "Ставка не меняет историю. При следующем обновлении Channex ставка и источник сохраняются в бронировании."}</p>
+          <p className="mt-3 text-xs text-muted-foreground">{kk ? "Channex нақты комиссияны Booking.com мен Airbnb үшін жібереді. Басқа арналар үшін осы мәнді шарттағы мөлшерлемеге сай енгізіңіз; жалпы мөлшер барлық серіктестерге бірдей емес. Ставка келесі жаңартуларға ғана қолданылады." : "Channex передаёт фактическую комиссию для Booking.com и Airbnb. Для других каналов укажите ставку из договора: универсального процента для всех объектов нет. Настройка применяется к новым обновлениям и сохраняется в брони как оценка."}</p>
         </CardContent> : null}
       </Card>
 

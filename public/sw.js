@@ -1,32 +1,30 @@
-const CACHE = "shanyraq-mobile-v1";
-const OFFLINE_URL = "/offline";
-const STATIC_ASSETS = [OFFLINE_URL, "/icons/shanyraq-192.png", "/icons/shanyraq-512.png"];
-
-self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(STATIC_ASSETS)));
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", (event) => {
-  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))));
-  self.clients.claim();
-});
-
-self.addEventListener("fetch", (event) => {
-  const request = event.request;
-  if (request.method !== "GET") return;
-  const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
-
-  if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
-    return;
+/* Shanyraq push notifications for the installable PWA. */
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { body: event.data ? event.data.text() : "" };
   }
 
-  if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/") || url.pathname.startsWith("/brand/")) {
-    event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-      if (response.ok) caches.open(CACHE).then((cache) => cache.put(request, response.clone()));
-      return response;
-    })));
-  }
+  event.waitUntil(self.registration.showNotification(payload.title || "Shanyraq", {
+    body: payload.body || "Новое уведомление",
+    icon: "/icons/shanyraq-192.png",
+    badge: "/icons/shanyraq-192.png",
+    tag: payload.id || "shanyraq-notification",
+    data: { href: payload.href || "/dashboard" },
+  }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.href || "/dashboard", self.location.origin);
+  const href = target.origin === self.location.origin ? `${target.pathname}${target.search}${target.hash}` : "/dashboard";
+  event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+    const existing = clients.find((client) => new URL(client.url).origin === self.location.origin);
+    if (existing) {
+      return existing.navigate(href).then(() => existing.focus());
+    }
+    return self.clients.openWindow(href);
+  }));
 });

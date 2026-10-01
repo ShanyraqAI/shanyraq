@@ -26,6 +26,20 @@ export async function saveChannelCommissionAction(formData: FormData) {
   revalidatePath("/dashboard/reports");
 }
 
+export async function saveIncomeTaxRateAction(formData: FormData) {
+  const hotelId = await requireSessionHotelId({ permission: "REPORTS" });
+  const raw = String(formData.get("incomeTaxRatePercent") ?? "").trim();
+  const rate = raw === "" ? null : Number(raw);
+  if (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 100 || Math.round(rate * 100) !== rate * 100)) {
+    throw new Error("Укажите ставку от 0 до 100 с точностью до 0,01%.");
+  }
+  const previous = await db.hotel.findUniqueOrThrow({ where: { id: hotelId }, select: { incomeTaxRatePercent: true } });
+  await db.hotel.update({ where: { id: hotelId }, data: { incomeTaxRatePercent: rate } });
+  await writeAudit(hotelId, "finance.income_tax_rate_updated", "Hotel", hotelId,
+    {}, { ratePercent: previous.incomeTaxRatePercent === null ? null : Number(previous.incomeTaxRatePercent) }, { ratePercent: rate });
+  revalidatePath("/dashboard/reports");
+}
+
 export async function createFinancialOperationAction(formData: FormData) {
   const hotelId = await requireSessionHotelId({ permission: "REPORTS" });
   const reservationId = String(formData.get("reservationId") ?? "");

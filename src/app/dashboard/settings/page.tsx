@@ -33,7 +33,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     getDocumentProfile(user.organizationId!),
     db.room.count({ where: { roomType: { hotelId } } }),
   ]);
-  const data = { hotel, user, memberships, invitations, notificationMembership, documentProfile, locale };
+  const pushConfigured = Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY && process.env.VAPID_SUBJECT);
+  const data = { hotel, user, memberships, invitations, notificationMembership, documentProfile, locale, pushConfigured, vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? "" };
 
   return <>
     <div className="lg:hidden">
@@ -93,6 +94,8 @@ type Data = {
   memberships: Array<{ id: string; role: string; accessLevel: string; permissions: string[] | null; user: { fullName: string; email: string | null } }>;
   invitations: Array<{ id: string; email: string; accessLevel: string; permissions: string[] | null; expiresAt: Date }>;
   notificationMembership: { newReservationEmail: boolean; dailyDigestEmail: boolean; digestHour: number };
+  pushConfigured: boolean;
+  vapidPublicKey: string;
   documentProfile: Awaited<ReturnType<typeof getDocumentProfile>>;
   locale: "ru" | "kk";
 };
@@ -102,7 +105,7 @@ function SectionContent({ section, data }: { section: Section; data: Data }) {
   if (section === "company") return <Panel icon={Building2} title={kk ? "Компания" : "Компания и объект"} description={kk ? "Жұмыс кеңістігінің атауы, мекенжайы және негізгі деректері." : "Название, адрес и основные данные рабочего пространства."}><SettingsForm initial={data.hotel} /></Panel>;
   if (section === "profile") return <Panel icon={UserRound} title={kk ? "Жеке профиль" : "Личный профиль"} description={kk ? "Байланыс деректеріңіз және профиль суреті." : "Ваши контактные данные и изображение профиля."}><AccountForm locale={data.locale} initial={{ firstName: data.user.firstName, lastName: data.user.lastName, avatarUrl: isManagedAvatar(data.user.avatarUrl) ? `/api/avatar/${data.user.id}` : data.user.avatarUrl ?? "", email: data.user.email, phone: data.user.phone }} /></Panel>;
   if (section === "access") return <Panel icon={ShieldCheck} title={kk ? "Команда және қолжетімділік" : "Команда и доступ"} description={kk ? "Қызметкерлердің рөлдері мен осы нысандағы рұқсаттары." : "Роли сотрудников и разрешения внутри этого объекта."}><AccessManagement initialMembers={data.memberships.map((m) => ({ id: m.id, name: m.user.fullName, email: m.user.email ?? "—", permissions: resolveHotelPermissions(m), role: m.role }))} pendingInvitations={data.invitations.map((i) => ({ id: i.id, email: i.email, permissions: resolveHotelPermissions(i), expiresAt: i.expiresAt.toISOString() }))} canManage={data.user.role === "OWNER"} /></Panel>;
-  if (section === "notifications") return <Panel icon={BellRing} title={kk ? "Хабарландырулар" : "Уведомления"} description={kk ? "Қолданбадан тыс қандай оқиғаларды алу керегін таңдаңыз." : "Выберите, какие события получать за пределами приложения."}><NotificationPreferences initial={data.notificationMembership} emailAvailable={Boolean(data.user.email)} /></Panel>;
+  if (section === "notifications") return <Panel icon={BellRing} title={kk ? "Хабарландырулар" : "Уведомления"} description={kk ? "Қолданбадан тыс қандай оқиғаларды алу керегін таңдаңыз." : "Выберите, какие события получать за пределами приложения."}><NotificationPreferences initial={data.notificationMembership} emailAvailable={Boolean(data.user.email)} pushConfigured={data.pushConfigured} vapidPublicKey={data.vapidPublicKey} /></Panel>;
   if (section === "stay") return <Panel icon={Clock3} title={kk ? "Заезд и выезд" : "Заезд и выезд"} description={kk ? "Әдепкі келу және кету уақытын белгілеңіз." : "Установите время заезда и выезда по умолчанию."}><SettingsForm initial={data.hotel} section="stay" /></Panel>;
   if (section === "rules") return <Panel icon={FileText} title={kk ? "Тұру ережелері" : "Правила проживания"} description={kk ? "Қонақтарға арналған ортақ нұсқауларды сақтаңыз." : "Сохраните общие инструкции, которые нужно сообщать гостям."}><SettingsForm initial={data.hotel} section="rules" /></Panel>;
   return <Panel icon={FileText} title={kk ? "Құжат деректемелері" : "Реквизиты для документов"} description={kk ? "Құжат жасағанда иесінің деректері автоматты түрде қойылады." : "Данные владельца автоматически подставляются при генерации."}><DocumentProfileForm initial={data.documentProfile ?? EMPTY_DOCUMENT_PROFILE} canManage={data.user.role === "OWNER"} /></Panel>;

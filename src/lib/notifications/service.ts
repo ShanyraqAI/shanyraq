@@ -1,6 +1,10 @@
+import "server-only";
+
+import webpush from "web-push";
 import { db } from "@/lib/db";
 import { parseISODate } from "@/lib/dates";
 import { sendDailyOperationsDigest, sendNewReservationNotification } from "@/lib/email";
+import { decryptSecret } from "@/lib/security/credentials";
 
 export interface NotificationInput {
   hotelId: string;
@@ -17,7 +21,7 @@ export async function createHotelNotification(input: NotificationInput): Promise
     select: { userId: true },
   });
   if (!recipients.length) return;
-  await db.notification.createMany({
+  const inserted = await db.notification.createManyAndReturn({
     data: recipients.map(({ userId }) => ({
       hotelId: input.hotelId,
       recipientUserId: userId,
@@ -28,7 +32,39 @@ export async function createHotelNotification(input: NotificationInput): Promise
       dedupeKey: input.dedupeKey ?? null,
     })),
     skipDuplicates: true,
+    select: { id: true, recipientUserId: true, title: true, body: true, href: true },
   });
+  await Promise.allSettled(inserted.flatMap((notification) => notification.recipientUserId
+    ? [sendPushNotification(input.hotelId, notification.recipientUserId, notification)]
+    : []));
+}
+
+async function sendPushNotification(hotelId: string, userId: string, notification: { id: string; title: string; body: string | null; href: string | null }): Promise<void> {
+  const publicKey = process.env.VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const subject = process.env.VAPID_SUBJECT;
+  if (!publicKey || !privateKey || !subject) return;
+
+  webpush.setVapidDetails(subject, publicKey, privateKey);
+  const subscriptions = await db.pushSubscription.findMany({ where: { hotelId, userId } });
+  await Promise.all(subscriptions.map(async (row) => {
+    const subscription = decryptSecret<webpush.PushSubscription>(row.encryptedData);
+    try {
+      await webpush.sendNotification(subscription, JSON.stringify({
+        title: notification.title,
+        body: notification.body ?? "",
+        href: notification.href ?? "/dashboard",
+        id: notification.id,
+      }));
+    } catch (error) {
+      const statusCode = typeof error === "object" && error !== null && "statusCode" in error ? Number(error.statusCode) : null;
+      if (statusCode === 404 || statusCode === 410) {
+        await db.pushSubscription.delete({ where: { id: row.id } }).catch(() => undefined);
+      } else {
+        console.error("Push notification delivery failed", { hotelId, userId, notificationId: notification.id, statusCode });
+      }
+    }
+  }));
 }
 
 export async function getNotificationCenter(hotelId: string, userId: string) {
