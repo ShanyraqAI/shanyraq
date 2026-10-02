@@ -10,7 +10,6 @@ import { db } from "@/lib/db";
 import { avatarDisplayUrl } from "@/lib/avatar";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
-import { ProductTour } from "@/components/onboarding/product-tour";
 import { PRODUCT_AVAILABILITY } from "@/lib/product-availability";
 import { resolveHotelPermissions } from "@/lib/access";
 import { SupportChatWidget } from "@/components/support/support-chat-widget";
@@ -44,7 +43,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }),
     db.productExperience.findUnique({
       where: { userId_hotelId: { userId: user.id, hotelId: hotel.id } },
-      select: { tourCompletedAt: true, tourSkippedAt: true, feedbackSubmittedAt: true, feedbackDismissedAt: true },
+      select: { feedbackSubmittedAt: true, feedbackDismissedAt: true },
     }),
     db.reservation.count({ where: { hotelId: hotel.id } }),
     getNotificationCenter(hotel.id, user.id),
@@ -91,12 +90,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {children}
         </main>
       </div>
-      {!productExperience?.tourCompletedAt && !productExperience?.tourSkippedAt ? (
-        <ProductTour permissions={permissions} />
-      ) : null}
       {shouldShowFirstReservationFeedback({
         reservationCount,
-        tourCompleted: Boolean(productExperience?.tourCompletedAt || productExperience?.tourSkippedAt),
         submitted: Boolean(productExperience?.feedbackSubmittedAt),
         dismissed: Boolean(productExperience?.feedbackDismissedAt),
       }) ? <ContextualFeedbackPrompt /> : null}

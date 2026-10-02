@@ -69,7 +69,7 @@ export function ReservationDetailsDialog({
   onOpenChange,
 }: ReservationDetailsProps) {
   const router = useRouter();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState<"edit" | "move" | null>(null);
   const [documentsOpen, setDocumentsOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const callNumber = r.guestPhone?.replace(/[^+\d]/g, "") ?? "";
@@ -174,9 +174,9 @@ export function ReservationDetailsDialog({
               <h3 className="text-sm font-extrabold text-[#26352f]">Действия</h3>
               <p className="text-xs text-[#8f968f]">Гостей: {t.reservations.details.guestsField(r.adults, r.children)} · {channelLabel(r.channel)}</p>
               <div className="grid grid-cols-2 gap-2">
-                <Button size="sm" variant="outline" className={MOBILE_ACTION} onClick={() => setEditing(true)}><Pencil className="size-4" />Изменить</Button>
+                <Button size="sm" variant="outline" className={MOBILE_ACTION} onClick={() => setEditing("edit")}><Pencil className="size-4" />Изменить</Button>
                 <Button size="sm" variant="outline" className={MOBILE_ACTION} onClick={() => setDocumentsOpen(true)}><FileText className="size-4" />Документы</Button>
-                <Button size="sm" variant="outline" className={MOBILE_ACTION} onClick={() => setEditing(true)}><CalendarRange className="size-4" />Переместить</Button>
+                <Button size="sm" variant="outline" className={MOBILE_ACTION} onClick={() => setEditing("move")}><CalendarRange className="size-4" />Перенести</Button>
                 <Button size="sm" variant="outline" className={`${MOBILE_ACTION} max-sm:text-[#b84b42]`} disabled={busy !== null || r.status === "CANCELLED"} onClick={cancel}><Ban className="size-4" />Отменить</Button>
               </div>
             </section>
@@ -215,10 +215,10 @@ export function ReservationDetailsDialog({
             </Button>
 
             <div className="grid w-full grid-cols-3 gap-2 max-sm:hidden">
-              <Button size="sm" onClick={() => setEditing(true)}>
+              <Button size="sm" onClick={() => setEditing("edit")}>
                 <Pencil className="mr-1.5 size-3.5" /> {t.common.edit}
               </Button>
-              <Button size="sm" variant="outline" title={t.reservations.details.moveTooltip} onClick={() => setEditing(true)}>
+              <Button size="sm" variant="outline" title={t.reservations.details.moveTooltip} onClick={() => setEditing("move")}>
                 <CalendarRange className="mr-1.5 size-3.5" /> {t.reservations.details.move}
               </Button>
               <Button
@@ -239,9 +239,10 @@ export function ReservationDetailsDialog({
       {editing && (
         <ReservationFormDialog
           mode="edit"
-          open={editing}
+          variant={editing === "move" ? "move" : undefined}
+          open={Boolean(editing)}
           onOpenChange={(o) => {
-            setEditing(o);
+            if (!o) setEditing(null);
             if (!o) onOpenChange(false);
           }}
           rooms={rooms}

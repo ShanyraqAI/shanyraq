@@ -40,6 +40,8 @@ export interface ReservationFormProps {
   guests: GuestVM[];
   hotelCurrency: string;
   compact?: boolean;
+  /** "move" shows only unit and dates for quick rescheduling. */
+  variant?: "move";
   contextNote?: string;
   initial?: {
     id?: string;
@@ -81,11 +83,13 @@ export function ReservationFormDialog({
   guests,
   hotelCurrency,
   compact = false,
+  variant,
   contextNote,
   initial,
 }: ReservationFormProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const moving = variant === "move";
   const [advancedOpen, setAdvancedOpen] = useState(mode === "edit");
 
   const [guestChoice, setGuestChoice] = useState<string>(
@@ -208,11 +212,11 @@ export function ReservationFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("max-h-[92dvh] overflow-y-auto max-sm:top-auto max-sm:bottom-0 max-sm:max-h-[94dvh] max-sm:w-full max-sm:max-w-full max-sm:-translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:pb-[max(env(safe-area-inset-bottom),12px)]", compact ? "sm:max-w-lg" : "sm:max-w-xl")}>
+      <DialogContent className={cn("max-h-[92dvh] overflow-y-auto max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:content-start max-sm:rounded-none max-sm:bg-[#f8f8f4] max-sm:px-4 max-sm:pt-[max(env(safe-area-inset-top),18px)] max-sm:pb-0 max-sm:ring-0", compact ? "sm:max-w-lg" : "sm:max-w-xl")}>
         <DialogHeader>
-          <DialogTitle>{compact && mode === "create" ? "Быстрая бронь" : mode === "create" ? t.reservations.form.createTitle : t.reservations.form.editTitle}</DialogTitle>
-          <DialogDescription className="max-sm:hidden">
-            {compact && mode === "create"
+          <DialogTitle className="max-sm:text-xl">{moving ? "Перенести бронь" : compact && mode === "create" ? "Быстрая бронь" : mode === "create" ? t.reservations.form.createTitle : t.reservations.form.editTitle}</DialogTitle>
+          <DialogDescription className={moving ? "" : "max-sm:hidden"}>
+            {moving ? "Выберите новую квартиру и даты. Свободность проверим перед сохранением." : compact && mode === "create"
               ? "Основные данные — без перехода на отдельную страницу."
               : mode === "create"
               ? t.reservations.form.createDescription
@@ -224,7 +228,7 @@ export function ReservationFormDialog({
 
         <form onSubmit={handleSubmit} className={compact ? "space-y-3" : "space-y-4"}>
           {/* Guest */}
-          <div className="space-y-1.5">
+          {!moving ? <div className="space-y-1.5">
             <Label>{t.reservations.form.guest}</Label>
             {guests.length > 0 && (
               <Select value={guestChoice} onValueChange={setGuestChoice}>
@@ -258,7 +262,7 @@ export function ReservationFormDialog({
                 />
               </div>
             )}
-          </div>
+          </div> : null}
 
           {/* Room */}
           <div className="space-y-1.5">
@@ -286,7 +290,7 @@ export function ReservationFormDialog({
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5 rounded-lg border bg-secondary/20 p-3">
+            <div className="space-y-1.5 rounded-lg border bg-secondary/20 p-3 max-sm:rounded-2xl max-sm:bg-white">
               <Label htmlFor="checkin">{t.reservations.form.checkIn}</Label>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_104px]">
                 <Input id="checkin" type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} required />
@@ -294,7 +298,7 @@ export function ReservationFormDialog({
               </div>
               {!compact ? <p className="text-[11px] text-muted-foreground">Гость занимает вторую половину дня заезда.</p> : null}
             </div>
-            <div className="space-y-1.5 rounded-lg border bg-secondary/20 p-3">
+            <div className="space-y-1.5 rounded-lg border bg-secondary/20 p-3 max-sm:rounded-2xl max-sm:bg-white">
               <Label htmlFor="checkout">{t.reservations.form.checkOut}</Label>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_104px]">
                 <Input id="checkout" type="date" value={checkOut} min={addDaysISO(checkIn, 1)} onChange={(e) => setCheckOut(e.target.value)} required />
@@ -321,14 +325,14 @@ export function ReservationFormDialog({
             </div>
           </div>
 
-          <section className="space-y-3 rounded-xl border p-3.5" aria-labelledby="reservation-pricing-title">
+          {!moving ? <section className="space-y-3 rounded-xl border p-3.5 max-sm:rounded-2xl max-sm:bg-white" aria-labelledby="reservation-pricing-title">
             <div>
               <Label id="reservation-pricing-title">Как рассчитать стоимость</Label>
               <p className="hidden text-xs text-muted-foreground sm:block">Выберите готовый тариф или укажите итоговую цену вручную.</p>
             </div>
-            <div className="grid h-10 grid-cols-2 gap-1 rounded-lg bg-secondary p-1">
-              <button type="button" aria-pressed={pricingMode === "RATE_PLAN"} disabled={!hasPlansForType} onClick={() => setPricingMode("RATE_PLAN")} className="flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors active:scale-100 disabled:cursor-not-allowed disabled:opacity-45 aria-pressed:bg-background aria-pressed:shadow-sm"><Tags className="size-3.5" />Из тарифа</button>
-              <button type="button" aria-pressed={pricingMode === "MANUAL"} onClick={() => setPricingMode("MANUAL")} className="flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors active:scale-100 aria-pressed:bg-background aria-pressed:shadow-sm"><Banknote className="size-3.5" />Вручную</button>
+            <div className="grid h-10 grid-cols-2 gap-1 rounded-lg bg-secondary p-1 max-sm:h-11 max-sm:rounded-xl">
+              <button type="button" aria-pressed={pricingMode === "RATE_PLAN"} disabled={!hasPlansForType} onClick={() => setPricingMode("RATE_PLAN")} className="flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors active:scale-100 disabled:cursor-not-allowed disabled:opacity-45 aria-pressed:bg-background aria-pressed:shadow-sm max-sm:h-9 max-sm:rounded-lg max-sm:font-bold max-sm:aria-pressed:bg-[#07866b] max-sm:aria-pressed:text-white"><Tags className="size-3.5" />Из тарифа</button>
+              <button type="button" aria-pressed={pricingMode === "MANUAL"} onClick={() => setPricingMode("MANUAL")} className="flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors active:scale-100 aria-pressed:bg-background aria-pressed:shadow-sm max-sm:h-9 max-sm:rounded-lg max-sm:font-bold max-sm:aria-pressed:bg-[#07866b] max-sm:aria-pressed:text-white"><Banknote className="size-3.5" />Вручную</button>
             </div>
 
             {pricingMode === "RATE_PLAN" ? (
@@ -350,9 +354,9 @@ export function ReservationFormDialog({
             )}
 
             {!hasPlansForType ? <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">Для этой категории ещё нет тарифов — укажите стоимость вручную.</p> : null}
-          </section>
+          </section> : null}
 
-          <div className="space-y-1.5 sm:hidden"><Label>Способ оплаты</Label><Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as typeof paymentMethod)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="UNSPECIFIED">Не указан</SelectItem><SelectItem value="ONLINE">Онлайн</SelectItem><SelectItem value="CASH">Наличные</SelectItem></SelectContent></Select></div>
+          {!moving ? <div className="space-y-1.5 sm:hidden"><Label>Способ оплаты</Label><Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as typeof paymentMethod)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="UNSPECIFIED">Не указан</SelectItem><SelectItem value="ONLINE">Онлайн</SelectItem><SelectItem value="CASH">Наличные</SelectItem></SelectContent></Select></div> : null}
 
           {mode === "create" ? (
             <Button type="button" variant="ghost" size="sm" className="px-0 text-muted-foreground" onClick={() => setAdvancedOpen((value) => !value)}>
@@ -360,7 +364,7 @@ export function ReservationFormDialog({
             </Button>
           ) : null}
 
-          {advancedOpen ? (
+          {advancedOpen && !moving ? (
             <div className="space-y-4 rounded-lg border bg-secondary/20 p-3">
               {guestChoice === NEW_GUEST ? <div className="space-y-1 sm:hidden"><Label>Email гостя · необязательно</Label><Input type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} /></div> : null}
               <div className="grid grid-cols-2 gap-2 sm:hidden"><div className="space-y-1"><Label>Время заезда</Label><Input type="time" value={checkInTime} onChange={(event) => setCheckInTime(event.target.value)} /></div><div className="space-y-1"><Label>Время выезда</Label><Input type="time" value={checkOutTime} onChange={(event) => setCheckOutTime(event.target.value)} /></div><div className="space-y-1"><Label>{t.reservations.form.adults}</Label><Select value={adults} onValueChange={setAdults}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[1, 2, 3, 4, 5, 6].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent></Select></div><div className="space-y-1"><Label>{t.reservations.form.children}</Label><Select value={children} onValueChange={setChildren}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[0, 1, 2, 3, 4, 5, 6].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent></Select></div></div>
@@ -396,7 +400,7 @@ export function ReservationFormDialog({
             <span className="font-semibold tabular-nums">{Number.isFinite(total) ? formatMoney(total) : "—"}</span>
           </div>
 
-          <DialogFooter className="sticky bottom-[-12px] z-10 bg-background/95 pt-3 pb-1 backdrop-blur max-sm:flex-row">
+          <DialogFooter className="sticky bottom-[-12px] z-10 bg-background/95 pt-3 pb-1 backdrop-blur max-sm:bottom-0 max-sm:-mx-4 max-sm:flex-row max-sm:border-t max-sm:bg-white/95 max-sm:px-4 max-sm:pb-[max(env(safe-area-inset-bottom),12px)] max-sm:[&_button]:h-12 max-sm:[&_button]:flex-1 max-sm:[&_button]:rounded-[13px] max-sm:[&_button]:font-bold">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t.common.cancel}
             </Button>

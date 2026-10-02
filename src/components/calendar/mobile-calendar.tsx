@@ -92,7 +92,7 @@ export function MobileCalendar(props: Props) {
 
       <div className="fixed inset-x-0 bottom-[calc(4.25rem+max(env(safe-area-inset-bottom),5px))] z-40 mx-auto flex max-w-[430px] items-center justify-between gap-3 border-t border-[#e8e8df] bg-white/95 px-4 py-3 shadow-[0_-8px_24px_rgba(28,47,38,0.08)] backdrop-blur-xl">
         <button type="button" onClick={() => props.onCreate()} className="sh-mobile-primary flex min-h-11 flex-1 items-center justify-center gap-2"><Plus className="size-4" />{copy.newBooking}</button>
-        <button type="button" onClick={props.onExpand} className="grid size-11 shrink-0 place-items-center rounded-2xl border border-[#dfe3da] bg-white text-[#087e67] shadow-sm" aria-label={props.locale === "kk" ? "Күнтізбені кеңейту" : "Развернуть календарь"}><Maximize2 className="size-5" /></button>
+        <button type="button" onClick={props.onExpand} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-[13px] border border-[#bfe0d4] bg-[#e4f3ee] px-3.5 text-xs font-bold text-[#087e67] shadow-sm active:bg-[#d4ece3]" aria-label={props.locale === "kk" ? "Күнтізбені кеңейту" : "Развернуть календарь"}><Maximize2 className="size-4" />{props.locale === "kk" ? "Кеңейту" : "Развернуть"}</button>
       </div>
     </div>
   );

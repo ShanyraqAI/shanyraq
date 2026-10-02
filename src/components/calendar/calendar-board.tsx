@@ -331,6 +331,12 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
     fullscreenHistory.current = true;
     setZoom(rangeDays === 30 ? MOBILE_ZOOM_MIN : 1);
     setFullscreen(true);
+    // Phones only offer week and month; snap other saved ranges to a week.
+    if (viewportWidth < 640 && rangeDays !== 7 && rangeDays !== 30) {
+      const url = `/dashboard/calendar?${new URLSearchParams({ date: anchorISO, range: "7" }).toString()}`;
+      fullscreenUrl.current = url;
+      startNavigation(() => router.replace(url, { scroll: false }));
+    }
   }
 
   function focusDay(iso: string) {
@@ -604,8 +610,8 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
                 </div>
               </div>
               {mobileFullscreen ? <div className="shrink-0 border-b px-3 py-2 text-xs">
-                <div className="grid grid-cols-4 gap-1 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-[#e7e9e1]" aria-label="Диапазон дат">
-                  {([[3, "Ближайшие"], [7, "Неделя"], [14, "2 недели"], [30, "Месяц"]] as const).map(([count, label]) => <button key={count} type="button" disabled={navigating} aria-pressed={rangeDays === count} onClick={() => navigate(anchorISO, count)} className="min-h-10 rounded-xl px-1 text-[11px] font-bold text-[#7d847d] aria-pressed:bg-[#07866b] aria-pressed:text-white disabled:opacity-50">{label}</button>)}
+                <div className="grid grid-cols-2 gap-1 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-[#e7e9e1]" aria-label="Диапазон дат">
+                  {([[7, "Неделя"], [30, "Месяц"]] as const).map(([count, label]) => <button key={count} type="button" disabled={navigating} aria-pressed={rangeDays === count} onClick={() => navigate(anchorISO, count)} className="min-h-10 rounded-xl px-1 text-[11px] font-bold text-[#7d847d] aria-pressed:bg-[#07866b] aria-pressed:text-white disabled:opacity-50">{label}</button>)}
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-1">
                   <Button variant="ghost" size="icon-sm" onClick={() => shift(-1)} disabled={navigating} aria-label="Предыдущие дни"><ChevronLeft className="size-4" /></Button>
