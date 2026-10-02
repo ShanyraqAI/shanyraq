@@ -472,7 +472,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
         <div className={cn("sticky left-0 z-40 flex shrink-0 items-center border-r bg-secondary text-[10px] font-semibold uppercase tracking-wider text-muted-foreground", mobileFullscreen ? "px-1.5" : "px-3")} style={{ width: labelWidth }}>{mobileFullscreen ? "Номера" : "Категория / номер"}</div>
         <div className="flex">{monthSegments.map((segment) => <div key={segment.key} style={{ width: segment.days * dayWidth }} className="shrink-0 overflow-hidden border-r py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground last:border-r-0"><span className="block w-fit whitespace-nowrap px-2">{overview ? segment.label.slice(0, 3) : segment.label}</span></div>)}</div>
       </div>
-      <div className={cn("flex border-b bg-secondary", mobileFullscreen ? "h-8" : "h-12", fullscreen && (mobileFullscreen ? "sticky top-6 z-40" : "sticky top-7 z-40"))}>
+      <div className={cn("flex border-b bg-secondary", mobileFullscreen ? "h-10" : "h-12", fullscreen && (mobileFullscreen ? "sticky top-6 z-40" : "sticky top-7 z-40"))}>
         <div className={cn("sticky left-0 z-40 flex shrink-0 items-end border-r bg-secondary text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", mobileFullscreen ? "px-1.5 pb-1" : "px-3 pb-2")} style={{ width: labelWidth }}>{mobileFullscreen ? "Номер" : "Номер и статус"}</div>
         <div className="flex">{days.map((day) => {
           const isToday = isSameDay(day, today);

@@ -179,7 +179,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           </SelectContent>
         </Select></div>
 
-        <div className="flex w-full gap-1.5 overflow-x-auto pb-1 sm:hidden">{activeMobileFilters > 0 ? <button type="button" onClick={resetMobileFilters} className="sh-mobile-chip inline-flex shrink-0 items-center gap-1 text-[#b84b42]"><RotateCcw className="size-3" />{locale === "kk" ? "Тазарту" : "Сбросить"}</button> : null}{periodChips.map(([value, label]) => <button key={value} type="button" onClick={() => setPeriod(value)} aria-pressed={period === value} className="sh-mobile-chip shrink-0">{label}</button>)}</div>
+        <div className="flex w-full flex-wrap gap-1.5 sm:hidden">{activeMobileFilters > 0 ? <button type="button" onClick={resetMobileFilters} className="sh-mobile-chip inline-flex shrink-0 items-center gap-1 text-[#b84b42]"><RotateCcw className="size-3" />{locale === "kk" ? "Тазарту" : "Сбросить"}</button> : null}{periodChips.map(([value, label]) => <button key={value} type="button" onClick={() => setPeriod(value)} aria-pressed={period === value} className="sh-mobile-chip shrink-0">{label}</button>)}</div>
 
         <div className="flex w-full flex-wrap items-center gap-3 text-sm text-muted-foreground xl:ml-auto xl:w-auto">
           <div className="flex items-center gap-3">
