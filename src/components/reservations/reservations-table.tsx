@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Search, MoreHorizontal, SlidersHorizontal } from "lucide-react";
+import { Plus, Search, MoreHorizontal, SlidersHorizontal, RotateCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -34,6 +34,7 @@ import { EmptyState } from "@/components/shared/page-header";
 import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
 import { setReservationStatusAction } from "@/server/actions/reservations";
 import { findSelectedReservation } from "@/lib/reservations/calendar-selection";
+import { groupMobileReservations } from "@/lib/reservations/mobile-groups";
 import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
 import type { ReservationStatus } from "@/lib/constants";
 import { cn, formatMoney } from "@/lib/utils";
@@ -64,7 +65,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState(initialStatus);
   const [channel, setChannel] = useState(initialChannel);
-  const [period, setPeriod] = useState<"all" | "today" | "arrivals" | "departures">("all");
+  const [period, setPeriod] = useState<"upcoming" | "all" | "today" | "arrivals" | "departures">("upcoming");
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const selected = findSelectedReservation(reservations, selectedId);
   const activeMobileFilters = Number(status !== "all") + Number(channel !== "all") + Number(initialDebt);
@@ -79,9 +80,6 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return reservations.filter((r) => {
-      if (period === "today" && !(r.checkIn <= todayISO && r.checkOut >= todayISO)) return false;
-      if (period === "arrivals" && r.checkIn !== todayISO) return false;
-      if (period === "departures" && r.checkOut !== todayISO) return false;
       if (status !== "all" && r.status !== status) return false;
       if (channel !== "all" && r.channel !== channel) return false;
       if (initialDebt && r.paymentMethod === "ONLINE") return false;
@@ -93,7 +91,16 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
         r.id.toLowerCase().includes(q.toLowerCase())
       );
     });
-  }, [reservations, query, status, channel, period, todayISO, initialDebt]);
+  }, [reservations, query, status, channel, initialDebt]);
+
+  // Period chips only exist on mobile; the desktop table always lists every match.
+  const mobileFiltered = useMemo(() => filtered.filter((r) => {
+    if (period === "upcoming") return r.checkOut >= todayISO;
+    if (period === "today") return r.checkIn <= todayISO && r.checkOut >= todayISO;
+    if (period === "arrivals") return r.checkIn === todayISO;
+    if (period === "departures") return r.checkOut === todayISO;
+    return true;
+  }), [filtered, period, todayISO]);
 
   const stats = useMemo(
     () => ({
@@ -108,16 +115,32 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
     return date.toISOString().slice(0, 10);
   }, [todayISO]);
   const mobileGroups = useMemo(() => {
-    const sorted = [...filtered].sort((a, b) => a.checkIn.localeCompare(b.checkIn));
-    return [
-      { key: "today", title: locale === "kk" ? "Бүгін" : "Сегодня", rows: sorted.filter((row) => row.checkIn === todayISO || (row.checkIn < todayISO && row.checkOut > todayISO)) },
-      { key: "tomorrow", title: locale === "kk" ? "Ертең" : "Завтра", rows: sorted.filter((row) => row.checkIn === tomorrowISO) },
-      { key: "later", title: locale === "kk" ? "Кейін" : "Позже", rows: sorted.filter((row) => row.checkIn > tomorrowISO) },
-    ].filter((group) => group.rows.length > 0);
-  }, [filtered, locale, todayISO, tomorrowISO]);
+    const titles: Record<string, string> = {
+      today: locale === "kk" ? "Бүгін" : "Сегодня",
+      tomorrow: locale === "kk" ? "Ертең" : "Завтра",
+      later: locale === "kk" ? "Кейін" : "Позже",
+      earlier: locale === "kk" ? "Бұрын" : "Ранее",
+    };
+    return groupMobileReservations(mobileFiltered, todayISO, tomorrowISO).map((group) => ({ ...group, title: titles[group.key] }));
+  }, [mobileFiltered, locale, todayISO, tomorrowISO]);
+  const periodChips = [
+    ["upcoming", `${locale === "kk" ? "Өзекті" : "Актуальные"} ${filtered.filter((item) => item.checkOut >= todayISO).length}`],
+    ["all", `${copy.all} ${filtered.length}`],
+    ["arrivals", `${copy.arrivals} ${filtered.filter((item) => item.checkIn === todayISO).length}`],
+    ["departures", `${copy.departures} ${filtered.filter((item) => item.checkOut === todayISO).length}`],
+    ["today", locale === "kk" ? "Бүгін" : "Сегодня"],
+  ] as const;
+
+  function resetMobileFilters() {
+    setStatus("all");
+    setChannel("all");
+    router.replace("/dashboard/reservations", { scroll: false });
+  }
+
 
   return (
     <div className="space-y-4">
+      <header className="sm:hidden"><h1 className="sh-mobile-title">{copy.title}</h1><p className="sh-mobile-eyebrow">{copy.bookings(mobileFiltered.length)}{activeMobileFilters > 0 ? (locale === "kk" ? " · сүзгі бойынша" : " · по фильтру") : ""}</p></header>
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-[calc(100%-78px)] sm:w-auto">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -156,13 +179,13 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
           </SelectContent>
         </Select></div>
 
-        <div className="flex w-full gap-1.5 overflow-x-auto pb-1 sm:hidden">{([ ["all", `${copy.all} ${reservations.length}`], ["arrivals", `${copy.arrivals} ${reservations.filter((item) => item.checkIn === todayISO).length}`], ["departures", `${copy.departures} ${reservations.filter((item) => item.checkOut === todayISO).length}`], ["today", locale === "kk" ? "Бүгін" : "Сегодня"] ] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setPeriod(value)} aria-pressed={period === value} className="sh-mobile-chip shrink-0 aria-pressed:bg-[#07866b] aria-pressed:text-white">{label}</button>)}</div>
+        <div className="flex w-full flex-wrap gap-1.5 sm:hidden">{activeMobileFilters > 0 ? <button type="button" onClick={resetMobileFilters} className="sh-mobile-chip inline-flex shrink-0 items-center gap-1 text-[#b84b42]"><RotateCcw className="size-3" />{locale === "kk" ? "Тазарту" : "Сбросить"}</button> : null}{periodChips.map(([value, label]) => <button key={value} type="button" onClick={() => setPeriod(value)} aria-pressed={period === value} className="sh-mobile-chip shrink-0">{label}</button>)}</div>
 
         <div className="flex w-full flex-wrap items-center gap-3 text-sm text-muted-foreground xl:ml-auto xl:w-auto">
           <div className="flex items-center gap-3">
             <span>
-              <strong className="text-foreground tabular-nums">{stats.total}</strong>{" "}
-              <span className="sm:hidden">{copy.bookings(stats.total).replace(String(stats.total), "").trim()}</span><span className="hidden sm:inline">{t.reservations.statsCount(stats.total)}</span>
+              <strong className="text-foreground tabular-nums"><span className="sm:hidden">{mobileFiltered.length}</span><span className="hidden sm:inline">{stats.total}</span></strong>{" "}
+              <span className="sm:hidden">{copy.bookings(mobileFiltered.length).replace(String(mobileFiltered.length), "").trim()}</span><span className="hidden sm:inline">{t.reservations.statsCount(stats.total)}</span>
             </span>
             <span className="hidden sm:inline">
               <strong className="text-foreground tabular-nums">{formatMoney(stats.revenue, { compact: true })}</strong>{" "}
@@ -253,7 +276,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
         </div>
         <div className="space-y-4 sm:hidden">
           {mobileGroups.map((group) => <section key={group.key}><h2 className="sh-mobile-section-title mb-2">{group.title}</h2><div className="space-y-2">{group.rows.map((r, index) => { const statusPresentation = reservationStatusPresentation(r.status, locale); return <button key={r.id} type="button" onClick={() => router.push(`/dashboard/reservations/${r.id}`)} className="sh-mobile-card block w-full min-w-0 px-3 py-3 text-left"><span className="flex items-start gap-3"><span className={cn("grid size-9 shrink-0 place-items-center rounded-full text-xs font-extrabold", index % 3 === 0 ? "bg-[#ddf2ea] text-[#14846b]" : index % 3 === 1 ? "bg-[#e4edfb] text-[#5187d7]" : "bg-[#fbefd8] text-[#c2872e]")}>{new Date(`${r.checkIn}T00:00:00Z`).getUTCDate()}</span><span className="min-w-0 flex-1"><span className="flex items-start justify-between gap-2"><span className="truncate text-xs font-extrabold text-[#2d3a33]">{r.guestName}</span><span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[9px] font-bold", statusPresentation.className)}>{statusPresentation.label}</span></span><span className="mt-1 block truncate text-[10px] text-[#8f968f]">{r.roomNumber} · {formatISOCompactDate(r.checkIn)}—{formatISOCompactDate(r.checkOut)}</span></span></span><span className="mt-2 flex items-center justify-between border-t border-[#f0f1eb] pt-2 text-[9px]"><span className="text-[#959b94]">{r.checkInTime}</span><span className={cn("font-bold", r.totalAmount > 0 ? "text-[#16826a]" : "text-[#ed665e]")}>{formatMoney(r.totalAmount)}</span></span></button>; })}</div></section>)}
-          {filtered.length === 0 ? <p className="sh-mobile-card py-10 text-center text-xs text-[#929991]">{t.filters.noMatch}</p> : null}
+          {mobileFiltered.length === 0 ? <p className="sh-mobile-card py-10 text-center text-xs text-[#929991]">{t.filters.noMatch}</p> : null}
           <Link href="/dashboard/reservations/new" className="fixed right-4 z-40 grid size-12 place-items-center rounded-full bg-[#07866b] text-white shadow-xl sm:hidden" style={{ bottom: "calc(4.8rem + env(safe-area-inset-bottom))" }} aria-label={copy.newBooking}><Plus className="size-5" /></Link>
         </div>
         </>

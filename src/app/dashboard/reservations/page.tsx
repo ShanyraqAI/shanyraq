@@ -33,11 +33,6 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
   const initialStatus = typeof params.status === "string" ? params.status : "all";
   const initialChannel = typeof params.channel === "string" ? params.channel : "all";
   const initialDebt = params.debt === "1";
-  const filteredReservationCount = reservationsVM.filter((reservation) =>
-    (initialStatus === "all" || reservation.status === initialStatus) &&
-    (initialChannel === "all" || reservation.channel === initialChannel) &&
-    (!initialDebt || reservation.paymentMethod !== "ONLINE")
-  ).length;
 
   const rooms: RoomVM[] = roomsRaw.map((r) => ({
     id: r.id,
@@ -75,7 +70,6 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
         title={copy.title}
         description={copy.description}
       /></div>
-      <header className="mb-4 sm:hidden"><h1 className="sh-mobile-title">{copy.title}</h1><p className="sh-mobile-eyebrow">{filteredReservationCount} {locale === "kk" ? "бронь сүзгі бойынша" : "броней по фильтру"}</p></header>
       <ReservationsTable
         reservations={reservationsVM}
         rooms={rooms}
