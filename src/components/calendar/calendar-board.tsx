@@ -66,6 +66,19 @@ const CALM_RESERVATION_STYLES: Record<string, { bar: string; dot: string; label:
   CHECKED_IN: { bar: "border-[#83aaa2] bg-[#dcece8] text-[#11473d] before:bg-[#21675a] dark:border-[#65978d] dark:bg-[#244f47] dark:text-white", dot: "bg-[#21675a]", label: "Заселён", legend: "border-[#bdd6d0] bg-[#e7f2ef] text-[#175247]" },
 };
 
+// Matches the tones of the compact mobile calendar so the expanded view looks the same.
+const MOBILE_RESERVATION_STYLES: Record<string, { bar: string; dot: string; label: string; legend: string }> = {
+  ...RESERVATION_STYLES,
+  PENDING: { bar: "border-[#f3cf86] bg-[#fff3dc] text-[#8a5a06] before:bg-[#f1b43f]", dot: "bg-[#f1b43f]", label: "Ожидает", legend: "border-[#f3cf86] bg-[#fff3dc] text-[#8a5a06]" },
+  CONFIRMED: { bar: "border-[#bfe0d4] bg-[#e3f1ec] text-[#167862] before:bg-[#07866b]", dot: "bg-[#07866b]", label: "Подтверждена", legend: "border-[#bfe0d4] bg-[#e3f1ec] text-[#167862]" },
+  CHECKED_IN: { bar: "border-[#0d8a70] bg-[#0d8a70] text-white before:bg-white/70", dot: "bg-[#0a5f4e]", label: "Заселён", legend: "border-[#0d8a70] bg-[#0d8a70] text-white" },
+};
+
+function reservationStyles(preferences: CalendarPreferences, mobile: boolean) {
+  if (mobile) return MOBILE_RESERVATION_STYLES;
+  return preferences.reservationColors === "CALM" ? CALM_RESERVATION_STYLES : RESERVATION_STYLES;
+}
+
 const ROOM_STATUS: Record<string, { label: string; dot: string }> = {
   AVAILABLE: { label: "Чисто и свободно", dot: "bg-emerald-500" },
   OCCUPIED: { label: "Занято", dot: "bg-blue-500" },
@@ -530,6 +543,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
                       height={blockHeight}
                       top={blockTop}
                       overview={overview}
+                      mobile={mobileFullscreen}
                       allowDrag={!mobileFullscreen}
                       clippedStart={clippedStart}
                       clippedEnd={clippedEnd}
@@ -580,22 +594,22 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
             <DialogContent
               showCloseButton={false}
               aria-describedby={undefined}
-              className="fixed inset-0 flex h-dvh max-h-dvh w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-none bg-background p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] ring-0 sm:max-w-full data-closed:zoom-out-100 data-open:zoom-in-100"
+              className={cn("fixed inset-0 flex h-dvh max-h-dvh w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-none bg-background p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] ring-0 sm:max-w-full data-closed:zoom-out-100 data-open:zoom-in-100", mobileFullscreen && "sh-calendar-expanded")}
             >
-              <div className="flex shrink-0 items-center justify-between gap-1 border-b bg-card px-2 py-1.5">
-                <DialogTitle className="truncate text-sm font-semibold">Календарь · {rangeDays} дней</DialogTitle>
+              <div className={cn("flex shrink-0 items-center justify-between gap-1 border-b bg-card", mobileFullscreen ? "px-4 py-2.5" : "px-2 py-1.5")}>
+                <DialogTitle className={cn("truncate", mobileFullscreen ? "text-lg font-extrabold tracking-tight text-[#17221e]" : "text-sm font-semibold")}>Календарь · {rangeDays} дней</DialogTitle>
                 <div className="hidden items-center gap-3 text-xs text-muted-foreground md:flex"><Metric label="Заезды" value={todayStats.arrivals} /><Metric label="Выезды" value={todayStats.departures} /><Metric label="Проживают" value={todayStats.staying} /></div>
                 <div className="flex shrink-0 items-center">
-                  <Button variant="ghost" size="icon-sm" onClick={closeFullscreen} aria-label="Закрыть"><X className="size-4" /></Button>
+                  <Button variant="ghost" size="icon-sm" onClick={closeFullscreen} aria-label="Закрыть" className={cn(mobileFullscreen && "size-9 rounded-full bg-white text-[#536059] ring-1 ring-[#e6e8df]")}><X className="size-4" /></Button>
                 </div>
               </div>
-              {mobileFullscreen ? <div className="shrink-0 border-b bg-card px-2 py-1.5 text-xs">
-                <div className="grid grid-cols-4 gap-1 rounded-lg bg-secondary/60 p-1" aria-label="Диапазон дат">
-                  {([[3, "Ближайшие"], [7, "Неделя"], [14, "2 недели"], [30, "Месяц"]] as const).map(([count, label]) => <button key={count} type="button" disabled={navigating} aria-pressed={rangeDays === count} onClick={() => navigate(anchorISO, count)} className="min-h-10 rounded-md px-1 text-[11px] font-medium aria-pressed:bg-card aria-pressed:text-primary aria-pressed:shadow-sm disabled:opacity-50">{label}</button>)}
+              {mobileFullscreen ? <div className="shrink-0 border-b px-3 py-2 text-xs">
+                <div className="grid grid-cols-4 gap-1 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-[#e7e9e1]" aria-label="Диапазон дат">
+                  {([[3, "Ближайшие"], [7, "Неделя"], [14, "2 недели"], [30, "Месяц"]] as const).map(([count, label]) => <button key={count} type="button" disabled={navigating} aria-pressed={rangeDays === count} onClick={() => navigate(anchorISO, count)} className="min-h-10 rounded-xl px-1 text-[11px] font-bold text-[#7d847d] aria-pressed:bg-[#07866b] aria-pressed:text-white disabled:opacity-50">{label}</button>)}
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-1">
                   <Button variant="ghost" size="icon-sm" onClick={() => shift(-1)} disabled={navigating} aria-label="Предыдущие дни"><ChevronLeft className="size-4" /></Button>
-                  <button type="button" onClick={() => navigate(data.todayISO)} className="min-h-10 rounded px-2 font-medium text-primary hover:bg-accent">Сегодня</button>
+                  <button type="button" onClick={() => navigate(data.todayISO)} className="min-h-10 rounded-xl px-2 font-bold text-primary hover:bg-accent">Сегодня</button>
                   <label className="flex min-h-10 min-w-0 flex-1 items-center justify-end gap-1 text-muted-foreground"><span className="truncate">{formatRangeShort(anchorISO, toISODate(addDays(range.start, range.days - 1)))}</span><input type="date" aria-label="Перейти к дате" value={anchorISO} onChange={(event) => { if (event.target.value) navigate(event.target.value); }} className="w-7 min-w-7 text-transparent [color-scheme:light]" /></label>
                   <Button variant="ghost" size="icon-sm" onClick={() => shift(1)} disabled={navigating} aria-label="Следующие дни"><ChevronRight className="size-4" /></Button>
                 </div>
@@ -608,10 +622,10 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
                   <div style={{ width: labelWidth + range.days * dayWidth }}>{board}</div>
                 </div>
               </div>
-              {mobileFullscreen ? <div className="flex shrink-0 items-center justify-center gap-1.5 border-t bg-card px-1 py-1 text-[10px]" aria-label="Статусы бронирований">
-                <Legend style={(preferences.reservationColors === "CALM" ? CALM_RESERVATION_STYLES : RESERVATION_STYLES).PENDING} compact />
-                <Legend style={(preferences.reservationColors === "CALM" ? CALM_RESERVATION_STYLES : RESERVATION_STYLES).CONFIRMED} compact />
-                <Legend style={(preferences.reservationColors === "CALM" ? CALM_RESERVATION_STYLES : RESERVATION_STYLES).CHECKED_IN} compact />
+              {mobileFullscreen ? <div className="flex shrink-0 items-center justify-center gap-1.5 border-t bg-card px-1 py-1.5 text-[10px] font-semibold" aria-label="Статусы бронирований">
+                <Legend style={MOBILE_RESERVATION_STYLES.PENDING} compact />
+                <Legend style={MOBILE_RESERVATION_STYLES.CONFIRMED} compact />
+                <Legend style={MOBILE_RESERVATION_STYLES.CHECKED_IN} compact />
               </div> : null}
               {dialogs}
             </DialogContent>
@@ -642,11 +656,13 @@ function RoomLabel({ room, width, compact }: { room: RoomVM; width: number; comp
   );
 }
 
-function ReservationBar({ reservation, left, width, height, top, overview, allowDrag, clippedStart, clippedEnd, moving, preferences, highlighted, turnaroundMinutes: gapMinutes, onDragStart, onDragEnd, onOpen }: { reservation: ReservationVM; left: number; width: number; height: number; top: number; overview: boolean; allowDrag: boolean; clippedStart: boolean; clippedEnd: boolean; moving: boolean; preferences: CalendarPreferences; highlighted: boolean; turnaroundMinutes?: number; onDragStart: () => void; onDragEnd: () => void; onOpen: () => void }) {
+function ReservationBar({ reservation, left, width, height, top, overview, mobile, allowDrag, clippedStart, clippedEnd, moving, preferences, highlighted, turnaroundMinutes: gapMinutes, onDragStart, onDragEnd, onOpen }: { reservation: ReservationVM; left: number; width: number; height: number; top: number; overview: boolean; mobile: boolean; allowDrag: boolean; clippedStart: boolean; clippedEnd: boolean; moving: boolean; preferences: CalendarPreferences; highlighted: boolean; turnaroundMinutes?: number; onDragStart: () => void; onDragEnd: () => void; onOpen: () => void }) {
   const nights = diffDays(parseISODate(reservation.checkIn), parseISODate(reservation.checkOut));
-  const styles = preferences.reservationColors === "CALM" ? CALM_RESERVATION_STYLES : RESERVATION_STYLES;
+  const styles = reservationStyles(preferences, mobile);
   const statusStyle = styles[reservation.status] ?? styles.CONFIRMED;
-  const overviewFill = preferences.reservationColors === "CALM"
+  const overviewFill = mobile
+    ? ({ PENDING: "bg-[#f1b43f]", CONFIRMED: "bg-[#5fb39b]", CHECKED_IN: "bg-[#0d8a70]" } as Record<string, string>)[reservation.status]
+    : preferences.reservationColors === "CALM"
     ? ({ PENDING: "bg-[#557c9f]", CONFIRMED: "bg-[#a18a5b]", CHECKED_IN: "bg-[#21675a]" } as Record<string, string>)[reservation.status]
     : ({ PENDING: "bg-blue-600", CONFIRMED: "bg-amber-500", CHECKED_IN: "bg-emerald-600" } as Record<string, string>)[reservation.status];
   const guestCount = reservation.children > 0 ? `${reservation.adults}+${reservation.children}` : `${reservation.adults}`;
