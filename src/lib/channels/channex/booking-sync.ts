@@ -96,6 +96,36 @@ async function findOrCreateGuest(hotelId: string, revision: ChannexBookingRevisi
   });
 }
 
+/**
+ * A crash between creating a reservation and saving its Channex link would
+ * otherwise make every retry collide with the unique external ID.
+ */
+async function recoverUnlinkedReservation(
+  property: { organizationId: string; hotelId: string; rentalPropertyId: string },
+  bookingRecordId: string,
+  roomKey: string,
+  sourceChannel: string,
+  externalReservationId: string,
+) {
+  const reservation = await db.reservation.findFirst({
+    where: { hotelId: property.hotelId, rentalPropertyId: property.rentalPropertyId, sourceChannel, externalReservationId },
+  });
+  if (!reservation) return undefined;
+  await db.channexBookingReservation.upsert({
+    where: { bookingRecordId_roomKey: { bookingRecordId, roomKey } },
+    update: { reservationId: reservation.id },
+    create: {
+      bookingRecordId,
+      reservationId: reservation.id,
+      organizationId: property.organizationId,
+      hotelId: property.hotelId,
+      rentalPropertyId: property.rentalPropertyId,
+      roomKey,
+    },
+  });
+  return reservation;
+}
+
 async function applyRevision(property: {
   id: string; organizationId: string; hotelId: string; rentalPropertyId: string;
 }, inboxId: string, revision: ChannexBookingRevisionPayload) {
@@ -202,7 +232,8 @@ async function applyRevision(property: {
     const checkIn = parseISODate(room.checkIn);
     const checkOut = parseISODate(room.checkOut);
     const link = existingLinks.find((item) => item.roomKey === roomKey);
-    const current = link?.reservation;
+    const externalReservationId = `${revision.uniqueId}:${roomKey}`;
+    const current = link?.reservation ?? await recoverUnlinkedReservation(property, booking.id, roomKey, sourceChannel, externalReservationId);
     const targetRoom = current?.roomTypeId === roomTypeId
       ? { id: current.roomId }
       : await findFreeRoom(property.hotelId, roomTypeId, checkIn, checkOut);
@@ -242,7 +273,7 @@ async function applyRevision(property: {
         manualTotalAmount: room.amount,
         manualCurrency: revision.currency,
         sourceChannel,
-        externalReservationId: `${revision.uniqueId}:${roomKey}`,
+        externalReservationId,
         status: "CONFIRMED",
         notes: revision.notes,
         enqueueChannelSync: false,

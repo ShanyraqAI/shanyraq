@@ -31,3 +31,16 @@ export function calculateOutstanding(input: { amount: number; collected: number;
   if (input.paymentCollect !== "property" || ["CANCELLED", "NO_SHOW"].includes(input.status)) return null;
   return Math.max(0, input.amount - input.collected + input.refunded);
 }
+
+/** Legacy deposit marks count as cash movements on the day they happened, not on the stay dates. */
+export function depositOperations(
+  rows: Array<{ depositAmount: number; currency: string; depositCollectedAt: Date | null; depositReturnedAt: Date | null }>,
+  from: Date,
+  toExclusive: Date,
+) {
+  const inPeriod = (date: Date | null): date is Date => date !== null && date >= from && date < toExclusive;
+  return rows.flatMap((row) => [
+    ...(inPeriod(row.depositCollectedAt) ? [{ amount: row.depositAmount, currency: row.currency, type: "PAYMENT", status: "COMPLETED" }] : []),
+    ...(inPeriod(row.depositReturnedAt) ? [{ amount: row.depositAmount, currency: row.currency, type: "REFUND", status: "COMPLETED" }] : []),
+  ]);
+}

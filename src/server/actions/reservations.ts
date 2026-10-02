@@ -137,6 +137,11 @@ export async function updateReservationAction(input: unknown): Promise<ActionRes
     if (!parsed.success) return fail(firstZodError(parsed.error));
     const hotelId = await requireSessionHotelId({ permission: "RESERVATIONS" });
     const data = parsed.data;
+    const room = await db.room.findFirst({ where: { id: data.roomId, hotelId }, include: { roomType: true } });
+    if (!room) return fail(t.reservations.errors.roomNotFound);
+    if (data.adults + data.children > room.roomType.capacity) {
+      return fail(`В выбранном объекте можно разместить не более ${room.roomType.capacity} гостей.`);
+    }
     const guest = await resolveGuest(hotelId, data);
     await updateReservationDetails({
       id: data.id,

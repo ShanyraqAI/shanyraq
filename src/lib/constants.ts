@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { userNameFields, fullNameFromParts } from "@/lib/auth/names";
-import { diffDays, isISODate, parseISODate } from "@/lib/dates";
+import { diffDays, isISODate, isValidTimeZone, parseISODate } from "@/lib/dates";
 import { MAX_NIGHTLY_PRICE, MIN_NIGHTLY_PRICE } from "@/lib/pricing";
 
 // ---------------------------------------------------------------------------
@@ -204,7 +204,7 @@ export const hotelSettingsSchema = z.object({
   address: z.string().trim().max(240).optional(),
   city: z.string().trim().max(120).optional(),
   country: z.string().trim().max(120).optional(),
-  timezone: z.string().trim().min(1).max(64),
+  timezone: z.string().trim().min(1).max(64).refine(isValidTimeZone, "Некорректный часовой пояс"),
   currency: z.enum(["KZT", "USD", "EUR"]),
   defaultCheckInTime: hotelTime.default("14:00"),
   defaultCheckOutTime: hotelTime.default("12:00"),

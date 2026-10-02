@@ -1,4 +1,11 @@
 import assert from "node:assert/strict";
+import { isValidTimeZone } from "./dates";
+
+test("only real IANA time zones are accepted", () => {
+  assert.equal(isValidTimeZone("Asia/Almaty"), true);
+  assert.equal(isValidTimeZone("Invalid/Audit"), false);
+  assert.equal(isValidTimeZone(""), false);
+});
 import test from "node:test";
 import { formatISOCompactDate, formatISODate } from "./dates";
 

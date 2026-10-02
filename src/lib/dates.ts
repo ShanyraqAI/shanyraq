@@ -28,6 +28,16 @@ export function isISODate(value: string): boolean {
   }
 }
 
+export function isValidTimeZone(value: string): boolean {
+  if (!value) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Format a hotel date as "YYYY-MM-DD" without timezone shifting. */
 export function toISODate(date: Date): string {
   return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;

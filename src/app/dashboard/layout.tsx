@@ -46,7 +46,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       select: { feedbackSubmittedAt: true, feedbackDismissedAt: true },
     }),
     db.reservation.count({ where: { hotelId: hotel.id } }),
-    getNotificationCenter(hotel.id, user.id),
+    getNotificationCenter(hotel.id, user.id, permissions),
     Promise.all([
       db.guest.findMany({ where: { hotelId: hotel.id }, orderBy: { sequenceNumber: "desc" }, take: 120, select: { id: true, sequenceNumber: true, fullName: true, email: true, phone: true } }),
       db.room.findMany({ where: { hotelId: hotel.id }, orderBy: { number: "asc" }, take: 120, select: { id: true, number: true, floor: true, roomType: { select: { name: true } } } }),
