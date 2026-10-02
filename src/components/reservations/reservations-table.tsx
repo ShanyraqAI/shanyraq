@@ -34,6 +34,7 @@ import { EmptyState } from "@/components/shared/page-header";
 import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
 import { setReservationStatusAction } from "@/server/actions/reservations";
 import { findSelectedReservation } from "@/lib/reservations/calendar-selection";
+import { groupMobileReservations } from "@/lib/reservations/mobile-groups";
 import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
 import type { ReservationStatus } from "@/lib/constants";
 import { cn, formatMoney } from "@/lib/utils";
@@ -114,13 +115,13 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
     return date.toISOString().slice(0, 10);
   }, [todayISO]);
   const mobileGroups = useMemo(() => {
-    const sorted = [...mobileFiltered].sort((a, b) => a.checkIn.localeCompare(b.checkIn));
-    return [
-      { key: "today", title: locale === "kk" ? "Бүгін" : "Сегодня", rows: sorted.filter((row) => row.checkIn <= todayISO && row.checkOut >= todayISO) },
-      { key: "tomorrow", title: locale === "kk" ? "Ертең" : "Завтра", rows: sorted.filter((row) => row.checkIn === tomorrowISO) },
-      { key: "later", title: locale === "kk" ? "Кейін" : "Позже", rows: sorted.filter((row) => row.checkIn > tomorrowISO) },
-      { key: "earlier", title: locale === "kk" ? "Бұрын" : "Ранее", rows: sorted.filter((row) => row.checkOut < todayISO).reverse() },
-    ].filter((group) => group.rows.length > 0);
+    const titles: Record<string, string> = {
+      today: locale === "kk" ? "Бүгін" : "Сегодня",
+      tomorrow: locale === "kk" ? "Ертең" : "Завтра",
+      later: locale === "kk" ? "Кейін" : "Позже",
+      earlier: locale === "kk" ? "Бұрын" : "Ранее",
+    };
+    return groupMobileReservations(mobileFiltered, todayISO, tomorrowISO).map((group) => ({ ...group, title: titles[group.key] }));
   }, [mobileFiltered, locale, todayISO, tomorrowISO]);
   const periodChips = [
     ["upcoming", `${locale === "kk" ? "Өзекті" : "Актуальные"} ${filtered.filter((item) => item.checkOut >= todayISO).length}`],
@@ -135,6 +136,7 @@ export function ReservationsTable({ reservations, rooms, ratePlans, guests, hote
     setChannel("all");
     router.replace("/dashboard/reservations", { scroll: false });
   }
+
 
   return (
     <div className="space-y-4">
