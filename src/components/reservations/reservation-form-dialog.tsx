@@ -212,7 +212,7 @@ export function ReservationFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("max-h-[92dvh] overflow-y-auto max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:content-start max-sm:rounded-none max-sm:bg-[#f8f8f4] max-sm:px-4 max-sm:pt-[max(env(safe-area-inset-top),18px)] max-sm:pb-0 max-sm:ring-0", compact ? "sm:max-w-lg" : "sm:max-w-xl")}>
+      <DialogContent className={cn("max-h-[92dvh] overflow-y-auto max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:flex max-sm:flex-col max-sm:rounded-none max-sm:bg-[#f8f8f4] max-sm:px-4 max-sm:pt-[max(env(safe-area-inset-top),18px)] max-sm:pb-0 max-sm:ring-0", compact ? "sm:max-w-lg" : "sm:max-w-xl")}>
         <DialogHeader>
           <DialogTitle className="max-sm:text-xl">{moving ? "Перенести бронь" : compact && mode === "create" ? "Быстрая бронь" : mode === "create" ? t.reservations.form.createTitle : t.reservations.form.editTitle}</DialogTitle>
           <DialogDescription className={moving ? "" : "max-sm:hidden"}>
@@ -226,7 +226,7 @@ export function ReservationFormDialog({
 
         {compact && contextNote ? <div className="flex items-start gap-2 rounded-lg border border-primary/15 bg-primary/[0.045] px-3 py-2 text-xs text-foreground"><Clock3 className="mt-0.5 size-3.5 shrink-0 text-primary" /><span>{contextNote}</span></div> : null}
 
-        <form onSubmit={handleSubmit} className={compact ? "space-y-3" : "space-y-4"}>
+        <form onSubmit={handleSubmit} className={cn(compact ? "space-y-3" : "space-y-4", "max-sm:flex max-sm:flex-1 max-sm:flex-col")}>
           {/* Guest */}
           {!moving ? <div className="space-y-1.5">
             <Label>{t.reservations.form.guest}</Label>
@@ -356,7 +356,7 @@ export function ReservationFormDialog({
             {!hasPlansForType ? <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">Для этой категории ещё нет тарифов — укажите стоимость вручную.</p> : null}
           </section> : null}
 
-          {!moving ? <div className="space-y-1.5 sm:hidden"><Label>Способ оплаты</Label><Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as typeof paymentMethod)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="UNSPECIFIED">Не указан</SelectItem><SelectItem value="ONLINE">Онлайн</SelectItem><SelectItem value="CASH">Наличные</SelectItem></SelectContent></Select></div> : null}
+          {!moving ? <div className="space-y-1.5 sm:hidden"><Label>Способ оплаты</Label><Select value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as typeof paymentMethod)}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="UNSPECIFIED">Не указан</SelectItem><SelectItem value="ONLINE">Онлайн</SelectItem><SelectItem value="CASH">Наличные</SelectItem></SelectContent></Select></div> : null}
 
           {mode === "create" ? (
             <Button type="button" variant="ghost" size="sm" className="px-0 text-muted-foreground" onClick={() => setAdvancedOpen((value) => !value)}>
@@ -400,7 +400,7 @@ export function ReservationFormDialog({
             <span className="font-semibold tabular-nums">{Number.isFinite(total) ? formatMoney(total) : "—"}</span>
           </div>
 
-          <DialogFooter className="sticky bottom-[-12px] z-10 bg-background/95 pt-3 pb-1 backdrop-blur max-sm:bottom-0 max-sm:-mx-4 max-sm:flex-row max-sm:border-t max-sm:bg-white/95 max-sm:px-4 max-sm:pb-[max(env(safe-area-inset-bottom),12px)] max-sm:[&_button]:h-12 max-sm:[&_button]:flex-1 max-sm:[&_button]:rounded-[13px] max-sm:[&_button]:font-bold">
+          <DialogFooter className="sticky bottom-[-12px] z-10 bg-background/95 pt-3 pb-1 backdrop-blur max-sm:mt-auto max-sm:bottom-0 max-sm:-mx-4 max-sm:flex-row max-sm:border-t max-sm:bg-white/95 max-sm:px-4 max-sm:pb-[max(env(safe-area-inset-bottom),12px)] max-sm:[&_button]:h-12 max-sm:[&_button]:flex-1 max-sm:[&_button]:rounded-[13px] max-sm:[&_button]:font-bold">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t.common.cancel}
             </Button>
