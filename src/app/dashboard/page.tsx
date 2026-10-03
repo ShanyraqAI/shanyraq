@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { db, getCurrentHotelId } from "@/lib/db";
 import { getChannelHealth, getDashboardStats, getRecentReservations } from "@/lib/stats";
 import { toReservationVM, type GuestVM, type RatePlanVM, type RoomVM } from "@/lib/types";
-import { todayInTimeZone, formatMediumDate } from "@/lib/dates";
+import { todayInTimeZone, formatMediumDate, formatShortDate } from "@/lib/dates";
 import { formatMoney, formatPercent } from "@/lib/utils";
 import { getCurrentUser } from "@/lib/tenant";
 import { PageHeader, EmptyState } from "@/components/shared/page-header";
@@ -34,7 +34,7 @@ export default async function DashboardPage() {
   const mobile = mobileCopy[locale];
   const day = todayInTimeZone(hotel.timezone);
   const [user, stats, recent, channelHealth, roomTypes, roomsRaw, ratePlansRaw, guestsRaw, depositFollowups, activeForConflicts] = await Promise.all([
-    getCurrentUser(), getDashboardStats(hotelId, day, hotel.timezone), getRecentReservations(hotelId, 20),
+    getCurrentUser(), getDashboardStats(hotelId, day, hotel.timezone, hotel.currency), getRecentReservations(hotelId, 20),
     PRODUCT_AVAILABILITY.channels ? getChannelHealth(hotelId) : Promise.resolve([]),
     db.roomType.findMany({ where: { hotelId }, orderBy: { sortOrder: "asc" } }),
     db.room.findMany({ where: { hotelId }, include: { roomType: { select: { name: true } } }, orderBy: { number: "asc" } }),
@@ -47,6 +47,8 @@ export default async function DashboardPage() {
   const ratePlans: RatePlanVM[] = ratePlansRaw.map((plan) => ({ id: plan.id, sequenceNumber: plan.sequenceNumber, name: plan.name, roomTypeId: plan.roomTypeId, roomTypeName: roomTypes.find((type) => type.id === plan.roomTypeId)?.name ?? "", basePrice: Number(plan.basePrice), currency: plan.currency, refundable: plan.refundable, breakfastIncluded: plan.breakfastIncluded }));
   const guests: GuestVM[] = guestsRaw.map((guest) => ({ id: guest.id, sequenceNumber: guest.sequenceNumber, fullName: guest.fullName, email: guest.email, phone: guest.phone, country: guest.country, notes: guest.notes }));
   const permissions = resolveHotelPermissions(user ?? {});
+  // Month-to-date nights, e.g. "1–3 окт"; the Reports page uses the same period.
+  const revenuePeriodLabel = day.getUTCDate() === 1 ? formatShortDate(day) : `1–${formatShortDate(day)}`;
   const waitingArrivals = stats.arrivalsToday.filter((reservation) => !["CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"].includes(reservation.status)).length;
   const unusualArrivals = stats.arrivalsToday
     .filter((reservation) => !["CANCELLED", "NO_SHOW", "CHECKED_OUT"].includes(reservation.status) && (reservation.checkInTime < "14:00" || reservation.checkInTime > "20:00"))
@@ -78,6 +80,8 @@ export default async function DashboardPage() {
       locale={locale}
       dateLabel={formatMediumDate(day)}
       revenue={stats.revenueMonthToDate}
+      revenueNights={stats.revenueNightsMonthToDate}
+      revenuePeriodLabel={revenuePeriodLabel}
       occupancyPercent={stats.occupancyTonight ? Math.round(stats.occupancyTonight * 100) : 0}
       activeReservations={stats.activeReservations}
       arrivals={stats.arrivalsToday.map((item) => ({ id: item.id, guest: item.guest.fullName, room: item.room.number, time: item.checkInTime }))}
@@ -107,7 +111,7 @@ export default async function DashboardPage() {
       <MetricCard
         label="Выручка с начала месяца"
         value={formatMoney(stats.revenueMonthToDate)}
-        sub="по действующим и завершённым броням"
+        sub={`${revenuePeriodLabel} · ${stats.revenueNightsMonthToDate} ноч. · как в отчётах`}
         visual={<MetricVisual icon={WalletCards} caption="за месяц" />}
       />
       <MetricCard
