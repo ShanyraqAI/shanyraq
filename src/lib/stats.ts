@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { ACTIVE_RESERVATION_STATUSES, type ChannelCode, type ReservationStatus } from "@/lib/constants";
+import { calculatePerformance } from "@/lib/reports/performance";
 import { addDays, startOfMonth } from "./dates";
 
 /**
@@ -46,7 +47,9 @@ export interface DashboardStats {
   inHouseGuests: number;
   arrivalsToday: ReservationWithRelations[];
   departuresToday: ReservationWithRelations[];
+  /** Revenue earned for the nights from the 1st through today, prorated per night like the Reports page. */
   revenueMonthToDate: number;
+  revenueNightsMonthToDate: number;
   revenueByDay: Array<{ date: Date; value: number }>;
   revenueByChannel: Record<string, number>;
   occupancyTrend: DashboardDayPoint[];
@@ -63,7 +66,7 @@ export interface DashboardDayPoint {
   total: number;
 }
 
-export async function getDashboardStats(hotelId: string, date: Date, timeZone = "UTC"): Promise<DashboardStats> {
+export async function getDashboardStats(hotelId: string, date: Date, timeZone = "UTC", currency?: string): Promise<DashboardStats> {
   const monthStart = startOfMonth(date);
   const nextDay = addDays(date, 1);
   const trendStart = addDays(date, -13);
@@ -94,10 +97,12 @@ export async function getDashboardStats(hotelId: string, date: Date, timeZone = 
     db.reservation.findMany({
       where: {
         hotelId,
-        checkIn: { gte: monthStart, lt: nextDay },
+        checkIn: { lt: nextDay },
+        checkOut: { gt: monthStart },
         status: { notIn: ["CANCELLED", "NO_SHOW"] },
+        ...(currency ? { currency } : {}),
       },
-      select: { totalAmount: true, sourceChannel: true, checkIn: true },
+      select: { totalAmount: true, sourceChannel: true, checkIn: true, checkOut: true, status: true },
     }),
     db.reservation.findMany({
       where: { hotelId, status: { in: [...ACTIVE_RESERVATION_STATUSES] } },
@@ -121,21 +126,15 @@ export async function getDashboardStats(hotelId: string, date: Date, timeZone = 
   ]);
 
   const occupiedTonight = tonightReservations.length;
-  const revenueByChannel: Record<string, number> = {};
-  const revenueByDate = new Map<string, number>();
-  let revenueMonthToDate = 0;
-  for (const r of monthReservations) {
-    const amount = Number(r.totalAmount);
-    revenueMonthToDate += amount;
-    revenueByChannel[r.sourceChannel] = (revenueByChannel[r.sourceChannel] ?? 0) + amount;
-    const dateKey = r.checkIn.toISOString().slice(0, 10);
-    revenueByDate.set(dateKey, (revenueByDate.get(dateKey) ?? 0) + amount);
-  }
-
-  const revenueByDay = Array.from({ length: date.getUTCDate() }, (_, index) => {
-    const pointDate = addDays(monthStart, index);
-    return { date: pointDate, value: revenueByDate.get(pointDate.toISOString().slice(0, 10)) ?? 0 };
-  });
+  // Same prorated-per-night method as the Reports page so both screens agree.
+  const monthPerformance = calculatePerformance(
+    monthReservations.map((r) => ({ ...r, totalAmount: Number(r.totalAmount) })),
+    totalRooms,
+    { from: monthStart, to: date, source: null },
+  );
+  const revenueMonthToDate = monthPerformance.summary.revenue;
+  const revenueByDay = [...monthPerformance.daily].reverse().map((day) => ({ date: day.date, value: day.revenue }));
+  const revenueByChannel = Object.fromEntries(monthPerformance.revenueBySource.map((row) => [row.source, row.value]));
   const activeReservationsByStatus = {
     PENDING: 0,
     CONFIRMED: 0,
@@ -179,6 +178,7 @@ export async function getDashboardStats(hotelId: string, date: Date, timeZone = 
     arrivalsToday: arrivals as ReservationWithRelations[],
     departuresToday: departures as ReservationWithRelations[],
     revenueMonthToDate,
+    revenueNightsMonthToDate: monthPerformance.summary.occupiedRoomNights,
     revenueByDay,
     revenueByChannel,
     occupancyTrend,
