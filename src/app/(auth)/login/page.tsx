@@ -22,7 +22,6 @@ export default async function LoginPage({
     <AuthShell
       title={t.auth.loginTitle}
       subtitle={t.auth.loginSubtitle}
-      mode="login"
     >
       <LoginForm googleEnabled={googleOAuthConfigured()} googleFailed={error === "google"} />
     </AuthShell>

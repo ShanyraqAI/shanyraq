@@ -18,7 +18,6 @@ export default async function RegisterPage() {
     <AuthShell
       title={t.auth.registerTitle}
       subtitle={t.auth.registerSubtitle}
-      mode="register"
     >
       <RegisterForm googleEnabled={googleOAuthConfigured()} />
     </AuthShell>

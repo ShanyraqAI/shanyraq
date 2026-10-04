@@ -229,3 +229,20 @@
 @media (max-width: 1024px), (pointer: coarse) {
   .header, .laptopPreview .guestPanel { backdrop-filter: none; }
 }
+
+button.primaryButton, button.secondaryButton { font-family: inherit; cursor: pointer; }
+.mobileNav nav button { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+@media (max-width: 600px) {
+  .heroActions { flex-direction: column; align-items: stretch; gap: 10px; width: 100%; max-width: 330px; margin-inline: auto; }
+  .heroActions > a, .heroActions > button { width: 100%; height: 52px; padding-inline: 18px; font-size: 15px; white-space: nowrap; }
+  .trialNote { font-size: 11px; line-height: 1.5; flex-wrap: wrap; justify-content: center; }
+}
+
+@media (max-width: 600px) {
+  .eyebrow, .heroIntro .eyebrow { font-size: 11px; }
+  .sectionEyebrow { font-size: 10px; }
+  .sectionHeading p { font-size: 14px; }
+  .demoNote, .billingNote, .pricingFootnote, .footerBottom, .legalLink, .planDescription { font-size: 12px; }
+  .footerBottom { flex-direction: column; gap: 8px; }
+  .betaBanner { font-size: 12px; text-align: center; }
+}
