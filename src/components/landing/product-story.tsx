@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { ArrowRight, ArrowUpRight, Check, ChevronDown, CircleCheck, ShieldCheck, Sparkles } from "lucide-react";
 import { BrandLogo } from "@/components/shared/brand-logo";
+import { BetaTrigger } from "./beta-trigger";
 import { ReservationsShowcase } from "./reservations-showcase";
 import { ChannelConnector } from "./channel-connector";
 import { InteractiveOccupancyChart } from "./interactive-occupancy-chart";
@@ -58,5 +58,5 @@ export function ProductStory() {
 }
 
 export function HotelFinalCta() {
-  return <section className={p.hotelCta} data-scroll-reveal><div className={s.container}><ShieldCheck size={28} /><h2>Готовы управлять объектом проще?</h2><p>Больше времени для гостей. Больше возможностей для вашего бизнеса.</p><Link className={s.primaryButton} href="/register">Попробовать Shanyraq AI <ArrowRight size={17} /></Link><small><Check size={13} />Бесплатно на время бета-теста · Карта не требуется</small></div></section>;
+  return <section className={p.hotelCta} data-scroll-reveal><div className={s.container}><ShieldCheck size={28} /><h2>Готовы управлять объектом проще?</h2><p>Больше времени для гостей. Больше возможностей для вашего бизнеса.</p><BetaTrigger className={s.primaryButton}>Попробовать Shanyraq AI <ArrowRight size={17} /></BetaTrigger><small><Check size={13} />Бесплатно на время бета-теста · Карта не требуется</small></div></section>;
 }

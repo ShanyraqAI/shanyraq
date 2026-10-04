@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { ArrowRight, Check, LoaderCircle, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { BrandLogo } from "@/components/shared/brand-logo";
+import { clarityEvent } from "@/lib/analytics/clarity";
 import p from "./beta-invite.module.css";
 
 const BetaContext = createContext<() => void>(() => {});
@@ -20,7 +21,7 @@ export function BetaInvite({ children, className }: { children: ReactNode; class
     dismissed.current = true;
     try { sessionStorage.setItem(seenKey, "1"); } catch { /* Storage may be disabled; the in-memory guard still applies. */ }
   }, []);
-  const openForm = useCallback(() => { markSeen(); setStep("form"); }, [markSeen]);
+  const openForm = useCallback(() => { markSeen(); clarityEvent("beta_form_opened"); setStep("form"); }, [markSeen]);
 
   useEffect(() => {
     try { if (sessionStorage.getItem(seenKey)) return; } catch { /* Show once for this page when storage is unavailable. */ }
@@ -33,6 +34,7 @@ export function BetaInvite({ children, className }: { children: ReactNode; class
         return;
       }
       markSeen();
+      clarityEvent("beta_offer_shown");
       setStep("offer");
     }
     timer = setTimeout(show, 30_000);
@@ -58,6 +60,7 @@ export function BetaInvite({ children, className }: { children: ReactNode; class
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Не удалось сохранить заявку. Попробуйте ещё раз.");
       setReference(result.reference);
+      clarityEvent("beta_form_submitted");
       setStep("success");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Нет связи с сервером. Попробуйте ещё раз.");

@@ -1,6 +1,6 @@
 import Image from "next/image";
-import Link from "next/link";
 import { ArrowDown, ArrowRight, ArrowUpRight, Check, ChevronRight, LogIn, LogOut, MousePointer2, Play, Sparkles } from "lucide-react";
+import { BetaTrigger } from "./beta-trigger";
 import { CalendarZoom } from "./calendar-zoom";
 import { CalendarPreview } from "./calendar-preview";
 import { BrandLogo } from "@/components/shared/brand-logo";
@@ -25,7 +25,7 @@ export function LaptopHero() {
         <h1 id="hero-title">Управляйте отелем<br /><span>из одного окна</span></h1>
         <p>Бронирования, номера, гости, оплаты и каналы — в единой системе.</p>
         <div className={s.heroActions}>
-          <Link href="/register" className={s.primaryButton}>Попробовать бесплатно <ArrowRight size={16} /></Link>
+          <BetaTrigger className={s.primaryButton}>Попробовать бесплатно <ArrowRight size={16} /></BetaTrigger>
           <a href="#demo" className={s.secondaryButton}><Play size={17} /> Смотреть демо</a>
         </div>
         <div className={s.trialNote}><Check size={13} /> Бесплатно на время бета-теста <span>·</span> Карта не требуется</div>

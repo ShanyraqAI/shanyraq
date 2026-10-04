@@ -10,7 +10,7 @@ import { mobileCopy } from "@/lib/locale";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReservationsPage({ searchParams }: { searchParams: Promise<{ reservation?: string | string[]; status?: string | string[]; channel?: string | string[]; debt?: string | string[] }> }) {
+export default async function ReservationsPage({ searchParams }: { searchParams: Promise<{ reservation?: string | string[]; status?: string | string[]; channel?: string | string[]; debt?: string | string[]; period?: string | string[] }> }) {
   await requireSectionAccess("RESERVATIONS");
   const hotelId = await getCurrentHotelId();
   const params = await searchParams;
@@ -33,6 +33,7 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
   const initialStatus = typeof params.status === "string" ? params.status : "all";
   const initialChannel = typeof params.channel === "string" ? params.channel : "all";
   const initialDebt = params.debt === "1";
+  const initialPeriod = params.period === "arrivals" || params.period === "departures" || params.period === "today" ? params.period : "all";
   const filteredReservationCount = reservationsVM.filter((reservation) =>
     (initialStatus === "all" || reservation.status === initialStatus) &&
     (initialChannel === "all" || reservation.channel === initialChannel) &&
@@ -88,6 +89,7 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
         initialStatus={initialStatus}
         initialChannel={initialChannel}
         initialDebt={initialDebt}
+        initialPeriod={initialPeriod}
       />
     </div>
   );

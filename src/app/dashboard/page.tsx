@@ -50,17 +50,17 @@ export default async function DashboardPage() {
   const waitingArrivals = stats.arrivalsToday.filter((reservation) => !["CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"].includes(reservation.status)).length;
   const unusualArrivals = stats.arrivalsToday
     .filter((reservation) => !["CANCELLED", "NO_SHOW", "CHECKED_OUT"].includes(reservation.status) && (reservation.checkInTime < "14:00" || reservation.checkInTime > "20:00"))
-    .map((reservation) => ({ label: `${locale === "kk" ? (reservation.checkInTime < "14:00" ? "Ерте келу" : "Кеш келу") : (reservation.checkInTime < "14:00" ? "Ранний заезд" : "Поздний заезд")} · ${reservation.checkInTime}`, room: reservation.room.number, guest: reservation.guest.fullName, href: `/dashboard/reservations?reservation=${reservation.id}` }));
+    .map((reservation) => ({ label: `${locale === "kk" ? (reservation.checkInTime < "14:00" ? "Ерте келу" : "Кеш келу") : (reservation.checkInTime < "14:00" ? "Ранний заезд" : "Поздний заезд")} · ${reservation.checkInTime}`, room: reservation.room.number, guest: reservation.guest.fullName, href: `/dashboard/reservations/${reservation.id}` }));
   const unusualDepartures = stats.departuresToday
     .filter((reservation) => !["CANCELLED", "NO_SHOW"].includes(reservation.status) && reservation.checkOutTime !== "12:00")
-    .map((reservation) => ({ label: `${locale === "kk" ? (reservation.checkOutTime < "12:00" ? "Ерте кету" : "Кеш кету") : (reservation.checkOutTime < "12:00" ? "Ранний выезд" : "Поздний выезд")} · ${reservation.checkOutTime}`, room: reservation.room.number, guest: reservation.guest.fullName, href: `/dashboard/reservations?reservation=${reservation.id}` }));
+    .map((reservation) => ({ label: `${locale === "kk" ? (reservation.checkOutTime < "12:00" ? "Ерте кету" : "Кеш кету") : (reservation.checkOutTime < "12:00" ? "Ранний выезд" : "Поздний выезд")} · ${reservation.checkOutTime}`, room: reservation.room.number, guest: reservation.guest.fullName, href: `/dashboard/reservations/${reservation.id}` }));
   const cleaningItems = roomsRaw.filter((room) => room.status === "CLEANING").map((room) => ({ label: locale === "kk" ? "Жинау керек" : "Требуется уборка", room: room.number, guest: "", href: `/dashboard/rooms?room=${room.id}` }));
   const maintenanceItems = roomsRaw.filter((room) => room.status === "MAINTENANCE" || room.status === "OUT_OF_ORDER").map((room) => ({ label: locale === "kk" ? "Қызмет көрсету керек" : "Требуется обслуживание", room: room.number, guest: "", href: `/dashboard/rooms?room=${room.id}` }));
   const conflictItems: typeof unusualArrivals = [];
   for (let index = 0; index < activeForConflicts.length; index += 1) {
     const current = activeForConflicts[index];
     const other = activeForConflicts.slice(index + 1).find((row) => row.roomId === current.roomId && row.checkIn < current.checkOut && row.checkOut > current.checkIn);
-    if (other) conflictItems.push({ label: locale === "kk" ? "Бронь күндері қабаттасуы мүмкін" : "Возможное пересечение броней", room: current.room.number, guest: `${current.guest.fullName} / ${other.guest.fullName}`, href: `/dashboard/reservations?reservation=${current.id}` });
+    if (other) conflictItems.push({ label: locale === "kk" ? "Бронь күндері қабаттасуы мүмкін" : "Возможное пересечение броней", room: current.room.number, guest: `${current.guest.fullName} / ${other.guest.fullName}`, href: `/dashboard/reservations/${current.id}` });
   }
   const depositItems = depositFollowups.map((row) => ({ label: locale === "kk" ? "Қонақ кеткен соң депозит қайтарылмады" : "Депозит не возвращён после выезда", room: row.room.number, guest: row.guest.fullName, href: `/dashboard/reservations/${row.id}` }));
   const attentionItems = [
@@ -70,7 +70,7 @@ export default async function DashboardPage() {
     ...unusualArrivals,
     ...maintenanceItems,
     ...cleaningItems,
-    ...(waitingArrivals ? [{ label: locale === "kk" ? `${waitingArrivals} қонақ қоныстануды күтуде` : `${waitingArrivals} ожидают заселения`, room: mobile.dashboard.arrivals, guest: mobile.dashboard.today, href: "/dashboard/reservations" }] : []),
+    ...(waitingArrivals ? [{ label: locale === "kk" ? `${waitingArrivals} қонақ қоныстануды күтуде` : `${waitingArrivals} ожидают заселения`, room: mobile.dashboard.arrivals, guest: mobile.dashboard.today, href: "/dashboard/reservations?period=arrivals" }] : []),
   ].slice(0, 12);
 
   return <div className="space-y-5">

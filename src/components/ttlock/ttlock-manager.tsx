@@ -4,6 +4,9 @@ import { useState, useTransition } from "react";
 import { LoaderCircle, RefreshCw, LockKeyhole, UnlockKeyhole, Battery, Wifi, History } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { ttlockCopy } from "./ttlock-copy";
+import { TTLockGuide } from "./ttlock-guide";
+import type { AppLocale } from "@/lib/locale";
 import { assignTTLockAction, controlTTLockAction, getTTLockOperationsDataAction, issueReservationPasscodeAction, saveTTLockConnectionAction, syncTTLockLocksAction } from "@/server/actions/ttlock";
 
 type Device = { lockId: number; lockName: string; lockAlias?: string; electricQuantity?: number; hasGateway?: number; keyboardPwdVersion?: number };
@@ -12,7 +15,7 @@ type Reservation = { id: string; guest: string; room: string; checkIn: string; c
 type Event = { id: string; room: string; summary: string; success: boolean | null; actor: string | null; at: string };
 type Operations = { state: string; batteryPercent: number | null; isOnline: boolean | null; records: { recordType: number; success: number; username?: string; lockDate: number }[]; passcodes: { id: string; code: string; name: string; startsAt: number; endsAt: number; status: number }[] };
 
-export function TTLockManager({ connected, appConfigured, rooms, reservations, events }: { connected: boolean; appConfigured: boolean; rooms: Room[]; reservations: Reservation[]; events: Event[] }) {
+export function TTLockManager({ connected, appConfigured, rooms, reservations, events, locale }: { locale: AppLocale; connected: boolean; appConfigured: boolean; rooms: Room[]; reservations: Reservation[]; events: Event[] }) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [operations, setOperations] = useState<Record<string, Operations>>({});
   const [loading, setLoading] = useState(false);
@@ -20,6 +23,7 @@ export function TTLockManager({ connected, appConfigured, rooms, reservations, e
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const copy = ttlockCopy[locale];
 
   async function syncDevices() {
     setLoading(true); setError("");
@@ -52,15 +56,16 @@ export function TTLockManager({ connected, appConfigured, rooms, reservations, e
 
   return <div className="grid gap-5 lg:grid-cols-2">
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="font-bold text-slate-900">Подключение TTLock</h2>
-      <p className="mt-1 text-xs leading-5 text-slate-500">Подключите аккаунт TTLock, в котором добавлены ваши замки. Пароль нужен только при подключении; дальше Shanyraq обновляет защищённый токен автоматически.</p>
-      <form action={async (formData) => { try { await saveTTLockConnectionAction(formData); toast.success("TTLock подключён"); router.refresh(); } catch (e) { toast.error(e instanceof Error ? e.message : "Не удалось подключить TTLock"); } }} className="mt-4 space-y-3">
+      <h2 className="font-bold text-slate-900">{copy.title}</h2>
+      <p className="mt-1 text-xs leading-5 text-slate-500">{copy.intro}</p>
+      <form action={async (formData) => { try { await saveTTLockConnectionAction(formData); toast.success(copy.connectedToast); router.refresh(); } catch (e) { toast.error(e instanceof Error ? e.message : copy.failedToast); } }} className="mt-4 space-y-3">
         {!appConfigured && <><p className="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">Для приложения TTLock не заданы серверные Client ID и Client Secret. Временно укажите их здесь; добавьте TTLOCK_CLIENT_ID и TTLOCK_CLIENT_SECRET в Vercel, чтобы пользователи не вводили ключи приложения.</p><input name="clientId" required placeholder="Client ID приложения" autoComplete="off" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" /><input name="clientSecret" required placeholder="Client Secret приложения" autoComplete="new-password" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" /></>}
-        <input name="username" required placeholder="Логин аккаунта TTLock" autoComplete="username" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" />
-        <input name="password" required type="password" placeholder="Пароль аккаунта TTLock" autoComplete="new-password" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" />
-        <button className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white">{connected ? "Обновить подключение" : "Подключить TTLock"}</button>
-        {connected && <span className="ml-3 text-xs font-semibold text-emerald-700">Подключено</span>}
+        <input name="username" required placeholder={copy.login} autoComplete="username" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" />
+        <input name="password" required type="password" placeholder={copy.password} autoComplete="new-password" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" />
+        <button className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white">{connected ? copy.reconnect : copy.connect}</button>
+        {connected && <span className="ml-3 text-xs font-semibold text-emerald-700">{copy.connected}</span>}
       </form>
+      <TTLockGuide locale={locale} />
       <div className="mt-4 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">
         Для удалённого управления и кодов через API нужен Wi‑Fi замок или замок со шлюзом. Для событий замков задайте `TTLOCK_CALLBACK_TOKEN` на сервере и укажите в приложении TTLock callback: <code className="break-all">https://ВАШ-ДОМЕН/api/ttlock/callback?token=ЗНАЧЕНИЕ_СЕРВЕРНОГО_КЛЮЧА</code>.
       </div>
