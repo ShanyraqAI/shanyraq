@@ -55,17 +55,18 @@ export function RoadmapSection() {
   return <section className={`${s.section} ${s.container}`}><SectionHeading centered eyebrow="Следующая глава" title="Shanyraq AI развивается вместе с вашим бизнесом" description="Добавляем возможности, которые освобождают время для самого важного." /><div className={s.roadmapGrid}>{[{ icon: CalendarCheck2, title: "Интеграции с каналами бронирования", status: "В разработке", text: "Больше каналов. Одна система управления." }, { icon: MessageCircle, title: "Автоматические сообщения гостям", status: "Скоро", text: "Важная информация — в нужный момент." }, { icon: Sparkles, title: "Рекомендации по ценам", status: "В разработке", text: "Больше данных для ваших решений." }].map(({ icon: Icon, title, status, text }) => <article key={title}><div><Icon size={22} strokeWidth={1.4} /><span>{status}</span></div><h3>{title}</h3><p>{text}</p></article>)}</div></section>;
 }
 
-export function FaqSection() {
-  const faqs = [
+export const landingFaqs = [
     ["Подойдёт ли Shanyraq AI, если у меня только 1–2 квартиры?", "Да. Тариф Start рассчитан на владельцев до 3 квартир. Вы сможете вести бронирования, гостей и оплаты в одном календаре и выбрать более вместительный тариф, когда ваш бизнес вырастет."],
     ["Можно ли перенести брони из Excel?", "Да. Загрузите таблицу с бронированиями, проверьте данные перед импортом и перенесите их в календарь. Повторно вносить каждую бронь вручную не придётся."],
     ["Можно ли добавить администратора или сотрудника?", "Да. Работа с сотрудниками предусмотрена в тарифах Pro и Business. В Business также доступно расширенное управление доступом."],
-    ["Есть ли бесплатный период?", "Да, Бесплатно на время бета-тестаго доступа. Банковская карта для начала не нужна. За это время можно добавить объект и разобраться с ежедневной работой в сервисе."],
+    ["Есть ли бесплатный период?", "Да, на время бета-тестирования доступ бесплатный. Банковская карта для начала не нужна. За это время можно добавить объект и разобраться с ежедневной работой в сервисе."],
     ["Можно ли работать с телефона?", "Да. Shanyraq AI доступен в браузере телефона, планшета и компьютера. Можно проверить бронирования и ближайшие заезды, даже когда вы не за рабочим столом."],
     ["Как защищаются данные?", "Доступ к данным вашего объекта получают только авторизованные пользователи вашей команды. Безопасность и конфиденциальность — один из наших главных приоритетов. Если у вас есть вопросы, напишите на hello@shanyraq.ai."],
     ["Когда появятся Booking.com и Ostrovok?", "Мы работаем над интеграциями с популярными каналами бронирования. О доступности новых функций будем сообщать пользователям Shanyraq AI."],
-  ];
-  return <section id="faq" className={`${s.section} ${s.container} ${s.faqSection}`}><div><SectionHeading eyebrow="Отвечаем на ваши вопросы" title="Осталось что-то уточнить?" /><p className={s.faqContact}>Мы рядом и готовы помочь.<br /><a href="mailto:hello@shanyraq.ai">hello@shanyraq.ai <ArrowUpRight size={14} /></a></p></div><div className={s.faqList}>{faqs.map(([question, answer]) => <details key={question} name="landing-faq"><summary>{question}<Plus size={17} /></summary><p>{answer}</p></details>)}</div></section>;
+] as const;
+
+export function FaqSection() {
+  return <section id="faq" className={`${s.section} ${s.container} ${s.faqSection}`}><div><SectionHeading eyebrow="Отвечаем на ваши вопросы" title="Осталось что-то уточнить?" /><p className={s.faqContact}>Мы рядом и готовы помочь.<br /><a href="mailto:hello@shanyraq.ai">hello@shanyraq.ai <ArrowUpRight size={14} /></a></p></div><div className={s.faqList}>{landingFaqs.map(([question, answer]) => <details key={question} name="landing-faq"><summary>{question}<Plus size={17} /></summary><p>{answer}</p></details>)}</div></section>;
 }
 
 export function FinalCta() {

@@ -23,7 +23,7 @@ import {
   Star,
 } from "lucide-react";
 
-export const metadata = { title: "Design Preview — Shanyraq AI" };
+export const metadata = { title: "Design Preview — Shanyraq AI", robots: { index: false, follow: false } };
 
 export default function DesignPreviewPage() {
   return (
