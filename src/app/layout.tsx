@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Toaster } from "@/components/ui/sonner";
-import { Clarity } from "@/components/analytics/clarity";
+import { ClarityAnalytics } from "@/components/analytics/clarity";
 import { PwaRegistration } from "@/components/pwa/pwa-registration";
 
 import "./globals.css";
@@ -41,7 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         }}
       >
         {children}
-        <Clarity />
+        <ClarityAnalytics />
         <PwaRegistration enabled={process.env.NODE_ENV === "production"} />
         <Toaster richColors position="top-right" />
       </body>
