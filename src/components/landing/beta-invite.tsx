@@ -48,14 +48,14 @@ export function BetaInvite({ children, className }: { children: ReactNode; class
     const name = String(data.get("name") ?? "").trim();
     const contact = String(data.get("contact") ?? "").trim();
     const property = String(data.get("property") ?? "").trim();
-    if (!name || contact.length < 5) { setError("Укажите имя и телефон или email для связи."); return; }
+    if (!name || contact.length < 5) { setError("Укажите имя и телефон (или email) для связи."); return; }
     setPending(true);
     setError("");
     try {
       const response = await fetch("/api/support/requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "LANDING", sourcePath: "/#beta", name, contact, message: `Заявка на бесплатный бета-тест Shanyraq AI. Объект: ${property || "Не указан"}. Прошу связаться со мной для подключения.`, transcript: [] }),
+        body: JSON.stringify({ source: "LANDING", sourcePath: "/#beta", name, contact, message: `Заявка на консультацию Shanyraq AI. Квартиры: ${property || "Не указано"}. Прошу связаться со мной.`, transcript: [] }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Не удалось сохранить заявку. Попробуйте ещё раз.");
@@ -71,17 +71,17 @@ export function BetaInvite({ children, className }: { children: ReactNode; class
     <Dialog open={step !== null} onOpenChange={open => { if (!open && !pending) { markSeen(); setStep(null); } }}>
       <DialogContent showCloseButton={!pending} className={`${className} ${p.dialog} ${step === "offer" ? p.offer : ""}`} onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} onPointerDownOutside={event => { if (pending) event.preventDefault(); }}>
         {step === "offer" ? <>
-          <div className={p.offerCopy}><span className={p.badge}><Sparkles size={13} /> BETA TEST</span><DialogTitle className={p.title}>Ваш отель.<br />Новый уровень спокойствия.</DialogTitle><DialogDescription className={p.description}>Приглашаем в бета-тест Shanyraq AI. Бронирования, гости и оплаты — в одном месте. <strong>Пока идёт бета-тест, всё бесплатно.</strong></DialogDescription><button className={p.primary} onClick={openForm}>Оставить заявку <ArrowRight size={17} /></button><span className={p.note}><Check size={13} /> Без оплаты и банковской карты</span></div>
+          <div className={p.offerCopy}><span className={p.badge}><Sparkles size={13} /> ДЛЯ ПОСУТОЧНИКОВ</span><DialogTitle className={p.title}>Посуточная аренда.<br />Без лишних забот.</DialogTitle><DialogDescription className={p.description}>Бесплатно покажем Shanyraq AI и поможем настроить его под ваши квартиры. <strong>Пока идёт бета-тест, всё бесплатно.</strong></DialogDescription><button className={p.primary} onClick={openForm}>Получить консультацию <ArrowRight size={17} /></button><span className={p.note}><Check size={13} /> Без оплаты и банковской карты</span></div>
           <div className={p.offerArt} aria-hidden="true"><div className={p.orbit} /><div className={p.orbit} /><BrandLogo variant="mark" inverse /><span className={p.artCard}>Всё под контролем <Check size={14} /></span><span className={p.artPrice}>0 ₸ <small>на время бета-теста</small></span></div>
-        </> : step === "success" ? <div className={p.success}><span><Check size={28} /></span><DialogTitle className={p.title}>Заявка сохранена</DialogTitle><DialogDescription className={p.description}>Свяжемся с вами по указанному контакту и поможем начать работу. На время бета-теста всё бесплатно.</DialogDescription><p>Номер заявки: {reference}</p><button className={p.primary} onClick={() => setStep(null)}>Понятно <Check size={16} /></button></div> : <>
-          <span className={p.badge}>BETA TEST · 0 ₸ / месяц</span><DialogTitle className={p.title}>Начнём с вашего объекта</DialogTitle><DialogDescription className={p.description}>Оставьте контакт — поможем подключиться. Все тарифы бесплатны на время бета-теста.</DialogDescription>
+        </> : step === "success" ? <div className={p.success}><span><Check size={28} /></span><DialogTitle className={p.title}>Заявка сохранена</DialogTitle><DialogDescription className={p.description}>Свяжемся с вами по указанному контакту, ответим на вопросы и поможем начать работу. На время бета-теста всё бесплатно.</DialogDescription><p>Номер заявки: {reference}</p><button className={p.primary} onClick={() => setStep(null)}>Понятно <Check size={16} /></button></div> : <>
+          <span className={p.badge}>БЕСПЛАТНАЯ КОНСУЛЬТАЦИЯ</span><DialogTitle className={p.title}>Расскажите о ваших квартирах</DialogTitle><DialogDescription className={p.description}>Оставьте контакт — перезвоним или напишем в WhatsApp и поможем подключиться. Все тарифы бесплатны на время бета-теста.</DialogDescription>
           <form onSubmit={submit} className={p.form} aria-busy={pending}>
             <label>Ваше имя<input name="name" autoComplete="name" autoFocus placeholder="Как к вам обращаться" required maxLength={100} disabled={pending} /></label>
-            <label>Телефон или email<input name="contact" autoComplete="email" placeholder="+7 … или name@example.com" required minLength={5} maxLength={160} disabled={pending} /></label>
-            <label>Ваш объект <span>необязательно</span><input name="property" autoComplete="organization" placeholder="Название отеля или количество квартир" maxLength={200} disabled={pending} /></label>
+            <label>Телефон (WhatsApp) или email<input name="contact" autoComplete="tel" placeholder="+7 7XX XXX XX XX" required minLength={5} maxLength={160} disabled={pending} /></label>
+            <label>Сколько у вас квартир? <span>необязательно</span><input name="property" autoComplete="organization" placeholder="Например: 5 квартир в Астане" maxLength={200} disabled={pending} /></label>
             <p className={p.privacy}>Используем контакт только для связи по вашей заявке.</p>
             {error && <p role="alert" className={p.error}>{error}</p>}
-            <button type="submit" className={p.primary} disabled={pending}>{pending ? <><LoaderCircle size={16} className={p.spinner} /> Сохраняем заявку…</> : <>Отправить заявку бесплатно <ArrowRight size={16} /></>}</button>
+            <button type="submit" className={p.primary} disabled={pending}>{pending ? <><LoaderCircle size={16} className={p.spinner} /> Сохраняем заявку…</> : <>Получить консультацию <ArrowRight size={16} /></>}</button>
           </form>
         </>}
       </DialogContent>

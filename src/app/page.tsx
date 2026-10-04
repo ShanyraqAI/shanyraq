@@ -14,9 +14,9 @@ import s from "@/components/landing/landing.module.css";
 const manrope = localFont({ src: "../assets/fonts/manrope-variable.ttf", display: "swap", weight: "200 800" });
 
 export const metadata: Metadata = {
-  title: "Shanyraq AI — управляйте отелем из одного окна",
-  description: "Бронирования, номера, гости и оплаты в единой системе. Управляйте гостиницей, апарт-отелем и посуточными квартирами с Shanyraq AI. Бесплатно на время бета-теста.",
-  openGraph: { title: "Shanyraq AI — управляйте отелем из одного окна", description: "Вся работа вашего объекта — в одном пространстве.", locale: "ru_KZ", type: "website" },
+  title: "Shanyraq AI — программа для посуточной аренды в Казахстане",
+  description: "Брони, квартиры, гости и оплаты в одной системе. Для посуточников в Казахстана: управляйте квартирами, домами и апарт-отелями с телефона. Бесплатно на время бета-теста.",
+  openGraph: { title: "Shanyraq AI — программа для посуточной аренды в Казахстане", description: "Всё для посуточной аренды в Казахстане — в одном окне.", locale: "ru_KZ", type: "website" },
 };
 
 export const viewport: Viewport = {

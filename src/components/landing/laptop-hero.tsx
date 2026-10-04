@@ -21,9 +21,9 @@ export function LaptopHero() {
       <div className={p.heroBackdrop}><Image src="/brand/hotel-lobby.webp" alt="" fill priority unoptimized sizes="100vw" /></div>
       <div className={p.heroVeil} />
       <div className={p.heroIntro} data-hero-intro>
-        <div className={s.eyebrow}><span className={s.statusDot} /> Управление отелем без хаоса</div>
-        <h1 id="hero-title">Управляйте отелем<br /><span>из одного окна</span></h1>
-        <p>Бронирования, номера, гости, оплаты и каналы — в единой системе.</p>
+        <div className={s.eyebrow}><span className={s.statusDot} /> Для посуточников в Казахстане</div>
+        <h1 id="hero-title">Посуточная аренда<br /><span>без хаоса и двойных броней</span></h1>
+        <p>Брони, квартиры, гости, оплаты и замки — в одном приложении. Сделано для хостов Казахстана.</p>
         <div className={s.heroActions}>
           <BetaTrigger className={s.primaryButton}>Попробовать бесплатно <ArrowRight size={16} /></BetaTrigger>
           <a href="#demo" className={s.secondaryButton}><Play size={17} /> Смотреть демо</a>
@@ -47,7 +47,7 @@ export function LaptopHero() {
 
         <div className={`${p.notification} ${p.occupancy}`} data-flying-card="left" aria-hidden="true"><span>Загрузка</span><strong>84%</strong><TrendLine /><small><ArrowUpRight size={13} /> <b>12%</b> к прошлому месяцу</small></div>
         <div className={`${p.notification} ${p.arrivals}`} data-flying-card="left" aria-hidden="true"><span>Сегодня</span><p><LogIn size={19} /><span>Заезды</span><strong>7</strong></p><p><LogOut size={19} /><span>Выезды</span><strong>4</strong></p></div>
-        <div className={`${p.notification} ${p.newBooking}`} data-flying-card="right" aria-hidden="true"><span>Новая бронь</span><div className={p.bookingNotification}><b className={p.bookingIcon}>B</b><p><strong>Booking.com</strong><span>Номер 204</span><small>12–15 сентября</small></p><ChevronRight size={17} /></div></div>
+        <div className={`${p.notification} ${p.newBooking}`} data-flying-card="right" aria-hidden="true"><span>Новая бронь</span><div className={p.bookingNotification}><b className={p.bookingIcon}>B</b><p><strong>Booking.com</strong><span>Квартира 204</span><small>12–15 сентября</small></p><ChevronRight size={17} /></div></div>
         <div className={`${p.notification} ${p.revenue}`} data-flying-card="right" aria-hidden="true"><span>Выручка</span><strong>₸ 1 284 000</strong><small><ArrowUpRight size={14} /> <b>18.4%</b></small><div className={p.miniBars}>{[12, 20, 30, 42].map(h => <i key={h} style={{ height: h }} />)}</div></div>
         <div className={`${p.notification} ${p.aiNotice}`} data-flying-card="right" aria-hidden="true"><span><Sparkles size={19} /> <b>Shanyraq AI</b></span><p>Найден риск<br /><strong>овербукинга</strong></p><ChevronRight size={17} /></div>
       </div>

@@ -22,7 +22,7 @@ export function ProductStory() {
 
   return <div className={p.productStory}>
     <section id="features" className={`${s.container} ${p.storySection}`}>
-      <StoryHeading number="01" label="Возможности" title="Вся работа объекта — в одном пространстве" description="Бронирования, номера, гости и оплаты — всё, что нужно для спокойной работы отеля." />
+      <StoryHeading number="01" label="Возможности" title="Вся работа объекта — в одном пространстве" description="Брони, квартиры, гости и оплаты — всё, что нужно хосту для спокойной работы с телефона." />
       <ReservationsShowcase />
     </section>
 
@@ -58,5 +58,5 @@ export function ProductStory() {
 }
 
 export function HotelFinalCta() {
-  return <section className={p.hotelCta} data-scroll-reveal><div className={s.container}><ShieldCheck size={28} /><h2>Готовы управлять объектом проще?</h2><p>Больше времени для гостей. Больше возможностей для вашего бизнеса.</p><BetaTrigger className={s.primaryButton}>Попробовать Shanyraq AI <ArrowRight size={17} /></BetaTrigger><small><Check size={13} />Бесплатно на время бета-теста · Карта не требуется</small></div></section>;
+  return <section className={p.hotelCta} data-scroll-reveal><div className={s.container}><ShieldCheck size={28} /><h2>Готовы управлять посуточной арендой проще?</h2><p>Оставьте заявку — бесплатно проконсультируем и поможем начать.</p><BetaTrigger className={s.primaryButton}>Получить консультацию <ArrowRight size={17} /></BetaTrigger><small><Check size={13} />Бесплатно на время бета-теста · Карта не требуется</small></div></section>;
 }
