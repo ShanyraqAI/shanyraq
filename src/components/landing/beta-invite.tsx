@@ -79,7 +79,7 @@ export function BetaInvite({ children, className }: { children: ReactNode; class
             <label>Ваше имя<input name="name" autoComplete="name" autoFocus placeholder="Как к вам обращаться" required maxLength={100} disabled={pending} /></label>
             <label>Телефон (WhatsApp) или email<input name="contact" autoComplete="tel" placeholder="+7 7XX XXX XX XX" required minLength={5} maxLength={160} disabled={pending} /></label>
             <label>Сколько у вас квартир? <span>необязательно</span><input name="property" autoComplete="organization" placeholder="Например: 5 квартир в Астане" maxLength={200} disabled={pending} /></label>
-            <p className={p.privacy}>Используем контакт только для связи по вашей заявке.</p>
+            <p className={p.privacy}>Используем контакт только для связи по заявке. Отправляя форму, вы даёте <a href="/consent" target="_blank">согласие на обработку персональных данных</a> в соответствии с <a href="/privacy" target="_blank">Политикой конфиденциальности</a>.</p>
             {error && <p role="alert" className={p.error}>{error}</p>}
             <button type="submit" className={p.primary} disabled={pending}>{pending ? <><LoaderCircle size={16} className={p.spinner} /> Сохраняем заявку…</> : <>Получить консультацию <ArrowRight size={16} /></>}</button>
           </form>
