@@ -191,6 +191,13 @@ export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
         </>
       ) : null}
 
+      <p className="text-center text-xs leading-5 text-muted-foreground">
+        Регистрируясь, вы принимаете{" "}
+        <Link href="/terms" target="_blank" className="underline hover:text-foreground">Условия использования</Link>, даёте{" "}
+        <Link href="/consent" target="_blank" className="underline hover:text-foreground">согласие на обработку персональных данных</Link> и подтверждаете, что ознакомились с{" "}
+        <Link href="/privacy" target="_blank" className="underline hover:text-foreground">Политикой конфиденциальности</Link>.
+      </p>
+
       <p className="pt-1 text-center text-sm text-muted-foreground">
         {t.auth.haveAccount}{" "}
         <Link href="/login" className="font-medium text-primary hover:underline">
