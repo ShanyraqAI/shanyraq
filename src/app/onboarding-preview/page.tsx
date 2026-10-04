@@ -1,6 +1,6 @@
 import { OnboardingForm } from "@/components/onboarding/onboarding-form";
 
-export const metadata = { title: "Предпросмотр онбординга — Shanyraq" };
+export const metadata = { title: "Предпросмотр онбординга — Shanyraq", robots: { index: false, follow: false } };
 
 export default function OnboardingPreviewPage() {
   return (

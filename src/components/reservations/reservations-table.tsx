@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "sonner";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -32,7 +33,7 @@ import {
 import { ReservationStatusBadge, ChannelLabel } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/page-header";
 import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
-import { setReservationStatusAction } from "@/server/actions/reservations";
+import { runOfflineAction } from "@/lib/offline/actions";
 import { findSelectedReservation } from "@/lib/reservations/calendar-selection";
 import { groupMobileReservations } from "@/lib/reservations/mobile-groups";
 import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
@@ -55,17 +56,18 @@ interface Props {
   initialStatus?: string;
   initialChannel?: string;
   initialDebt?: boolean;
+  initialPeriod?: "upcoming" | "all" | "today" | "arrivals" | "departures";
 }
 
 const STATUSES: ReservationStatus[] = ["PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"];
 
-export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency, todayISO, initialSelectedId = null, locale = "ru", initialStatus = "all", initialChannel = "all", initialDebt = false }: Props) {
+export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency, todayISO, initialSelectedId = null, locale = "ru", initialStatus = "all", initialChannel = "all", initialDebt = false, initialPeriod = "upcoming" }: Props) {
   const router = useRouter();
   const copy = mobileCopy[locale].reservations;
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState(initialStatus);
   const [channel, setChannel] = useState(initialChannel);
-  const [period, setPeriod] = useState<"upcoming" | "all" | "today" | "arrivals" | "departures">("upcoming");
+  const [period, setPeriod] = useState<"upcoming" | "all" | "today" | "arrivals" | "departures">(initialPeriod);
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const selected = findSelectedReservation(reservations, selectedId);
   const activeMobileFilters = Number(status !== "all") + Number(channel !== "all") + Number(initialDebt);
@@ -328,8 +330,9 @@ function ResAction({
   return (
     <DropdownMenuItem
       onSelect={async () => {
-        const result = await setReservationStatusAction({ id: row.id, status });
+        const result = await runOfflineAction("reservation.status", `${label} · ${row.guestName}`, { id: row.id, status });
         if (result.ok) onDone();
+        if (result.queued) { toast.success(result.message); return; }
         router.refresh();
       }}
     >

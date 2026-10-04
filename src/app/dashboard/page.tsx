@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { db, getCurrentHotelId } from "@/lib/db";
 import { getChannelHealth, getDashboardStats, getRecentReservations } from "@/lib/stats";
 import { toReservationVM, type GuestVM, type RatePlanVM, type RoomVM } from "@/lib/types";
-import { todayInTimeZone, formatMediumDate } from "@/lib/dates";
+import { todayInTimeZone, formatMediumDate, formatShortDate } from "@/lib/dates";
 import { formatMoney, formatPercent } from "@/lib/utils";
 import { getCurrentUser } from "@/lib/tenant";
 import { PageHeader, EmptyState } from "@/components/shared/page-header";
@@ -38,7 +38,7 @@ export default async function DashboardPage() {
   // These rows are serialized into client components, so load them only for roles allowed to see reservation details.
   const canViewReservations = permissions.includes("RESERVATIONS");
   const [stats, recent, channelHealth, roomTypes, roomsRaw, ratePlansRaw, guestsRaw, depositFollowups, activeForConflicts] = await Promise.all([
-    getDashboardStats(hotelId, day, hotel.timezone), canViewReservations ? getRecentReservations(hotelId, 20) : Promise.resolve([]),
+    getDashboardStats(hotelId, day, hotel.timezone, hotel.currency), canViewReservations ? getRecentReservations(hotelId, 20) : Promise.resolve([]),
     PRODUCT_AVAILABILITY.channels ? getChannelHealth(hotelId) : Promise.resolve([]),
     db.roomType.findMany({ where: { hotelId }, orderBy: { sortOrder: "asc" } }),
     db.room.findMany({ where: { hotelId }, include: { roomType: { select: { name: true } } }, orderBy: { number: "asc" } }),
@@ -50,20 +50,22 @@ export default async function DashboardPage() {
   const rooms: RoomVM[] = roomsRaw.map((room) => ({ id: room.id, number: room.number, floor: room.floor, status: room.status as RoomVM["status"], roomTypeId: room.roomTypeId, roomTypeName: room.roomType.name, guestTonight: null }));
   const ratePlans: RatePlanVM[] = ratePlansRaw.map((plan) => ({ id: plan.id, sequenceNumber: plan.sequenceNumber, name: plan.name, roomTypeId: plan.roomTypeId, roomTypeName: roomTypes.find((type) => type.id === plan.roomTypeId)?.name ?? "", basePrice: Number(plan.basePrice), currency: plan.currency, refundable: plan.refundable, breakfastIncluded: plan.breakfastIncluded }));
   const guests: GuestVM[] = guestsRaw.map((guest) => ({ id: guest.id, sequenceNumber: guest.sequenceNumber, fullName: guest.fullName, email: guest.email, phone: guest.phone, country: guest.country, notes: guest.notes }));
+  // Month-to-date nights, e.g. "1–3 окт"; the Reports page uses the same period.
+  const revenuePeriodLabel = day.getUTCDate() === 1 ? formatShortDate(day) : `1–${formatShortDate(day)}`;
   const waitingArrivals = stats.arrivalsToday.filter((reservation) => !["CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"].includes(reservation.status)).length;
   const unusualArrivals = stats.arrivalsToday
     .filter((reservation) => !["CANCELLED", "NO_SHOW", "CHECKED_OUT"].includes(reservation.status) && (reservation.checkInTime < "14:00" || reservation.checkInTime > "20:00"))
-    .map((reservation) => ({ label: `${locale === "kk" ? (reservation.checkInTime < "14:00" ? "Ерте келу" : "Кеш келу") : (reservation.checkInTime < "14:00" ? "Ранний заезд" : "Поздний заезд")} · ${reservation.checkInTime}`, room: reservation.room.number, guest: reservation.guest.fullName, href: `/dashboard/reservations?reservation=${reservation.id}` }));
+    .map((reservation) => ({ label: `${locale === "kk" ? (reservation.checkInTime < "14:00" ? "Ерте келу" : "Кеш келу") : (reservation.checkInTime < "14:00" ? "Ранний заезд" : "Поздний заезд")} · ${reservation.checkInTime}`, room: reservation.room.number, guest: reservation.guest.fullName, href: `/dashboard/reservations/${reservation.id}` }));
   const unusualDepartures = stats.departuresToday
     .filter((reservation) => !["CANCELLED", "NO_SHOW"].includes(reservation.status) && reservation.checkOutTime !== "12:00")
-    .map((reservation) => ({ label: `${locale === "kk" ? (reservation.checkOutTime < "12:00" ? "Ерте кету" : "Кеш кету") : (reservation.checkOutTime < "12:00" ? "Ранний выезд" : "Поздний выезд")} · ${reservation.checkOutTime}`, room: reservation.room.number, guest: reservation.guest.fullName, href: `/dashboard/reservations?reservation=${reservation.id}` }));
+    .map((reservation) => ({ label: `${locale === "kk" ? (reservation.checkOutTime < "12:00" ? "Ерте кету" : "Кеш кету") : (reservation.checkOutTime < "12:00" ? "Ранний выезд" : "Поздний выезд")} · ${reservation.checkOutTime}`, room: reservation.room.number, guest: reservation.guest.fullName, href: `/dashboard/reservations/${reservation.id}` }));
   const cleaningItems = roomsRaw.filter((room) => room.status === "CLEANING").map((room) => ({ label: locale === "kk" ? "Жинау керек" : "Требуется уборка", room: room.number, guest: "", href: `/dashboard/rooms?room=${room.id}` }));
   const maintenanceItems = roomsRaw.filter((room) => room.status === "MAINTENANCE" || room.status === "OUT_OF_ORDER").map((room) => ({ label: locale === "kk" ? "Қызмет көрсету керек" : "Требуется обслуживание", room: room.number, guest: "", href: `/dashboard/rooms?room=${room.id}` }));
   const conflictItems: typeof unusualArrivals = [];
   for (let index = 0; index < activeForConflicts.length; index += 1) {
     const current = activeForConflicts[index];
     const other = activeForConflicts.slice(index + 1).find((row) => row.roomId === current.roomId && row.checkIn < current.checkOut && row.checkOut > current.checkIn);
-    if (other) conflictItems.push({ label: locale === "kk" ? "Бронь күндері қабаттасуы мүмкін" : "Возможное пересечение броней", room: current.room.number, guest: `${current.guest.fullName} / ${other.guest.fullName}`, href: `/dashboard/reservations?reservation=${current.id}` });
+    if (other) conflictItems.push({ label: locale === "kk" ? "Бронь күндері қабаттасуы мүмкін" : "Возможное пересечение броней", room: current.room.number, guest: `${current.guest.fullName} / ${other.guest.fullName}`, href: `/dashboard/reservations/${current.id}` });
   }
   const depositItems = depositFollowups.map((row) => ({ label: locale === "kk" ? "Қонақ кеткен соң депозит қайтарылмады" : "Депозит не возвращён после выезда", room: row.room.number, guest: row.guest.fullName, href: `/dashboard/reservations/${row.id}` }));
   const attentionItems = [
@@ -73,7 +75,7 @@ export default async function DashboardPage() {
     ...unusualArrivals,
     ...maintenanceItems,
     ...cleaningItems,
-    ...(waitingArrivals ? [{ label: locale === "kk" ? `${waitingArrivals} қонақ қоныстануды күтуде` : `${waitingArrivals} ожидают заселения`, room: mobile.dashboard.arrivals, guest: mobile.dashboard.today, href: "/dashboard/reservations" }] : []),
+    ...(waitingArrivals ? [{ label: locale === "kk" ? `${waitingArrivals} қонақ қоныстануды күтуде` : `${waitingArrivals} ожидают заселения`, room: mobile.dashboard.arrivals, guest: mobile.dashboard.today, href: "/dashboard/reservations?period=arrivals" }] : []),
   ].slice(0, 12);
 
   return <div className="space-y-5">
@@ -81,8 +83,12 @@ export default async function DashboardPage() {
       locale={locale}
       dateLabel={formatMediumDate(day)}
       revenue={stats.revenueMonthToDate}
+      revenueNights={stats.revenueNightsMonthToDate}
+      revenuePeriodLabel={revenuePeriodLabel}
       occupancyPercent={stats.occupancyTonight ? Math.round(stats.occupancyTonight * 100) : 0}
-      activeReservations={stats.activeReservations}
+      occupiedToday={stats.occupiedTonight}
+      totalRooms={stats.totalRooms}
+      revenueToday={stats.revenueByDay.find((point) => point.date.getTime() === day.getTime())?.value ?? 0}
       arrivals={stats.arrivalsToday.map((item) => ({ id: item.id, guest: item.guest.fullName, room: item.room.number, time: item.checkInTime }))}
       departures={stats.departuresToday.map((item) => ({ id: item.id, guest: item.guest.fullName, room: item.room.number, time: item.checkOutTime }))}
       cleaningCount={stats.roomsCleaning}
@@ -110,7 +116,7 @@ export default async function DashboardPage() {
       <MetricCard
         label="Выручка с начала месяца"
         value={formatMoney(stats.revenueMonthToDate)}
-        sub="по действующим и завершённым броням"
+        sub={`${revenuePeriodLabel} · ${stats.revenueNightsMonthToDate} ноч. · как в отчётах`}
         visual={<MetricVisual icon={WalletCards} caption="за месяц" />}
       />
       <MetricCard

@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Mail, MessageCircle, Phone, Plus, Search, UserRound } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, Mail, MessageCircle, Pencil, Phone, Plus, Search, StickyNote, UserRound } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -33,7 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/page-header";
 import { ChannelLabel, ReservationStatusBadge } from "@/components/shared/status-badge";
-import { addGuestNoteAction, upsertGuestAction } from "@/server/actions/guests";
+import { runOfflineAction } from "@/lib/offline/actions";
 import { guestDisplayId, reservationDisplayId, type ReservationVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
@@ -78,11 +79,12 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null, lo
     if (!selectedId) return;
     setSavingNote(true);
     try {
-      const result = await addGuestNoteAction({ guestId: selectedId, content: noteText });
+      const result = await runOfflineAction("guest.note", "Заметка о госте", { guestId: selectedId, content: noteText });
       if (!result.ok) return toast.error(result.error);
       setNoteText("");
       setNoteOpen(false);
       toast.success(result.message);
+      if (result.queued) return;
       router.refresh();
     } finally { setSavingNote(false); }
   }
@@ -187,80 +189,79 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null, lo
 
       {/* Details modal — full-screen drawer on mobile via responsive Dialog */}
       <Dialog open={Boolean(selected)} onOpenChange={(o) => !o && setSelectedId(null)}>
-        <DialogContent className="flex max-h-[90dvh] flex-col gap-3 overflow-hidden p-4 max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:p-4 max-sm:pt-[max(env(safe-area-inset-top),16px)] max-sm:pb-[max(env(safe-area-inset-bottom),12px)] sm:max-w-xl sm:p-6">
+        <DialogContent className="flex max-h-[90dvh] flex-col gap-3 overflow-hidden p-4 max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:bg-[#f8f8f4] max-sm:p-4 max-sm:pt-[max(env(safe-area-inset-top),16px)] max-sm:pb-0 max-sm:ring-0 sm:max-w-xl sm:p-6">
           {selected && (
             <>
-              <DialogHeader>
+              <DialogHeader className="max-sm:text-left">
                 <DialogTitle className="flex items-center gap-3">
-                  <span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                    {selected.fullName.split(" ").map((p) => p[0]).slice(0, 2).join("")}
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#ddf2ea] text-sm font-extrabold text-[#14846b] sm:size-9 sm:bg-primary/10 sm:text-primary">
+                    {initials(selected.fullName)}
                   </span>
-                  {selected.fullName}
+                  <span className="min-w-0 truncate max-sm:text-xl max-sm:font-extrabold max-sm:tracking-tight max-sm:text-[#17221e]">{selected.fullName}</span>
                 </DialogTitle>
-                <DialogDescription>
-                  {guestDisplayId(selected.sequenceNumber)} · {t.guests.profile.subtitle}
+                <DialogDescription className="max-sm:text-[#8b9189]">
+                  {guestDisplayId(selected.sequenceNumber)} · {kk ? `${history.length} сапар` : tripsLabel(history.length)}
+                  {selected.reservationCount > 1 ? <b className="ml-1 text-[#07866b]">· {kk ? "Тұрақты қонақ" : "Постоянный гость"}</b> : null}
                 </DialogDescription>
               </DialogHeader>
 
               {selected.phone ? <div className="hidden flex-wrap gap-2 sm:flex"><Button asChild variant="outline" size="sm"><a href={`tel:${selected.phone}`}><Phone className="size-4" />{kk ? "Қоңырау шалу" : "Позвонить"}</a></Button>{selectedWhatsApp ? <Button asChild size="sm" className="bg-[#25D366] text-white hover:bg-[#1fb75a]"><a href={selectedWhatsApp} target="_blank" rel="noopener noreferrer"><MessageCircle className="size-4" />WhatsApp</a></Button> : null}</div> : null}
 
-              <div className="space-y-2 rounded-2xl border border-[#e7e9e1] bg-gradient-to-br from-[#f6faf8] to-white p-4 shadow-sm sm:hidden">
-                <p className="text-sm font-medium">{selected.phone ?? "Телефон не указан"}</p>
-                {selected.phone ? <div className="grid grid-cols-2 gap-2"><Button asChild variant="outline" size="sm" className="h-10"><a href={`tel:${selected.phone}`}><Phone className="size-4" />{kk ? "Қоңырау" : "Позвонить"}</a></Button>{selectedWhatsApp ? <Button asChild variant="outline" size="sm" className="h-10 border-[#25D366]/40 text-[#158542]"><a href={selectedWhatsApp} target="_blank" rel="noopener noreferrer"><MessageCircle className="size-4" />WhatsApp</a></Button> : null}</div> : null}
-                <div className="flex flex-wrap items-center gap-2 text-xs"><span className="text-muted-foreground">Последнее проживание:</span>{history[0] ? <ReservationStatusBadge status={history[0].status} /> : <span>Нет бронирований</span>}</div>
-                {selected.notes ? <p className="line-clamp-2 text-xs text-muted-foreground">{selected.notes}</p> : null}
-                <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>Редактировать гостя</Button>
+              <div className="grid grid-cols-3 gap-2 sm:hidden">
+                <a href={selected.phone ? `tel:${selected.phone}` : undefined} aria-disabled={!selected.phone} className="sh-mobile-card flex min-h-14 flex-col items-center justify-center gap-1 text-[9px] font-bold text-[#16826a] aria-disabled:pointer-events-none aria-disabled:opacity-45"><Phone className="size-4" />{kk ? "Қоңырау" : "Позвонить"}</a>
+                <a href={selectedWhatsApp ?? undefined} target="_blank" rel="noopener noreferrer" aria-disabled={!selectedWhatsApp} className="sh-mobile-card flex min-h-14 flex-col items-center justify-center gap-1 text-[9px] font-bold text-[#16826a] aria-disabled:pointer-events-none aria-disabled:opacity-45"><MessageCircle className="size-4" />WhatsApp</a>
+                <button type="button" onClick={() => setEditOpen(true)} className="sh-mobile-card flex min-h-14 flex-col items-center justify-center gap-1 text-[9px] font-bold text-[#16826a]"><Pencil className="size-4" />{kk ? "Өзгерту" : "Изменить"}</button>
               </div>
 
               <Tabs defaultValue="stays" className="min-h-0 flex-1 overflow-hidden" key={selected.id}>
-                <TabsList className="grid w-full shrink-0 grid-cols-3"><TabsTrigger value="stays">Проживания</TabsTrigger><TabsTrigger value="notes">Заметки</TabsTrigger><TabsTrigger value="details">Данные</TabsTrigger></TabsList>
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-3">
+                <TabsList className="grid w-full shrink-0 grid-cols-3 max-sm:h-11 max-sm:rounded-xl max-sm:bg-[#eceee6] max-sm:p-1 max-sm:[&>button]:rounded-lg max-sm:[&>button]:text-xs max-sm:[&>button]:font-bold max-sm:[&>button[data-state=active]]:bg-white max-sm:[&>button[data-state=active]]:text-[#07866b]"><TabsTrigger value="stays">{kk ? "Тұрулар" : "Проживания"}</TabsTrigger><TabsTrigger value="notes">{kk ? "Ескертпелер" : "Заметки"}</TabsTrigger><TabsTrigger value="details">{kk ? "Деректер" : "Данные"}</TabsTrigger></TabsList>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-3 max-sm:pb-4">
                 <TabsContent value="details" className="space-y-3">
 
-              <dl className="grid overflow-hidden rounded-xl border bg-secondary/15 sm:grid-cols-2">
-                <div className="min-w-0 border-b p-3.5 sm:border-r">
+              <dl className="grid overflow-hidden rounded-xl border bg-secondary/15 max-sm:rounded-2xl max-sm:border max-sm:border-[#e2e4da] max-sm:bg-white max-sm:shadow-[0_5px_18px_rgb(38_61_51/0.045)] max-sm:border-0 max-sm:bg-white sm:grid-cols-2">
+                <div className="min-w-0 border-b p-3.5 max-sm:border-[#f0f1eb] sm:border-r">
                   <dt className="flex items-center gap-2 text-xs text-muted-foreground"><Mail className="size-3.5" /> Email</dt>
-                  <dd className="mt-1 truncate text-sm font-medium">{selected.email ?? "—"}</dd>
+                  <dd className="mt-1 truncate text-sm font-medium max-sm:font-bold max-sm:text-[#303d36]">{selected.email ?? "—"}</dd>
                 </div>
-                <div className="min-w-0 border-b p-3.5">
-                  <dt className="flex items-center gap-2 text-xs text-muted-foreground"><Phone className="size-3.5" /> Телефон</dt>
-                  <dd className="mt-1 truncate text-sm font-medium">{selected.phone ?? "—"}</dd>
+                <div className="min-w-0 border-b p-3.5 max-sm:border-[#f0f1eb]">
+                  <dt className="flex items-center gap-2 text-xs text-muted-foreground"><Phone className="size-3.5" /> {kk ? "Телефон" : "Телефон"}</dt>
+                  <dd className="mt-1 truncate text-sm font-medium max-sm:font-bold max-sm:text-[#303d36]">{selected.phone ?? "—"}</dd>
                 </div>
-                <div className="p-3.5 sm:border-r">
+                <div className="p-3.5 max-sm:border-b max-sm:border-[#f0f1eb] sm:border-r">
                   <dt className="text-xs text-muted-foreground">{t.guests.profile.country}</dt>
-                  <dd className="mt-1 text-sm font-medium">{selected.country ?? "—"}</dd>
+                  <dd className="mt-1 text-sm font-medium max-sm:font-bold max-sm:text-[#303d36]">{selected.country ?? "—"}</dd>
                 </div>
                 <div className="p-3.5">
                   <dt className="text-xs text-muted-foreground">{t.guests.profile.totalStays}</dt>
-                  <dd className="mt-1 text-sm font-medium tabular-nums">{history.length}</dd>
+                  <dd className="mt-1 text-sm font-medium tabular-nums max-sm:font-bold max-sm:text-[#303d36]">{history.length}</dd>
                 </div>
               </dl>
 
               {selected.notes ? (
-                <div className="rounded-lg border border-dashed bg-secondary/30 p-3 text-sm text-muted-foreground">
+                <div className="rounded-lg border border-dashed bg-secondary/30 p-3 text-sm text-muted-foreground max-sm:rounded-2xl max-sm:border-[#cfe5dc] max-sm:bg-[#e7f4ef] max-sm:text-[#19755f]">
                   “{selected.notes}”
                 </div>
               ) : null}
 
                 </TabsContent>
                 <TabsContent value="notes"><section className="space-y-2">
-                <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">Внутренние заметки</h3><Button type="button" size="sm" variant="outline" onClick={() => setNoteOpen((value) => !value)}><Plus className="size-3.5" /> Добавить заметку</Button></div>
-                {noteOpen ? <div className="space-y-2"><Textarea aria-label="Новая заметка о госте" value={noteText} onChange={(event) => setNoteText(event.target.value)} maxLength={2000} rows={2} placeholder="Видно только сотрудникам отеля" /><Button type="button" size="sm" disabled={savingNote || !noteText.trim()} onClick={addNote}>Сохранить заметку</Button></div> : null}
-                {selected.internalNotes.length ? <><ul className="space-y-2">{selected.internalNotes.slice(0, showAllNotes ? undefined : 3).map((note) => <li key={note.id} className="rounded-lg bg-secondary/40 p-2.5 text-sm"><p className="whitespace-pre-wrap">{note.content}</p><p className="mt-1 text-xs text-muted-foreground">{note.authorName} · {new Date(note.createdAt).toLocaleDateString("ru-RU")}</p></li>)}</ul>{selected.internalNotes.length > 3 ? <Button size="sm" variant="ghost" onClick={() => setShowAllNotes((value) => !value)}>{showAllNotes ? "Свернуть" : `Показать все · ${selected.internalNotes.length}`}</Button> : null}</> : <p className="text-xs text-muted-foreground">Заметок пока нет.</p>}
+                <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold max-sm:text-[0.92rem] max-sm:font-extrabold max-sm:text-[#26352f]">{kk ? "Ішкі ескертпелер" : "Внутренние заметки"}</h3><Button type="button" size="sm" variant="outline" className="max-sm:rounded-full max-sm:border-[#07866b]/30 max-sm:text-[#07866b]" onClick={() => setNoteOpen((value) => !value)}><Plus className="size-3.5" /> {kk ? "Қосу" : "Добавить заметку"}</Button></div>
+                {noteOpen ? <div className="space-y-2"><Textarea aria-label={kk ? "Қонақ туралы жаңа ескертпе" : "Новая заметка о госте"} value={noteText} onChange={(event) => setNoteText(event.target.value)} maxLength={2000} rows={2} className="max-sm:rounded-2xl max-sm:border max-sm:border-[#e2e4da] max-sm:bg-white max-sm:shadow-[0_5px_18px_rgb(38_61_51/0.045)] max-sm:border-0 max-sm:text-sm" placeholder={kk ? "Тек қызметкерлерге көрінеді" : "Видно только сотрудникам"} /><Button type="button" size="sm" className="max-sm:h-11 max-sm:w-full max-sm:rounded-xl max-sm:bg-[#07866b] max-sm:font-bold" disabled={savingNote || !noteText.trim()} onClick={addNote}>{kk ? "Ескертпені сақтау" : "Сохранить заметку"}</Button></div> : null}
+                {selected.internalNotes.length ? <><ul className="space-y-2">{selected.internalNotes.slice(0, showAllNotes ? undefined : 3).map((note) => <li key={note.id} className="rounded-lg bg-secondary/40 p-2.5 text-sm max-sm:rounded-2xl max-sm:border max-sm:border-[#e2e4da] max-sm:bg-white max-sm:shadow-[0_5px_18px_rgb(38_61_51/0.045)] max-sm:p-3.5"><p className="whitespace-pre-wrap max-sm:text-[#303d36]">{note.content}</p><p className="mt-1 text-xs text-muted-foreground">{note.authorName} · {new Date(note.createdAt).toLocaleDateString("ru-RU")}</p></li>)}</ul>{selected.internalNotes.length > 3 ? <Button size="sm" variant="ghost" onClick={() => setShowAllNotes((value) => !value)}>{showAllNotes ? (kk ? "Жию" : "Свернуть") : `${kk ? "Барлығын көрсету" : "Показать все"} · ${selected.internalNotes.length}`}</Button> : null}</> : <p className="text-xs text-muted-foreground max-sm:rounded-2xl max-sm:border max-sm:border-[#e2e4da] max-sm:bg-white max-sm:shadow-[0_5px_18px_rgb(38_61_51/0.045)] max-sm:py-6 max-sm:text-center">{kk ? "Әзірге ескертпе жоқ." : "Заметок пока нет."}</p>}
               </section></TabsContent>
 
               <TabsContent value="stays"><div>
-                <h3 className="mb-2 text-sm font-semibold">{t.guests.profile.historyTitle}</h3>
+                <h3 className="mb-2 text-sm font-semibold max-sm:text-[0.92rem] max-sm:font-extrabold max-sm:text-[#26352f]">{kk ? "Сапарлар тарихы" : t.guests.profile.historyTitle}</h3>
                 {history.length === 0 ? (
-                  <p className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
+                  <p className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground max-sm:rounded-2xl max-sm:border max-sm:border-[#e2e4da] max-sm:bg-white max-sm:shadow-[0_5px_18px_rgb(38_61_51/0.045)] max-sm:border-solid">
                     {t.guests.profile.historyEmpty}
                   </p>
                 ) : (
-                  <ul className="divide-y overflow-hidden rounded-xl border">
+                  <ul className="divide-y overflow-hidden rounded-xl border max-sm:space-y-2 max-sm:divide-y-0 max-sm:rounded-none max-sm:border-0">
                     {history.map((r) => (
-                      <li key={r.id} className="space-y-2 px-3.5 py-3 text-sm">
+                      <li key={r.id} className="space-y-2 px-3.5 py-3 text-sm max-sm:rounded-2xl max-sm:border max-sm:border-[#e2e4da] max-sm:bg-white max-sm:shadow-[0_5px_18px_rgb(38_61_51/0.045)]">
                         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                          <span className="font-medium">{t.guests.profile.roomLabel(r.roomNumber)}</span>
+                          <span className="font-medium max-sm:font-extrabold max-sm:text-[#2d3a33]">{t.guests.profile.roomLabel(r.roomNumber)}</span>
                           <span className="whitespace-nowrap text-xs text-muted-foreground">
                             {formatMediumDate(new Date(`${r.checkIn}T00:00:00Z`))} → {formatMediumDate(new Date(`${r.checkOut}T00:00:00Z`))}
                           </span>
@@ -268,9 +269,11 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null, lo
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <span className="font-mono text-muted-foreground">{reservationDisplayId(r.sequenceNumber)}</span>
                           <ChannelLabel channel={r.channel} />
-                          <span className="ml-auto font-medium tabular-nums">{formatMoney(r.totalAmount)}</span>
+                          <span className="ml-auto font-medium tabular-nums max-sm:font-extrabold max-sm:text-[#2f3b35]">{formatMoney(r.totalAmount)}</span>
                           <ReservationStatusBadge status={r.status} />
                         </div>
+                        {r.notes ? <p className="flex items-start gap-1.5 rounded-lg bg-[#e7f4ef] px-2.5 py-2 text-xs text-[#19755f]"><StickyNote className="mt-0.5 size-3.5 shrink-0" /><span className="whitespace-pre-wrap">{r.notes}</span></p> : null}
+                        <Link href={`/dashboard/reservations/${r.id}`} className="hidden items-center gap-0.5 text-[11px] font-bold text-[#07866b] max-sm:inline-flex">{kk ? "Броньды ашу" : "Открыть бронь"}<ChevronRight className="size-3.5" /></Link>
                       </li>
                     ))}
                   </ul>
@@ -285,20 +288,36 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null, lo
                 </Button>
                 <Button onClick={() => setSelectedId(null)}>{t.common.close}</Button>
               </DialogFooter>
+              <div className="-mx-4 grid grid-cols-2 gap-2 border-t border-[#e6e8df] bg-white/95 px-4 pt-3 pb-[max(env(safe-area-inset-bottom),12px)] sm:hidden">
+                <button type="button" onClick={() => setSelectedId(null)} className="sh-mobile-card flex min-h-12 items-center justify-center text-sm font-bold text-[#536059]">{t.common.close}</button>
+                <button type="button" onClick={() => setEditOpen(true)} className="sh-mobile-primary flex min-h-12 items-center justify-center gap-2"><Pencil className="size-4" />{kk ? "Өзгерту" : "Редактировать"}</button>
+              </div>
 
               <GuestFormSheet
                 guest={selected}
                 open={editOpen}
                 onOpenChange={(o) => setEditOpen(o)}
                 onSaved={() => setSelectedId(null)}
+                locale={locale}
               />
             </>
           )}
         </DialogContent>
       </Dialog>
-      <GuestFormSheet guest={null} open={createOpen} onOpenChange={setCreateOpen} onSaved={() => undefined} />
+      <GuestFormSheet guest={null} open={createOpen} onOpenChange={setCreateOpen} onSaved={() => undefined} locale={locale} />
     </div>
   );
+}
+
+function tripsLabel(count: number) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  const word = mod10 === 1 && mod100 !== 11 ? "поездка" : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? "поездки" : "поездок";
+  return `${count} ${word}`;
+}
+
+function initials(fullName: string) {
+  return fullName.split(" ").filter(Boolean).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
 }
 
 function GuestFormSheet({
@@ -306,24 +325,29 @@ function GuestFormSheet({
   open,
   onOpenChange,
   onSaved,
+  locale = "ru",
 }: {
   guest: GuestRow | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSaved: () => void;
+  locale?: AppLocale;
 }) {
   const router = useRouter();
+  const kk = locale === "kk";
   const [fullName, setFullName] = useState(guest?.fullName ?? "");
   const [email, setEmail] = useState(guest?.email ?? "");
   const [phone, setPhone] = useState(guest?.phone ?? "");
   const [country, setCountry] = useState(guest?.country ?? "");
   const [notes, setNotes] = useState(guest?.notes ?? "");
   const [saving, setSaving] = useState(false);
+  const fieldClass = "max-sm:h-12 max-sm:rounded-xl max-sm:border-[#e2e4da] max-sm:bg-white max-sm:px-3 max-sm:text-sm max-sm:shadow-none max-sm:focus-visible:border-[#07866b] max-sm:focus-visible:ring-[#07866b]/15";
+  const labelClass = "max-sm:text-xs max-sm:font-bold max-sm:text-[#4b5650]";
 
   async function save() {
     setSaving(true);
     try {
-      const result = await upsertGuestAction({
+      const result = await runOfflineAction("guest.upsert", `${guest ? "Изменение гостя" : "Новый гость"} · ${fullName}`, {
         id: guest?.id,
         fullName,
         email,
@@ -337,6 +361,7 @@ function GuestFormSheet({
       }
       toast.success(result.message);
       onOpenChange(false);
+      if (result.queued) return;
       onSaved();
       if (!guest) {
         setFullName("");
@@ -353,37 +378,38 @@ function GuestFormSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>{guest ? t.guests.editForm.title : "Новый гость"}</SheetTitle>
+      <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto max-sm:data-[side=right]:w-full max-sm:data-[side=right]:max-w-none max-sm:bg-[#f8f8f4] max-sm:pt-[max(env(safe-area-inset-top),8px)] sm:max-w-md">
+        <SheetHeader className="max-sm:pb-2">
+          <SheetTitle className="max-sm:text-xl max-sm:font-extrabold max-sm:tracking-tight max-sm:text-[#17221e]">{guest ? (kk ? "Қонақты өзгерту" : t.guests.editForm.title) : (kk ? "Жаңа қонақ" : "Новый гость")}</SheetTitle>
+          <p className="hidden text-xs text-[#8b9189] max-sm:block">{guest ? guestDisplayId(guest.sequenceNumber) : (kk ? "Карточка қонақтар базасында сақталады" : "Карточка сохранится в базе гостей")}</p>
         </SheetHeader>
-        <div className="space-y-4 overflow-y-auto px-4 pb-6">
+        <div className="flex flex-1 flex-col space-y-4 overflow-y-auto px-4 pb-6">
           <div className="space-y-1.5">
-            <Label htmlFor="guest-name">{t.guests.editForm.fullName}</Label>
-            <Input id="guest-name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+            <Label htmlFor="guest-name" className={labelClass}>{t.guests.editForm.fullName}</Label>
+            <Input id="guest-name" className={fieldClass} value={fullName} onChange={(e) => setFullName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="guest-email">{t.dashboard.table.email}</Label>
-            <Input id="guest-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Label htmlFor="guest-phone" className={labelClass}>{t.dashboard.table.phone}</Label>
+            <Input id="guest-phone" className={fieldClass} inputMode="tel" placeholder="+7 700 000 00 00" value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="guest-phone">{t.dashboard.table.phone}</Label>
-            <Input id="guest-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <Label htmlFor="guest-email" className={labelClass}>{t.dashboard.table.email}</Label>
+            <Input id="guest-email" className={fieldClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="guest-country">{t.guests.editForm.country}</Label>
-            <Input id="guest-country" value={country} onChange={(e) => setCountry(e.target.value)} />
+            <Label htmlFor="guest-country" className={labelClass}>{t.guests.editForm.country}</Label>
+            <Input id="guest-country" className={fieldClass} value={country} onChange={(e) => setCountry(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="guest-notes">{t.guests.editForm.notes}</Label>
-            <Textarea id="guest-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <Label htmlFor="guest-notes" className={labelClass}>{t.guests.editForm.notes}</Label>
+            <Textarea id="guest-notes" className="max-sm:rounded-xl max-sm:border-[#e2e4da] max-sm:bg-white max-sm:text-sm max-sm:shadow-none max-sm:focus-visible:border-[#07866b] max-sm:focus-visible:ring-[#07866b]/15" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <div className="flex justify-end gap-2 pt-2 max-sm:mt-auto max-sm:grid max-sm:grid-cols-[0.8fr_1.2fr] max-sm:pb-[max(env(safe-area-inset-bottom),4px)]">
+            <Button variant="outline" className="max-sm:h-12 max-sm:rounded-xl max-sm:font-bold" onClick={() => onOpenChange(false)}>
               {t.common.cancel}
             </Button>
-            <Button onClick={save} disabled={saving || !fullName.trim()}>
-              {guest ? t.guests.editForm.saveGuest : "Добавить гостя"}
+            <Button className="max-sm:h-12 max-sm:rounded-xl max-sm:bg-[#07866b] max-sm:font-bold" onClick={save} disabled={saving || !fullName.trim()}>
+              {guest ? (kk ? "Сақтау" : t.guests.editForm.saveGuest) : (kk ? "Қонақ қосу" : "Добавить гостя")}
             </Button>
           </div>
         </div>

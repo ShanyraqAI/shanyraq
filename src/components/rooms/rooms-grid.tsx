@@ -25,7 +25,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/page-header";
 import { RoomStatusBadge } from "@/components/shared/status-badge";
-import { deleteRoomAction, setRoomStatusAction, upsertRoomAction } from "@/server/actions/rooms";
+import { deleteRoomAction, upsertRoomAction } from "@/server/actions/rooms";
+import { runOfflineAction } from "@/lib/offline/actions";
 import { ROOM_STATUSES, type RoomStatus } from "@/lib/constants";
 import type { RoomVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
@@ -103,9 +104,10 @@ export function RoomsGrid({
   }
 
   async function changeStatus(room: RoomVM, status: RoomStatus) {
-    const result = await setRoomStatusAction({ roomId: room.id, status });
+    const result = await runOfflineAction("room.status", `Статус · ${room.number}`, { roomId: room.id, status });
     if (!result.ok) return toast.error(result.error);
     toast.success(result.message);
+    if (result.queued) return;
     router.refresh();
   }
 

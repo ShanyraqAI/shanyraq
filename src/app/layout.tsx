@@ -1,10 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { Toaster } from "@/components/ui/sonner";
+import { ClarityAnalytics } from "@/components/analytics/clarity";
 import { PwaRegistration } from "@/components/pwa/pwa-registration";
+import { getSiteUrl } from "@/lib/site-url";
 
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: getSiteUrl(),
   title: {
     default: "Shanyraq Mobile",
     template: "%s · Shanyraq",
@@ -19,6 +22,10 @@ export const metadata: Metadata = {
     title: "Shanyraq",
   },
   formatDetection: { telephone: false },
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION || undefined,
+    yandex: process.env.YANDEX_VERIFICATION || undefined,
+  },
 };
 
 export const viewport: Viewport = {
@@ -40,6 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         }}
       >
         {children}
+        <ClarityAnalytics />
         <PwaRegistration enabled={process.env.NODE_ENV === "production"} />
         <Toaster richColors position="top-right" />
       </body>

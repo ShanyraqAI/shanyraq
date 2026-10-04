@@ -29,7 +29,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { ReservationStatusBadge, ChannelLabel } from "@/components/shared/status-badge";
 import { ReservationFormDialog } from "./reservation-form-dialog";
-import { setReservationStatusAction, cancelReservationAction } from "@/server/actions/reservations";
+import { runOfflineAction } from "@/lib/offline/actions";
 import { reservationDisplayId, type GuestVM, type RatePlanVM, type ReservationVM, type RoomVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
@@ -78,12 +78,12 @@ export function ReservationDetailsDialog({
   async function changeStatus(status: string) {
     setBusy(status);
     try {
-      const result = await setReservationStatusAction({ id: r.id, status });
+      const result = await runOfflineAction("reservation.status", `Статус брони · ${r.guestName}`, { id: r.id, status });
       if (!result.ok) toast.error(result.error);
       else {
         toast.success(result.message);
         onOpenChange(false);
-        router.refresh();
+        if (!result.queued) router.refresh();
       }
     } finally {
       setBusy(null);
@@ -94,12 +94,12 @@ export function ReservationDetailsDialog({
     if (!window.confirm(t.reservations.details.cancelConfirm(r.guestName))) return;
     setBusy("CANCELLED");
     try {
-      const result = await cancelReservationAction(r.id);
+      const result = await runOfflineAction("reservation.cancel", `Отмена брони · ${r.guestName}`, r.id);
       if (!result.ok) toast.error(result.error);
       else {
         toast.success(result.message);
         onOpenChange(false);
-        router.refresh();
+        if (!result.queued) router.refresh();
       }
     } finally {
       setBusy(null);

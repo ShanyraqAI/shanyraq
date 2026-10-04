@@ -15,6 +15,7 @@ import { db, getCurrentHotelId } from "@/lib/db";
 import { EMPTY_DOCUMENT_PROFILE, getDocumentProfile } from "@/lib/documents/service";
 import { getRequestLocale } from "@/lib/locale-server";
 import { signOutAction } from "@/server/actions/auth";
+import { SignOutForm } from "@/components/pwa/sign-out-form";
 import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
@@ -81,7 +82,7 @@ function MobileSettings({ locale, hotelName, roomCount, memberCount }: { locale:
       <Row href="/dashboard/settings?section=notifications" icon={BellRing} title={kk ? "Хабарландырулар" : "Уведомления"} subtitle="Push, WhatsApp, email" />
     </Group>
     <Group title={kk ? "Аккаунт" : "Аккаунт"}><Row href="/dashboard/settings?section=profile" icon={UserRound} title={kk ? "Жеке профиль" : "Личный профиль"} subtitle={kk ? "Аты-жөні, телефон, фото" : "Имя, телефон, фото"} /></Group>
-    <form action={signOutAction}><button type="submit" className="flex w-full items-center justify-center gap-2 py-2 text-sm font-semibold text-destructive"><LogOut className="size-4" />{kk ? "Аккаунттан шығу" : "Выйти из аккаунта"}</button></form>
+    <SignOutForm action={signOutAction} locale={locale}><button type="submit" className="flex w-full items-center justify-center gap-2 py-2 text-sm font-semibold text-destructive"><LogOut className="size-4" />{kk ? "Аккаунттан шығу" : "Выйти из аккаунта"}</button></SignOutForm>
   </div>;
 }
 

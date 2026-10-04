@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Check, ChevronLeft, Loader2, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { createReservationAction } from "@/server/actions/reservations";
+import { runOfflineAction } from "@/lib/offline/actions";
 import type { AppLocale } from "@/lib/locale";
 import type { GuestVM, RatePlanVM, RoomVM } from "@/lib/types";
 import { cn, formatMoney } from "@/lib/utils";
@@ -31,13 +31,15 @@ export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, def
   const [step, setStep] = useState(1);
   const [checkIn, setCheckIn] = useState(initialCheckIn ?? todayISO);
   const [checkOut, setCheckOut] = useState(() => initialCheckOut && initialCheckOut > (initialCheckIn ?? todayISO) ? initialCheckOut : shiftDate(initialCheckIn ?? todayISO, 2));
-  const [adults, setAdults] = useState(2);
+  // A unit preselected from the calendar must not be filtered out by the default guest count.
+  const [adults, setAdults] = useState(() => { const capacity = rooms.find((room) => room.id === initialRoomId)?.capacity; return capacity ? Math.min(2, capacity) : 2; });
   const [children, setChildren] = useState(0);
   const [roomId, setRoomId] = useState(initialRoomId ?? "");
   const [source, setSource] = useState("direct");
-  const [guestId, setGuestId] = useState(guests[0]?.id ?? "new");
+  const [guestId, setGuestId] = useState("new");
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
+  const [notes, setNotes] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const [depositCollected, setDepositCollected] = useState(false);
   // null = price follows the rate plan; a string = host-entered total.
@@ -45,6 +47,8 @@ export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, def
 
   const availableRooms = useMemo(() => rooms.filter((room) => (room.capacity === undefined || room.capacity >= adults + children) && !busyStays.some((stay) => stay.roomId === room.id && stay.checkIn < checkOut && stay.checkOut > checkIn)), [adults, busyStays, checkIn, checkOut, children, rooms]);
   const selectedRoom = availableRooms.find((room) => room.id === roomId);
+  const preselectedRoom = rooms.find((room) => room.id === initialRoomId);
+  const preselectedUnavailable = Boolean(preselectedRoom && !availableRooms.some((room) => room.id === preselectedRoom.id));
   const selectedPlan = ratePlans.find((plan) => plan.roomTypeId === selectedRoom?.roomTypeId);
   const nights = Math.max(1, daysBetween(checkIn, checkOut));
   const estimate = (selectedPlan?.basePrice ?? selectedRoom?.basePrice ?? 0) * nights;
@@ -52,20 +56,25 @@ export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, def
   const manualPriceValid = manualTotal === null || (manualPrice?.trim() !== "" && Number.isFinite(manualTotal) && manualTotal >= 0);
   const useManualPrice = !selectedPlan || (manualTotal !== null && manualTotal !== estimate);
   const total = manualTotal ?? estimate;
+  const perNight = Number.isFinite(total) ? Math.round(total / nights) : 0;
   const validDates = Boolean(checkIn && checkOut && checkOut > checkIn);
   const guestReady = guestId !== "new" || guestName.trim().length >= 2;
   const stepTitle = step === 1 ? (kk ? "Күндерді таңдаңыз" : "Выберите даты") : step === 2 ? (kk ? "Бос пәтер" : "Свободный объект") : (kk ? "Қонақ және растау" : "Гость и подтверждение");
+  const nightsLabel = kk ? "түн" : "ноч.";
+  const perNightLabel = kk ? "/ түн" : "/ ночь";
+
+  useEffect(() => {
+    if (step === 2 && roomId) document.getElementById(`mobile-room-${roomId}`)?.scrollIntoView({ block: "center" });
+  }, [step, roomId]);
 
   function updateCheckIn(value: string) {
     setCheckIn(value);
     if (!checkOut || checkOut <= value) setCheckOut(shiftDate(value, 1));
-    setRoomId("");
     setManualPrice(null);
   }
 
   function updateCheckOut(value: string) {
     setCheckOut(value);
-    setRoomId("");
     setManualPrice(null);
   }
 
@@ -77,6 +86,7 @@ export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, def
   function continueFlow() {
     if (step === 1) {
       if (!validDates) return;
+      // Keep the unit chosen on the calendar whenever it is still free for the new dates.
       setRoomId((current) => availableRooms.some((room) => room.id === current) ? current : availableRooms[0]?.id ?? "");
       setStep(2);
       return;
@@ -87,7 +97,8 @@ export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, def
   function submit() {
     if (!selectedRoom || !guestReady || !manualPriceValid) return;
     startTransition(async () => {
-      const result = await createReservationAction({
+      const label = `${kk ? "Жаңа бронь" : "Новая бронь"} · ${selectedRoom.number} · ${checkIn} → ${checkOut}`;
+      const result = await runOfflineAction("reservation.create", label, {
         guestId: guestId === "new" ? undefined : guestId,
         guestName: guestId === "new" ? guestName.trim() : undefined,
         guestPhone: guestId === "new" ? guestPhone.trim() || undefined : undefined,
@@ -102,10 +113,12 @@ export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, def
         pricingMode: useManualPrice ? "MANUAL" : "RATE_PLAN",
         manualTotalAmount: useManualPrice ? total : undefined,
         sourceChannel: source,
+        notes: notes.trim() || undefined,
         depositAmount: Number(depositAmount) || 0,
         depositCollected: (Number(depositAmount) || 0) > 0 && depositCollected,
       });
       if (!result.ok) { toast.error(result.error); return; }
+      if (result.queued) { toast.success(result.message); router.push("/dashboard/reservations"); return; }
       const reservationId = result.data?.id;
       if (!reservationId) { toast.error(kk ? "Бронь ашылмады" : "Не удалось открыть бронь"); return; }
       toast.success(kk ? "Бронь жасалды" : "Бронь создана");
@@ -126,23 +139,29 @@ export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, def
       </div> : null}
 
       {step === 2 ? <div className="space-y-4">
-        <div className="rounded-2xl bg-[#e7f4ef] px-4 py-3 text-xs font-semibold text-[#19755f]">{checkIn} → {checkOut} · {nights} {kk ? "түн" : "ноч."} · {availableRooms.length} {kk ? "бос" : "свободно"}</div>
-        <section><h2 className="sh-mobile-section-title mb-2">{kk ? "Бос пәтерлер" : "Свободные квартиры"}</h2>{availableRooms.length ? <div className="space-y-2">{availableRooms.map((room) => { const plan = ratePlans.find((item) => item.roomTypeId === room.roomTypeId); const total = (plan?.basePrice ?? room.basePrice ?? 0) * nights; const active = room.id === roomId; return <button key={room.id} type="button" onClick={() => selectRoom(room.id)} className={cn("sh-mobile-card flex min-h-[66px] w-full items-center gap-3 px-3 text-left", active && "border-[#07866b] bg-[#f2faf7] ring-1 ring-[#07866b]")}><span className={cn("grid size-6 shrink-0 place-items-center rounded-full border border-[#d9ddd5] text-transparent", active && "border-[#07866b] bg-[#07866b] text-white")}><Check className="size-3.5" /></span><span className="min-w-0 flex-1"><span className="block text-xs font-extrabold text-[#303d36]">{room.number}</span><span className="mt-0.5 block truncate text-[9px] text-[#959b94]">{room.roomTypeName} · {room.floor} {kk ? "қабат" : "этаж"} · {kk ? `сыйымдылығы ${room.capacity ?? "—"}` : `до ${room.capacity ?? "—"} гостей`}</span></span><span className="text-[10px] font-extrabold text-[#38453e]">{formatMoney(total)}</span></button>; })}</div> : <div className="sh-mobile-card border-amber-200 bg-amber-50 p-5 text-center text-sm text-amber-900">{kk ? "Күндер мен қонақтар санына сәйкес бос пәтер жоқ. Күндерді немесе қонақтар санын өзгертіңіз." : "Нет свободного объекта для этих дат и числа гостей. Измените даты или количество гостей."}</div>}</section>
+        <div className="rounded-2xl bg-[#e7f4ef] px-4 py-3 text-xs font-semibold text-[#19755f]">
+          <p>{checkIn} → {checkOut} · {nights} {nightsLabel} · {availableRooms.length} {kk ? "бос" : "свободно"}</p>
+          {selectedRoom ? <p className="mt-1 flex items-center gap-1 font-extrabold text-[#07866b]"><Check className="size-3.5" />{kk ? "Таңдалды" : "Выбрана"}: {selectedRoom.number} · {selectedRoom.roomTypeName}</p> : null}
+          {preselectedUnavailable && preselectedRoom ? <p className="mt-1 text-[11px] font-semibold text-amber-800">{kk ? `${preselectedRoom.number} бұл күндерге немесе қонақ санына сәйкес келмейді — басқа пәтерді таңдаңыз.` : `${preselectedRoom.number} недоступна для этих дат или числа гостей — выбрана другая квартира.`}</p> : null}
+        </div>
+        <section><h2 className="sh-mobile-section-title mb-2">{kk ? "Бос пәтерлер" : "Свободные квартиры"}</h2>{availableRooms.length ? <div className="space-y-2">{availableRooms.map((room) => { const plan = ratePlans.find((item) => item.roomTypeId === room.roomTypeId); const nightly = plan?.basePrice ?? room.basePrice ?? 0; const active = room.id === roomId; return <button key={room.id} id={`mobile-room-${room.id}`} type="button" aria-pressed={active} onClick={() => selectRoom(room.id)} className={cn("sh-mobile-card flex min-h-[66px] w-full items-center gap-3 px-3 text-left", active && "border-[#07866b] bg-[#f2faf7] ring-1 ring-[#07866b]")}><span className={cn("grid size-6 shrink-0 place-items-center rounded-full border border-[#d9ddd5] text-transparent", active && "border-[#07866b] bg-[#07866b] text-white")}><Check className="size-3.5" /></span><span className="min-w-0 flex-1"><span className="block text-xs font-extrabold text-[#303d36]">{room.number}</span><span className="mt-0.5 block truncate text-[9px] text-[#959b94]">{room.roomTypeName} · {room.floor} {kk ? "қабат" : "этаж"} · {kk ? `сыйымдылығы ${room.capacity ?? "—"}` : `до ${room.capacity ?? "—"} гостей`}</span></span><span className="text-right"><span className="block text-[10px] font-extrabold text-[#38453e]">{formatMoney(nightly * nights)}</span><span className="block text-[9px] text-[#959b94]">{formatMoney(nightly)} {perNightLabel}</span></span></button>; })}</div> : <div className="sh-mobile-card border-amber-200 bg-amber-50 p-5 text-center text-sm text-amber-900">{kk ? "Күндер мен қонақтар санына сәйкес бос пәтер жоқ. Күндерді немесе қонақтар санын өзгертіңіз." : "Нет свободного объекта для этих дат и числа гостей. Измените даты или количество гостей."}</div>}</section>
         <section><label className="sh-mobile-section-title mb-2 block" htmlFor="mobile-booking-source">{kk ? "Дереккөз" : "Источник"}</label><select id="mobile-booking-source" value={source} onChange={(event) => setSource(event.target.value)} className="sh-mobile-card h-12 w-full px-3 text-xs font-bold text-[#3f4a44]"><option value="direct">{kk ? "Тікелей бронь" : "Прямая бронь"}</option><option value="booking">Booking.com</option><option value="airbnb">Airbnb</option><option value="ostrovok">Ostrovok</option><option value="krisha">Krisha.kz</option></select></section>
       </div> : null}
 
       {step === 3 ? <section className="space-y-4">
         <div><label className="sh-mobile-section-title mb-2 block" htmlFor="mobile-guest">{kk ? "Қонақты таңдаңыз" : "Выберите гостя"}</label><select id="mobile-guest" value={guestId} onChange={(event) => setGuestId(event.target.value)} className="sh-mobile-card h-12 w-full px-3 text-xs font-bold"><option value="new">{kk ? "+ Жаңа қонақ" : "+ Новый гость"}</option>{guests.map((guest) => <option key={guest.id} value={guest.id}>{guest.fullName}</option>)}</select></div>
         {guestId === "new" ? <div className="space-y-3"><label className="block text-xs font-bold text-[#4b5650]">{kk ? "Аты-жөні" : "Имя и фамилия"}<input value={guestName} onChange={(event) => setGuestName(event.target.value)} className="sh-mobile-card mt-1.5 h-12 w-full px-3 font-normal" placeholder={kk ? "Қонақтың аты" : "Имя гостя"} /></label><label className="block text-xs font-bold text-[#4b5650]">{kk ? "Телефон" : "Телефон"}<input value={guestPhone} onChange={(event) => setGuestPhone(event.target.value)} className="sh-mobile-card mt-1.5 h-12 w-full px-3 font-normal" placeholder="+7 700 000 00 00" inputMode="tel" /></label></div> : null}
-        <div className="sh-mobile-card p-4"><p className="text-[10px] font-bold uppercase tracking-wide text-[#939991]">{kk ? "Тұру" : "Проживание"}</p><p className="mt-2 text-sm font-extrabold text-[#2d3a33]">{selectedRoom?.number} · {selectedRoom?.roomTypeName}</p><p className="mt-1 text-xs text-[#858c85]">{checkIn} → {checkOut} · {nights} {kk ? "түн" : "ноч."}</p></div>
+        <div className="sh-mobile-card p-4"><p className="text-[10px] font-bold uppercase tracking-wide text-[#939991]">{kk ? "Тұру" : "Проживание"}</p><p className="mt-2 text-sm font-extrabold text-[#2d3a33]">{selectedRoom?.number} · {selectedRoom?.roomTypeName}</p><p className="mt-1 text-xs text-[#858c85]">{checkIn} → {checkOut} · {nights} {nightsLabel} · {adults + children} {kk ? "қонақ" : "гост."}</p></div>
         <div className="rounded-2xl bg-[#e4f3ee] p-4">
           <div className="flex items-center justify-between gap-2">
             <label htmlFor="mobile-booking-price" className="text-[10px] font-bold text-[#568276]">{kk ? "Тұру құны · ₸" : "Стоимость проживания · ₸"}</label>
             {manualPrice !== null && manualTotal !== estimate ? <button type="button" onClick={() => setManualPrice(null)} className="text-[10px] font-bold text-[#07866b] underline-offset-2 hover:underline">{kk ? "Тариф бойынша" : "Вернуть по тарифу"}</button> : null}
           </div>
           <input id="mobile-booking-price" type="text" inputMode="numeric" value={manualPrice ?? String(estimate)} onChange={(event) => setManualPrice(event.target.value.replace(/[^\d]/g, ""))} onFocus={(event) => event.target.select()} className={cn("mt-2 h-12 w-full rounded-xl border border-[#cfe5dc] bg-white px-3 text-xl font-extrabold text-[#08745f] outline-none focus:border-[#07866b] focus:ring-2 focus:ring-[#07866b]/15", !manualPriceValid && "border-red-300")} />
-          <p className="mt-1.5 text-[10px] text-[#568276]">{useManualPrice && selectedPlan ? (kk ? `Қолмен белгіленді · тариф бойынша ${formatMoney(estimate)}` : `Указана вручную · по тарифу ${formatMoney(estimate)}`) : (kk ? `Тариф бойынша · ${nights} түн. Бағаны өзгерту үшін басыңыз.` : `По тарифу · ${nights} ноч. Нажмите, чтобы изменить цену.`)}</p>
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-white/70 px-3 py-2"><span className="text-[10px] font-bold text-[#568276]">{nights} {nightsLabel} × {formatMoney(perNight)}</span><span className="text-xs font-extrabold text-[#08745f]">{manualPriceValid ? `${formatMoney(perNight)} ${perNightLabel}` : "—"}</span></div>
+          <p className="mt-1.5 text-[10px] text-[#568276]">{useManualPrice && selectedPlan ? (kk ? `Қолмен белгіленді · тариф бойынша ${formatMoney(estimate)}` : `Указана вручную · по тарифу ${formatMoney(estimate)}`) : (kk ? "Тариф бойынша. Жалпы соманы өзгерту үшін басыңыз." : "По тарифу. Нажмите, чтобы изменить общую сумму.")}</p>
         </div>
+        <label className="block"><span className="sh-mobile-section-title mb-2 block">{kk ? "Броньға ескертпе" : "Заметка к брони"}</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={2000} rows={3} className="sh-mobile-card w-full resize-none px-3 py-2.5 text-sm text-[#303d36] outline-none placeholder:text-[#a1a79f] focus:border-[#07866b] focus:ring-2 focus:ring-[#07866b]/15" placeholder={kk ? "Мысалы: кілтті консьержге қалдыру, қонақтан депозит алу…" : "Например: оставить ключ у консьержа, забрать депозит, приготовить детскую кроватку…"} /><span className="mt-1 block text-[10px] text-[#858c85]">{kk ? "Бронь картасында және қонақ тарихында көрінеді." : "Видно в карточке брони и в истории гостя."}</span></label>
         <div className="sh-mobile-card space-y-3 p-4"><div><h2 className="text-xs font-extrabold text-[#303d36]">{kk ? "Қайтарылатын депозит" : "Возвратный депозит"}</h2><p className="mt-1 text-[10px] text-[#858c85]">{kk ? "Нөл қалдырыңыз, егер депозит қажет болмаса." : "Оставьте 0, если депозит не нужен. После выезда напомним вернуть его."}</p></div><label className="block text-[10px] font-bold text-[#68736b]">{kk ? "Депозит сомасы · ₸" : "Сумма депозита · ₸"}<input type="number" min="0" step="500" inputMode="numeric" value={depositAmount} onChange={(event) => setDepositAmount(event.target.value)} className="sh-mobile-card mt-1.5 h-11 w-full px-3 text-sm font-bold text-[#303d36]" placeholder="0" /></label>{Number(depositAmount) > 0 ? <label className="flex items-start gap-2 text-[11px] font-semibold text-[#455249]"><input type="checkbox" checked={depositCollected} onChange={(event) => setDepositCollected(event.target.checked)} className="mt-0.5 size-4 accent-[#07866b]" />{kk ? "Депозитті қонақтан алдым" : "Депозит уже получен от гостя"}</label> : null}</div>
       </section> : null}
 

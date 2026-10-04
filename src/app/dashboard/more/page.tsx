@@ -53,7 +53,7 @@ export default async function MorePage() {
       </Link>
       {groups.map((group) => <section key={group.title} className="space-y-2"><h2 className="sh-mobile-section-title px-0.5">{group.title}</h2><div className="sh-mobile-card overflow-hidden">{group.items.map((item) => <Link key={item.title} href={item.href} className="flex min-h-[62px] items-center gap-3 border-b border-[#edeee7] px-3.5 last:border-0"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#eaf4f0] text-[#088269]"><item.icon className="size-[18px]" /></span><span className="min-w-0 flex-1"><span className="block text-sm font-bold text-[#28362f]">{item.title}</span><span className="block truncate text-[11px] text-[#939992]">{item.subtitle}</span></span><ChevronRight className="size-4 text-[#a7ada6]" /></Link>)}</div></section>)}
       <section className="space-y-2"><h2 className="sh-mobile-section-title px-0.5">{kk ? "Тіл" : "Язык"}</h2><MobileLanguageSwitcher locale={locale} /></section>
-      <PwaInstallButton title={kk ? "Shanyraq Mobile орнату" : "Установить Shanyraq Mobile"} hint={kk ? "Басты экраннан жылдам қолжетімділік" : "Быстрый доступ с домашнего экрана"} />
+      <PwaInstallButton title={kk ? "Shanyraq Mobile орнату" : "Установить Shanyraq Mobile"} hint={kk ? "Басты экраннан жылдам қолжетімділік, интернетсіз жұмыс" : "Быстрый доступ с главного экрана и работа без интернета"} locale={locale} />
       <div className="flex items-center justify-center gap-2 pb-2 text-[10px] font-semibold text-[#a0a69f]"><Sparkles className="size-3" />Shanyraq Mobile · Kazakhstan</div>
     </div>
   );

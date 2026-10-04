@@ -309,3 +309,8 @@
 @media (max-width: 600px) { .calendarZoom { display: block; margin-top: 16px; } .interactionHint { display: none; } }
 .calendarDialog > * { min-width: 0; }
 .calendarDialog { overflow-x: hidden; }
+
+.hotelCta button { display: inline-flex; align-items: center; justify-content: center; gap: 17px; color: #284631; background: #f4eedc; border-color: #f4eedc; margin-top: 23px; }
+.hotelCta button:hover { background: #fff9e7; }
+@media (max-width: 600px) { .hotelCta button { width: 100%; max-width: 330px; height: 52px; font-size: 15px; } }
+@media (max-width: 600px) { .heroIntro > p { font-size: 14px; max-width: 340px; } .storyHeading > p { font-size: 14px; } .hotelCta small { font-size: 11px; } .hotelCta p { font-size: 14px; } }

@@ -12,7 +12,7 @@ import type {
  */
 export const t = {
   brand: "Shanyraq AI",
-  tagline: "Платформа управления отелем",
+  tagline: "Для посуточников в Казахстане",
 
   nav: {
     overview: "Обзор",
@@ -42,9 +42,9 @@ export const t = {
 
   auth: {
     loginTitle: "Вход в Shanyraq AI",
-    loginSubtitle: "Управляйте отелем и каналами продаж в одном окне",
+    loginSubtitle: "Брони, квартиры и гости посуточной аренды в одном приложении",
     registerTitle: "Создать аккаунт",
-    registerSubtitle: "Начните управлять своим отелем за пару минут",
+    registerSubtitle: "Начните вести посуточную аренду за пару минут",
     emailTab: "Email",
     phoneTab: "Телефон",
     fullName: "Имя и фамилия",
@@ -52,7 +52,7 @@ export const t = {
     lastName: "Фамилия",
     fullNamePlaceholder: "Введите имя и фамилию",
     email: "Email",
-    emailPlaceholder: "you@hotel.kz",
+    emailPlaceholder: "you@mail.kz",
     phone: "Телефон",
     phonePlaceholder: "+7 701 123 45 67",
     password: "Пароль",
