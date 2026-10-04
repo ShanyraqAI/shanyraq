@@ -21,11 +21,8 @@ type CalendarSearchParams = Promise<{
 
 export default async function CalendarPage({ searchParams }: { searchParams: CalendarSearchParams }) {
   await requireSectionAccess("CALENDAR");
-  const hotel = await getCurrentHotel();
+  const [hotel, locale, membership, params] = await Promise.all([getCurrentHotel(), getRequestLocale(), getCurrentMembership(), searchParams]);
   const hotelId = hotel.id;
-  const locale = await getRequestLocale();
-  const membership = await getCurrentMembership();
-  const params = await searchParams;
   const todayISO = toISODate(todayInTimeZone(hotel.timezone));
   const { anchorISO } = parseCalendarNavigation(params.date, params.range, todayISO);
   const savedPreferences = membership ? await db.calendarPreference.findUnique({

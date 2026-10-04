@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "sonner";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -32,7 +33,7 @@ import {
 import { ReservationStatusBadge, ChannelLabel } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/page-header";
 import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
-import { setReservationStatusAction } from "@/server/actions/reservations";
+import { runOfflineAction } from "@/lib/offline/actions";
 import { findSelectedReservation } from "@/lib/reservations/calendar-selection";
 import { groupMobileReservations } from "@/lib/reservations/mobile-groups";
 import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
@@ -329,8 +330,9 @@ function ResAction({
   return (
     <DropdownMenuItem
       onSelect={async () => {
-        const result = await setReservationStatusAction({ id: row.id, status });
+        const result = await runOfflineAction("reservation.status", `${label} · ${row.guestName}`, { id: row.id, status });
         if (result.ok) onDone();
+        if (result.queued) { toast.success(result.message); return; }
         router.refresh();
       }}
     >

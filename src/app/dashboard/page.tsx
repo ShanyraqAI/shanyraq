@@ -83,7 +83,9 @@ export default async function DashboardPage() {
       revenueNights={stats.revenueNightsMonthToDate}
       revenuePeriodLabel={revenuePeriodLabel}
       occupancyPercent={stats.occupancyTonight ? Math.round(stats.occupancyTonight * 100) : 0}
-      activeReservations={stats.activeReservations}
+      occupiedToday={stats.occupiedTonight}
+      totalRooms={stats.totalRooms}
+      revenueToday={stats.revenueByDay.find((point) => point.date.getTime() === day.getTime())?.value ?? 0}
       arrivals={stats.arrivalsToday.map((item) => ({ id: item.id, guest: item.guest.fullName, room: item.room.number, time: item.checkInTime }))}
       departures={stats.departuresToday.map((item) => ({ id: item.id, guest: item.guest.fullName, room: item.room.number, time: item.checkOutTime }))}
       cleaningCount={stats.roomsCleaning}

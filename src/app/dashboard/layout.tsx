@@ -18,9 +18,23 @@ import { shouldShowFirstReservationFeedback } from "@/lib/support/feedback";
 import { getNotificationCenter } from "@/lib/notifications/service";
 import { NotificationCenter } from "@/components/notifications/notification-center";
 import { GlobalSearch, type GlobalSearchItem } from "@/components/layout/global-search";
-import { formatISODate, toISODate } from "@/lib/dates";
+import { formatISODate, toISODate, todayInTimeZone } from "@/lib/dates";
 import { guestDisplayId, reservationDisplayId } from "@/lib/types";
 import { getRequestLocale } from "@/lib/locale-server";
+import { OfflineSync } from "@/components/pwa/offline-sync";
+import { PwaInstallBanner } from "@/components/pwa/pwa-install-banner";
+import type { HotelPermission } from "@/lib/access";
+
+// Workspace pages saved on the device for offline use, by required permission.
+const OFFLINE_SECTIONS: Array<[string, HotelPermission | null]> = [
+  ["/dashboard", "OVERVIEW"],
+  ["/dashboard/calendar", "CALENDAR"],
+  ["/dashboard/reservations", "RESERVATIONS"],
+  ["/dashboard/reservations/new", "RESERVATIONS"],
+  ["/dashboard/rooms", "ROOMS"],
+  ["/dashboard/guests", "GUESTS"],
+  ["/dashboard/more", null],
+];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireOnboardingComplete();
@@ -34,7 +48,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const locale = await getRequestLocale();
   const userName = user.fullName;
   const permissions = resolveHotelPermissions(user);
-  const [subscription, hotels, productExperience, reservationCount, notificationCenter, searchableData] = await Promise.all([
+  const [subscription, hotels, productExperience, reservationCount, notificationCenter, searchableData, upcomingReservations] = await Promise.all([
     PRODUCT_AVAILABILITY.billing && user.organizationId ? getSubscription(user.organizationId) : Promise.resolve(null),
     db.membership.findMany({
       where: { userId: user.id },
@@ -52,8 +66,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
       db.room.findMany({ where: { hotelId: hotel.id }, orderBy: { number: "asc" }, take: 120, select: { id: true, number: true, floor: true, roomType: { select: { name: true } } } }),
       db.reservation.findMany({ where: { hotelId: hotel.id }, orderBy: { createdAt: "desc" }, take: 120, select: { id: true, sequenceNumber: true, guest: { select: { fullName: true } }, room: { select: { number: true } }, checkIn: true, checkOut: true } }),
     ]),
+    permissions.includes("RESERVATIONS")
+      ? db.reservation.findMany({ where: { hotelId: hotel.id, status: { in: ["PENDING", "CONFIRMED", "CHECKED_IN"] }, checkOut: { gte: todayInTimeZone(hotel.timezone) } }, orderBy: { checkIn: "asc" }, take: 12, select: { id: true } })
+      : Promise.resolve([]),
   ]);
   const hotelOptions = hotels.map((item) => item.hotel);
+  const offlineUrls = [
+    ...OFFLINE_SECTIONS.filter(([, permission]) => !permission || permissions.includes(permission)).map(([href]) => href),
+    ...upcomingReservations.map((reservation) => `/dashboard/reservations/${reservation.id}`),
+  ];
   const [searchGuests, searchRooms, searchReservations] = searchableData;
   const searchItems: GlobalSearchItem[] = [
     ...(permissions.includes("GUESTS") ? searchGuests.map((guest) => ({ id: `guest-${guest.id}`, type: "guest" as const, title: guest.fullName, subtitle: `${guestDisplayId(guest.sequenceNumber)} · ${guest.email ?? guest.phone ?? "карточка гостя"}`, href: `/dashboard/guests?guest=${guest.id}` })) : []),
@@ -86,10 +107,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </Link>
           )}
           {subscription && <BillingBanner endsAt={accessUntil(subscription).toISOString()} paid={Boolean(subscription.paidUntil)} initiallyExpired={isExpired(subscription)} />}
+          <OfflineSync scope={`${user.id}:${hotel.id}`} warmUrls={offlineUrls} locale={locale} />
           <MobileContextBack locale={locale} />
           {children}
         </main>
       </div>
+      <PwaInstallBanner locale={locale} />
       {shouldShowFirstReservationFeedback({
         reservationCount,
         submitted: Boolean(productExperience?.feedbackSubmittedAt),
