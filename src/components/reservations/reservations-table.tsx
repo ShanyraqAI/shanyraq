@@ -55,17 +55,18 @@ interface Props {
   initialStatus?: string;
   initialChannel?: string;
   initialDebt?: boolean;
+  initialPeriod?: "upcoming" | "all" | "today" | "arrivals" | "departures";
 }
 
 const STATUSES: ReservationStatus[] = ["PENDING", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"];
 
-export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency, todayISO, initialSelectedId = null, locale = "ru", initialStatus = "all", initialChannel = "all", initialDebt = false }: Props) {
+export function ReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency, todayISO, initialSelectedId = null, locale = "ru", initialStatus = "all", initialChannel = "all", initialDebt = false, initialPeriod = "upcoming" }: Props) {
   const router = useRouter();
   const copy = mobileCopy[locale].reservations;
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState(initialStatus);
   const [channel, setChannel] = useState(initialChannel);
-  const [period, setPeriod] = useState<"upcoming" | "all" | "today" | "arrivals" | "departures">("upcoming");
+  const [period, setPeriod] = useState<"upcoming" | "all" | "today" | "arrivals" | "departures">(initialPeriod);
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const selected = findSelectedReservation(reservations, selectedId);
   const activeMobileFilters = Number(status !== "all") + Number(channel !== "all") + Number(initialDebt);

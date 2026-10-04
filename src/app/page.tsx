@@ -14,9 +14,9 @@ import s from "@/components/landing/landing.module.css";
 
 const manrope = localFont({ src: "../assets/fonts/manrope-variable.ttf", display: "swap", weight: "200 800" });
 
-const title = "Shanyraq AI — программа для посуточной аренды и отелей в Казахстане";
+const title = "Shanyraq AI — программа для посуточной аренды в Казахстане";
 const description =
-  "Система управления посуточной арендой, гостиницами и апарт-отелями: календарь бронирований, гости, оплаты в тенге, уборки и каналы продаж. Алматы, Астана и весь Казахстан. Бесплатно на время бета-теста.";
+  "Брони, квартиры, гости и оплаты в одной системе. Для посуточников в Казахстане: управляйте квартирами, домами и апарт-отелями с телефона. Бесплатно на время бета-теста.";
 
 export const metadata: Metadata = {
   title: { absolute: title },
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 } },
   openGraph: {
     title,
-    description: "Бронирования, гости, оплаты и каналы продаж посуточной аренды — в одном окне.",
+    description: "Всё для посуточной аренды в Казахстане — в одном окне.",
     url: "/",
     siteName: "Shanyraq AI",
     locale: "ru_KZ",

@@ -29,7 +29,7 @@ export function LandingStructuredData() {
         applicationCategory: "BusinessApplication",
         operatingSystem: "Web, iOS, Android",
         url: siteUrl,
-        description: "Программа для управления посуточной арендой, гостиницами и апарт-отелями в Казахстане.",
+        description: "Программа для посуточной аренды в Казахстане: квартиры, дома и апарт-отели.",
         inLanguage: "ru-KZ",
         offers: { "@type": "Offer", price: "0", priceCurrency: "KZT", description: "Бесплатно на время бета-теста" },
         publisher: { "@id": `${siteUrl}/#organization` },
