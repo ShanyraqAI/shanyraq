@@ -34,7 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/page-header";
 import { ChannelLabel, ReservationStatusBadge } from "@/components/shared/status-badge";
-import { addGuestNoteAction, upsertGuestAction } from "@/server/actions/guests";
+import { runOfflineAction } from "@/lib/offline/actions";
 import { guestDisplayId, reservationDisplayId, type ReservationVM } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
@@ -79,11 +79,12 @@ export function GuestsTable({ guests, reservations, initialSelectedId = null, lo
     if (!selectedId) return;
     setSavingNote(true);
     try {
-      const result = await addGuestNoteAction({ guestId: selectedId, content: noteText });
+      const result = await runOfflineAction("guest.note", "Заметка о госте", { guestId: selectedId, content: noteText });
       if (!result.ok) return toast.error(result.error);
       setNoteText("");
       setNoteOpen(false);
       toast.success(result.message);
+      if (result.queued) return;
       router.refresh();
     } finally { setSavingNote(false); }
   }
@@ -346,7 +347,7 @@ function GuestFormSheet({
   async function save() {
     setSaving(true);
     try {
-      const result = await upsertGuestAction({
+      const result = await runOfflineAction("guest.upsert", `${guest ? "Изменение гостя" : "Новый гость"} · ${fullName}`, {
         id: guest?.id,
         fullName,
         email,
@@ -360,6 +361,7 @@ function GuestFormSheet({
       }
       toast.success(result.message);
       onOpenChange(false);
+      if (result.queued) return;
       onSaved();
       if (!guest) {
         setFullName("");

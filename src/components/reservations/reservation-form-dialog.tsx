@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { createReservationAction, updateReservationAction } from "@/server/actions/reservations";
+import { runOfflineAction } from "@/lib/offline/actions";
 import type { GuestVM, RatePlanVM, RoomVM } from "@/lib/types";
 import { CHANNEL_CODES } from "@/lib/constants";
 import { cn, formatMoney } from "@/lib/utils";
@@ -169,14 +169,15 @@ export function ReservationFormDialog({
           notes: notes || undefined,
           paymentMethod: paymentMethod === "UNSPECIFIED" ? null : paymentMethod,
         };
-        const result = await createReservationAction(payload);
+        const result = await runOfflineAction("reservation.create", `Новая бронь · ${checkIn} → ${checkOut}`, payload);
         if (!result.ok) {
           toast.error(result.error ?? t.reservations.toasts.createFailed);
           return;
         }
         toast.success(result.message ?? t.reservations.toasts.created);
+        if (result.queued) { onOpenChange(false); return; }
       } else {
-        const result = await updateReservationAction({
+        const result = await runOfflineAction("reservation.update", `Изменение брони · ${checkIn} → ${checkOut}`, {
           id: initial!.id,
           guestId: guestChoice === NEW_GUEST ? undefined : guestChoice,
           guestName: guestChoice === NEW_GUEST ? newName : undefined,
@@ -199,6 +200,7 @@ export function ReservationFormDialog({
           return;
         }
         toast.success(result.message ?? t.reservations.toasts.updated);
+        if (result.queued) { onOpenChange(false); return; }
       }
       onOpenChange(false);
       router.refresh();

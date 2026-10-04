@@ -22,7 +22,7 @@ export default async function RoomsPage({ searchParams }: { searchParams: Promis
   const highlightRoomId = typeof query.room === "string" ? query.room : undefined;
   const day = today();
 
-  const [roomTypes, roomsRaw] = await Promise.all([
+  const [roomTypes, roomsRaw, tonightReservations] = await Promise.all([
     db.roomType.findMany({
       where: { hotelId },
       include: { rooms: { orderBy: { number: "asc" } } },
@@ -33,18 +33,19 @@ export default async function RoomsPage({ searchParams }: { searchParams: Promis
       include: { roomType: { select: { name: true, capacity: true, basePrice: true } } },
       orderBy: [{ floor: "asc" }, { number: "asc" }],
     }),
+    // Who is in each room tonight (for hints on room cards).
+    db.reservation.findMany({
+      where: {
+        hotelId,
+        checkIn: { lte: day },
+        checkOut: { gt: day },
+        status: { in: ["CONFIRMED", "CHECKED_IN"] },
+      },
+      include: { guest: { select: { fullName: true } }, room: { select: { id: true } } },
+    }),
   ]);
 
-  // Who is in each room tonight (for hints on room cards).
-  const tonightReservations = await db.reservation.findMany({
-    where: {
-      hotelId,
-      checkIn: { lte: day },
-      checkOut: { gt: day },
-      status: { in: ["CONFIRMED", "CHECKED_IN"] },
-    },
-    include: { guest: { select: { fullName: true } }, room: { select: { id: true } } },
-  });
+
   const guestByRoom = new Map<string, string>();
   for (const r of tonightReservations) {
     if (!guestByRoom.has(r.room.id)) guestByRoom.set(r.room.id, r.guest.fullName);

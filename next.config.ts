@@ -21,7 +21,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   // Allow multipart overhead; individual profile images are still capped at 1 MiB.
-  experimental: { serverActions: { bodySizeLimit: "4mb" } },
+  // Revisiting a section within 30 s renders from the client router cache instead of
+  // waiting for the server; mutations call revalidatePath, which clears it.
+  experimental: { serverActions: { bodySizeLimit: "4mb" }, staleTimes: { dynamic: 30 } },
   // Keep heavy native/server-only packages out of the bundler — faster builds
   // and no engine-resolution issues in serverless environments.
   serverExternalPackages: ["@prisma/client", "bcryptjs", "pdfkit"],

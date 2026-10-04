@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Check, ChevronLeft, Loader2, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { createReservationAction } from "@/server/actions/reservations";
+import { runOfflineAction } from "@/lib/offline/actions";
 import type { AppLocale } from "@/lib/locale";
 import type { GuestVM, RatePlanVM, RoomVM } from "@/lib/types";
 import { cn, formatMoney } from "@/lib/utils";
@@ -97,7 +97,8 @@ export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, def
   function submit() {
     if (!selectedRoom || !guestReady || !manualPriceValid) return;
     startTransition(async () => {
-      const result = await createReservationAction({
+      const label = `${kk ? "Жаңа бронь" : "Новая бронь"} · ${selectedRoom.number} · ${checkIn} → ${checkOut}`;
+      const result = await runOfflineAction("reservation.create", label, {
         guestId: guestId === "new" ? undefined : guestId,
         guestName: guestId === "new" ? guestName.trim() : undefined,
         guestPhone: guestId === "new" ? guestPhone.trim() || undefined : undefined,
@@ -117,6 +118,7 @@ export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, def
         depositCollected: (Number(depositAmount) || 0) > 0 && depositCollected,
       });
       if (!result.ok) { toast.error(result.error); return; }
+      if (result.queued) { toast.success(result.message); router.push("/dashboard/reservations"); return; }
       const reservationId = result.data?.id;
       if (!reservationId) { toast.error(kk ? "Бронь ашылмады" : "Не удалось открыть бронь"); return; }
       toast.success(kk ? "Бронь жасалды" : "Бронь создана");

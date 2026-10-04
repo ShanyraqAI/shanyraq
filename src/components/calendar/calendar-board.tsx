@@ -17,7 +17,7 @@ import { MobileCalendar } from "@/components/calendar/mobile-calendar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { moveReservationAction } from "@/server/actions/reservations";
+import { runOfflineAction } from "@/lib/offline/actions";
 import { saveCalendarPreferencesAction } from "@/server/actions/calendar";
 import type { CalendarBoardData, CalendarFilters, CalendarPreferences } from "./types";
 import { reservationDisplayId, type ReservationVM, type RoomVM } from "@/lib/types";
@@ -388,15 +388,17 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   async function undoMove(reservation: ReservationVM) {
     setMovingId(reservation.id);
     try {
-      const result = await moveReservationAction(
+      const result = await runOfflineAction(
+        "reservation.move",
+        `Отмена переноса · ${reservation.guestName}`,
         reservation.id,
         reservation.roomId,
         reservation.checkIn,
         reservation.checkOut,
       );
       if (!result.ok) toast.error(result.error);
-      else toast.success("Перенос брони отменён");
-      router.refresh();
+      else toast.success(result.queued ? result.message : "Перенос брони отменён");
+      if (!result.queued) router.refresh();
     } catch {
       toast.error("Не удалось отменить перенос. Проверьте доступность номера.");
       router.refresh();
@@ -417,8 +419,9 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
     }
     setMovingId(reservationId);
     try {
-      const result = await moveReservationAction(reservationId, roomId, dateISO, checkOut);
+      const result = await runOfflineAction("reservation.move", `Перенос брони · ${reservation.guestName} · ${dateISO}`, reservationId, roomId, dateISO, checkOut);
       if (!result.ok) toast.error(result.error);
+      else if (result.queued) { toast.success(result.message); return; }
       else toast.success(result.message ?? t.calendar.movedToast, {
         duration: 8_000,
         action: { label: "Отменить", onClick: () => void undoMove(reservation) },

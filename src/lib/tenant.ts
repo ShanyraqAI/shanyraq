@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { getSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
@@ -78,7 +79,8 @@ export async function getCurrentMembership(): Promise<CurrentMembership | null> 
   return { id: user.membershipId, role: user.role, accessLevel: user.accessLevel, permissions: user.permissions, organizationId: user.organizationId, hotelId: user.hotelId, userId: user.id };
 }
 
-export async function getCurrentHotel(): Promise<CurrentHotel | null> {
+/** Deduplicated per request: layout, guards and page share one lookup. */
+export const getCurrentHotel = cache(async (): Promise<CurrentHotel | null> => {
   const membership = await getCurrentMembership();
   if (!membership || !membership.hotelId) return null;
   const hotel = await db.hotel.findFirst({
@@ -86,7 +88,7 @@ export async function getCurrentHotel(): Promise<CurrentHotel | null> {
     select: { id: true, orgId: true, slug: true, name: true, propertyType: true, address: true, city: true, country: true, timezone: true, currency: true, createdAt: true },
   });
   return hotel;
-}
+});
 
 export async function getCurrentHotelId(): Promise<string> {
   const hotel = await getCurrentHotel();

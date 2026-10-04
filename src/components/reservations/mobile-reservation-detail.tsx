@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarCheck, CalendarRange, Check, ChevronLeft, ChevronRight, CircleDot, FileText, Loader2, MessageCircle, Pencil, Phone, KeyRound, StickyNote } from "lucide-react";
 import { toast } from "sonner";
-import { collectReservationDepositAction, returnReservationDepositAction, setReservationStatusAction } from "@/server/actions/reservations";
+import { runOfflineAction } from "@/lib/offline/actions";
 import { issueReservationPasscodeAction } from "@/server/actions/ttlock";
 import type { AppLocale } from "@/lib/locale";
 import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
@@ -35,11 +35,13 @@ export function MobileReservationDetail({ reservation, rooms, ratePlans, guests,
 
   function updateStatus() {
     startTransition(async () => {
-      const result = await setReservationStatusAction({ id: reservation.id, status: nextStatus });
+      const label = `${nextStatus === "CHECKED_IN" ? (kk ? "Орналастыру" : "Заселение") : (kk ? "Шығару" : "Выселение")} · ${reservation.guestName} · ${reservation.roomNumber}`;
+      const result = await runOfflineAction("reservation.status", label, { id: reservation.id, status: nextStatus });
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
+      if (result.queued) { toast.success(result.message); return; }
       toast.success(nextStatus === "CHECKED_IN" ? (kk ? "Қонақ орналастырылды" : "Гость заселён") : (kk ? "Қонақ шығарылды" : "Гость выселен"));
       router.refresh();
     });
@@ -65,18 +67,20 @@ export function MobileReservationDetail({ reservation, rooms, ratePlans, guests,
 
   function markDepositReturned() {
     startTransition(async () => {
-      const result = await returnReservationDepositAction({ id: reservation.id });
+      const result = await runOfflineAction("reservation.depositReturn", `${kk ? "Кепілді қайтару" : "Возврат залога"} · ${reservation.guestName}`, { id: reservation.id });
       if (!result.ok) { toast.error(result.error); return; }
       toast.success(result.message);
+      if (result.queued) return;
       router.refresh();
     });
   }
 
   function markDepositCollected() {
     startTransition(async () => {
-      const result = await collectReservationDepositAction({ id: reservation.id });
+      const result = await runOfflineAction("reservation.depositCollect", `${kk ? "Кепіл алынды" : "Залог получен"} · ${reservation.guestName}`, { id: reservation.id });
       if (!result.ok) { toast.error(result.error); return; }
       toast.success(result.message);
+      if (result.queued) return;
       router.refresh();
     });
   }
