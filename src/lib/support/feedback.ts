@@ -1,10 +1,9 @@
 export function shouldShowFirstReservationFeedback(input: {
   reservationCount: number;
-  tourCompleted: boolean;
   submitted: boolean;
   dismissed: boolean;
 }): boolean {
-  return input.reservationCount > 0 && input.tourCompleted && !input.submitted && !input.dismissed;
+  return input.reservationCount > 0 && !input.submitted && !input.dismissed;
 }
 
 export function buildFeedbackTechnicalContext(input: {

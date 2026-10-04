@@ -1,23 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarCheck, Check, ChevronLeft, CircleDot, Loader2, MessageCircle, Phone, KeyRound } from "lucide-react";
+import { CalendarCheck, CalendarRange, Check, ChevronLeft, ChevronRight, CircleDot, FileText, Loader2, MessageCircle, Pencil, Phone, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { collectReservationDepositAction, returnReservationDepositAction, setReservationStatusAction } from "@/server/actions/reservations";
 import { issueReservationPasscodeAction } from "@/server/actions/ttlock";
 import type { AppLocale } from "@/lib/locale";
-import type { ReservationVM } from "@/lib/types";
+import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
+import { ReservationFormDialog } from "./reservation-form-dialog";
+import { ReservationDocumentsDialog } from "./reservation-documents-dialog";
 import { reservationDisplayId } from "@/lib/types";
 import { channelLabel } from "@/lib/i18n";
 import { formatISOCompactDate } from "@/lib/dates";
 import { formatMoney } from "@/lib/utils";
 import { whatsappHref } from "@/lib/whatsapp";
 
-export function MobileReservationDetail({ reservation, locale, ttlockReady, ttlockPasscode }: { reservation: ReservationVM; locale: AppLocale; ttlockReady: boolean; ttlockPasscode: { code: string; startsAt: string; endsAt: string } | null }) {
+export function MobileReservationDetail({ reservation, rooms, ratePlans, guests, hotelCurrency, locale, ttlockReady, ttlockPasscode }: { reservation: ReservationVM; rooms: RoomVM[]; ratePlans: RatePlanVM[]; guests: GuestVM[]; hotelCurrency: string; locale: AppLocale; ttlockReady: boolean; ttlockPasscode: { code: string; startsAt: string; endsAt: string } | null }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [editing, setEditing] = useState<"edit" | "move" | null>(null);
+  const [documentsOpen, setDocumentsOpen] = useState(false);
   const kk = locale === "kk";
   const nextStatus = reservation.status === "CHECKED_IN" ? "CHECKED_OUT" : "CHECKED_IN";
   const canUpdateStatus = ["PENDING", "CONFIRMED", "CHECKED_IN"].includes(reservation.status);
@@ -107,7 +111,27 @@ export function MobileReservationDetail({ reservation, locale, ttlockReady, ttlo
     <section><h2 className="sh-mobile-section-title mb-2">{kk ? "Төлем" : "Оплата"}</h2><div className="sh-mobile-card space-y-2 p-4 text-xs"><Row label={kk ? "Барлығы" : "Итого"} value={formatMoney(reservation.totalAmount)} /><Row label={kk ? "Төленгені" : "Оплачено"} value="—" accent /><Row label={kk ? "Төлем тәсілі" : "Способ оплаты"} value={paymentMethodLabel} /></div></section>
     {(reservation.depositAmount ?? 0) > 0 ? <section><h2 className="sh-mobile-section-title mb-2">{kk ? "Қайтарылатын депозит" : "Возвратный депозит"}</h2><div className="sh-mobile-card space-y-3 p-4 text-xs"><Row label={kk ? "Сомасы" : "Сумма"} value={formatMoney(reservation.depositAmount ?? 0)} /><Row label={kk ? "Қабылданды" : "Получен"} value={reservation.depositCollectedAt ? (kk ? "Иә" : "Да") : (kk ? "Жоқ" : "Нет")} /><Row label={kk ? "Қайтарылды" : "Возвращён"} value={reservation.depositReturnedAt ? (kk ? "Иә" : "Да") : reservation.status === "CHECKED_OUT" && reservation.depositCollectedAt ? (kk ? "Қайтару керек" : "Нужно вернуть") : (kk ? "Күтілуде" : "Ожидается выезд")} />{!reservation.depositCollectedAt && !["CANCELLED", "NO_SHOW"].includes(reservation.status) ? <button type="button" disabled={pending} onClick={markDepositCollected} className="sh-mobile-primary w-full disabled:opacity-60">{pending ? <Loader2 className="mx-auto size-4 animate-spin" /> : (kk ? "Депозитті алдым" : "Отметить получение депозита")}</button> : null}{reservation.status === "CHECKED_OUT" && reservation.depositCollectedAt && !reservation.depositReturnedAt ? <button type="button" disabled={pending} onClick={markDepositReturned} className="sh-mobile-primary w-full disabled:opacity-60">{pending ? <Loader2 className="mx-auto size-4 animate-spin" /> : (kk ? "Депозитті қайтардым" : "Отметить возврат депозита")}</button> : null}</div></section> : null}
     <section><h2 className="sh-mobile-section-title mb-2">{kk ? "Қонақ деректері" : "Детали гостя"}</h2><div className="sh-mobile-card space-y-2 p-4 text-xs"><Row label={kk ? "Телефон" : "Телефон"} value={reservation.guestPhone ?? "—"} /><Row label="Email" value={reservation.guestEmail ?? "—"} /><Row label={kk ? "Түсініктеме" : "Комментарий"} value={reservation.notes ?? (kk ? "Жоқ" : "Нет")} /></div></section>
-    <Link href={`/dashboard/reservations?reservation=${reservation.id}`} className="sh-mobile-primary flex w-full items-center justify-center">{kk ? "Броньды өзгерту" : "Изменить бронь"}</Link>
+    <button type="button" onClick={() => setDocumentsOpen(true)} className="sh-mobile-card flex w-full items-center gap-3 p-4 text-left">
+      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e4f3ee] text-[#07866b]"><FileText className="size-5" /></span>
+      <span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-[#2d3a33]">{kk ? "Құжаттар" : "Документы"}</span><span className="mt-0.5 block text-[11px] text-[#8f968f]">{kk ? "Шарт, шот-фактура, акт — бронь деректерімен" : "Договор, счёт-фактура, акт — по данным брони"}</span></span>
+      <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-[#07866b] px-3 py-1.5 text-[11px] font-bold text-white">{kk ? "Бастау" : "Начать"}<ChevronRight className="size-3.5" /></span>
+    </button>
+    <div className="grid grid-cols-2 gap-2">
+      <button type="button" onClick={() => setEditing("edit")} className="sh-mobile-primary flex items-center justify-center gap-2"><Pencil className="size-4" />{kk ? "Өзгерту" : "Изменить"}</button>
+      <button type="button" onClick={() => setEditing("move")} className="sh-mobile-card flex min-h-[50px] items-center justify-center gap-2 text-[0.84rem] font-bold text-[#16826a]"><CalendarRange className="size-4" />{kk ? "Ауыстыру" : "Перенести"}</button>
+    </div>
+    {editing ? <ReservationFormDialog
+      mode="edit"
+      variant={editing === "move" ? "move" : undefined}
+      open
+      onOpenChange={(open) => { if (!open) setEditing(null); }}
+      rooms={rooms}
+      ratePlans={ratePlans}
+      guests={guests}
+      hotelCurrency={hotelCurrency}
+      initial={{ id: reservation.id, guestId: reservation.guestId, roomId: reservation.roomId, checkIn: reservation.checkIn, checkOut: reservation.checkOut, checkInTime: reservation.checkInTime, checkOutTime: reservation.checkOutTime, adults: reservation.adults, children: reservation.children, ratePlanId: reservation.ratePlanId ?? undefined, pricingMode: reservation.pricingMode, totalAmount: reservation.totalAmount, notes: reservation.notes ?? "", paymentMethod: reservation.paymentMethod }}
+    /> : null}
+    <ReservationDocumentsDialog reservationId={reservation.id} open={documentsOpen} onOpenChange={setDocumentsOpen} />
   </div>;
 }
 
