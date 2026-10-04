@@ -3,12 +3,14 @@ import "server-only";
 import { db } from "@/lib/db";
 import { addDays, diffDays } from "@/lib/dates";
 import { calculatePerformance, type ReportFilters } from "@/lib/reports/performance";
-import { calculateOutstanding, summarizeOperations } from "@/lib/reports/finance";
+import { calculateOutstanding, depositOperations, summarizeOperations } from "@/lib/reports/finance";
 
 export async function getHotelPerformanceReport(hotelId: string, filters: ReportFilters) {
-  const [hotel, roomCount, reservations, sourceRows, commissionSettings, periodExpenses] = await Promise.all([
+  const toExclusive = addDays(filters.to, 1);
+  const sourceFilter = filters.source ? { reservation: { sourceChannel: filters.source } } : {};
+  const [hotel, roomCount, reservations, sourceRows, commissionSettings, periodExpenses, periodPayments, periodDeposits] = await Promise.all([
     db.hotel.findUniqueOrThrow({ where: { id: hotelId }, select: { currency: true, incomeTaxRatePercent: true } }),
-    db.room.count({ where: { hotelId, status: { not: "OUT_OF_ORDER" } } }),
+    db.room.count({ where: { hotelId, status: { notIn: ["OUT_OF_ORDER", "MAINTENANCE"] } } }),
     db.reservation.findMany({
       where: {
         hotelId,
@@ -28,17 +30,26 @@ export async function getHotelPerformanceReport(hotelId: string, filters: Report
       select: { sourceChannel: true },
     }),
     db.channelCommissionSetting.findMany({ where: { hotelId }, orderBy: { sourceChannel: "asc" } }),
-    db.financialOperation.findMany({ where: { hotelId, occurredAt: { gte: filters.from, lt: addDays(filters.to, 1) }, type: "EXPENSE", status: "COMPLETED", ...(filters.source ? { reservation: { sourceChannel: filters.source } } : {}) }, select: { amount: true, currency: true } }),
+    db.financialOperation.findMany({ where: { hotelId, occurredAt: { gte: filters.from, lt: toExclusive }, type: "EXPENSE", status: "COMPLETED", ...sourceFilter }, select: { amount: true, currency: true } }),
+    // Paid/refunded is cash flow: select by operation date, independent of the stay dates.
+    db.financialOperation.findMany({ where: { hotelId, occurredAt: { gte: filters.from, lt: toExclusive }, type: { in: ["PAYMENT", "REFUND"] }, status: "COMPLETED", ...sourceFilter }, select: { amount: true, currency: true, type: true, status: true } }),
+    db.reservation.findMany({
+      where: {
+        hotelId,
+        ...(filters.source ? { sourceChannel: filters.source } : {}),
+        OR: [{ depositCollectedAt: { gte: filters.from, lt: toExclusive } }, { depositReturnedAt: { gte: filters.from, lt: toExclusive } }],
+      },
+      select: { depositAmount: true, currency: true, depositCollectedAt: true, depositReturnedAt: true },
+    }),
   ]);
 
   const scopedReservations = reservations.filter((row) => !filters.source || row.sourceChannel === filters.source);
   const financialReservations = scopedReservations.filter((row) => !["CANCELLED", "NO_SHOW"].includes(row.status));
   const commissionRows = financialReservations.filter((row) => row.currency === hotel.currency && row.otaCommissionAmount !== null);
-  const operations = scopedReservations.flatMap((row) => [
-    ...row.financialOperations,
-    ...(row.depositCollectedAt ? [{ amount: row.depositAmount, currency: row.currency, type: "PAYMENT", status: "COMPLETED" }] : []),
-    ...(row.depositReturnedAt ? [{ amount: row.depositAmount, currency: row.currency, type: "REFUND", status: "COMPLETED" }] : []),
-  ]).map((row) => ({ ...row, amount: Number(row.amount) }));
+  const operations = [
+    ...periodPayments.map((row) => ({ ...row, amount: Number(row.amount) })),
+    ...depositOperations(periodDeposits.map((row) => ({ ...row, depositAmount: Number(row.depositAmount) })), filters.from, toExclusive),
+  ];
   const paymentSummary = summarizeOperations(operations, hotel.currency);
   const expenses = periodExpenses.filter((row) => row.currency === hotel.currency).reduce((sum, row) => sum + Number(row.amount), 0);
   const performance = calculatePerformance(

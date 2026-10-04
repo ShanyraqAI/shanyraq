@@ -8,6 +8,7 @@ import { getCurrentMembership } from "@/lib/tenant";
 import { encryptSecret } from "@/lib/security/credentials";
 import { fail, ok, type ActionResult } from "@/server/types";
 import { AuthenticationError, toErrorMessage } from "@/server/errors";
+import { isAllowedPushEndpoint } from "@/lib/notifications/policy";
 
 async function requireNotificationMembership() {
   const membership = await getCurrentMembership();
@@ -66,7 +67,7 @@ export async function saveNotificationPreferencesAction(input: unknown): Promise
 }
 
 const pushSubscriptionSchema = z.object({
-  endpoint: z.string().url().max(2048).startsWith("https://"),
+  endpoint: z.string().url().max(2048).refine(isAllowedPushEndpoint),
   keys: z.object({ p256dh: z.string().min(20).max(256), auth: z.string().min(10).max(128) }),
 });
 

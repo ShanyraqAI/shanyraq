@@ -33,20 +33,23 @@ export default async function DashboardPage() {
   const locale = await getRequestLocale(hotel.language);
   const mobile = mobileCopy[locale];
   const day = todayInTimeZone(hotel.timezone);
-  const [user, stats, recent, channelHealth, roomTypes, roomsRaw, ratePlansRaw, guestsRaw, depositFollowups, activeForConflicts] = await Promise.all([
-    getCurrentUser(), getDashboardStats(hotelId, day, hotel.timezone, hotel.currency), getRecentReservations(hotelId, 20),
+  const user = await getCurrentUser();
+  const permissions = resolveHotelPermissions(user ?? {});
+  // These rows are serialized into client components, so load them only for roles allowed to see reservation details.
+  const canViewReservations = permissions.includes("RESERVATIONS");
+  const [stats, recent, channelHealth, roomTypes, roomsRaw, ratePlansRaw, guestsRaw, depositFollowups, activeForConflicts] = await Promise.all([
+    getDashboardStats(hotelId, day, hotel.timezone, hotel.currency), canViewReservations ? getRecentReservations(hotelId, 20) : Promise.resolve([]),
     PRODUCT_AVAILABILITY.channels ? getChannelHealth(hotelId) : Promise.resolve([]),
     db.roomType.findMany({ where: { hotelId }, orderBy: { sortOrder: "asc" } }),
     db.room.findMany({ where: { hotelId }, include: { roomType: { select: { name: true } } }, orderBy: { number: "asc" } }),
-    db.ratePlan.findMany({ where: { hotelId }, orderBy: { name: "asc" } }),
-    db.guest.findMany({ where: { hotelId }, orderBy: { fullName: "asc" } }),
+    canViewReservations ? db.ratePlan.findMany({ where: { hotelId }, orderBy: { name: "asc" } }) : Promise.resolve([]),
+    canViewReservations ? db.guest.findMany({ where: { hotelId }, orderBy: { fullName: "asc" } }) : Promise.resolve([]),
     db.reservation.findMany({ where: { hotelId, status: "CHECKED_OUT", depositAmount: { gt: 0 }, depositCollectedAt: { not: null }, depositReturnedAt: null }, include: { room: { select: { number: true } }, guest: { select: { fullName: true } } }, orderBy: { updatedAt: "asc" }, take: 10 }),
     db.reservation.findMany({ where: { hotelId, status: { in: ["PENDING", "CONFIRMED", "CHECKED_IN"] }, checkOut: { gt: day } }, select: { id: true, roomId: true, checkIn: true, checkOut: true, guest: { select: { fullName: true } }, room: { select: { number: true } } }, orderBy: { checkIn: "asc" }, take: 150 }),
   ]);
   const rooms: RoomVM[] = roomsRaw.map((room) => ({ id: room.id, number: room.number, floor: room.floor, status: room.status as RoomVM["status"], roomTypeId: room.roomTypeId, roomTypeName: room.roomType.name, guestTonight: null }));
   const ratePlans: RatePlanVM[] = ratePlansRaw.map((plan) => ({ id: plan.id, sequenceNumber: plan.sequenceNumber, name: plan.name, roomTypeId: plan.roomTypeId, roomTypeName: roomTypes.find((type) => type.id === plan.roomTypeId)?.name ?? "", basePrice: Number(plan.basePrice), currency: plan.currency, refundable: plan.refundable, breakfastIncluded: plan.breakfastIncluded }));
   const guests: GuestVM[] = guestsRaw.map((guest) => ({ id: guest.id, sequenceNumber: guest.sequenceNumber, fullName: guest.fullName, email: guest.email, phone: guest.phone, country: guest.country, notes: guest.notes }));
-  const permissions = resolveHotelPermissions(user ?? {});
   // Month-to-date nights, e.g. "1–3 окт"; the Reports page uses the same period.
   const revenuePeriodLabel = day.getUTCDate() === 1 ? formatShortDate(day) : `1–${formatShortDate(day)}`;
   const waitingArrivals = stats.arrivalsToday.filter((reservation) => !["CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"].includes(reservation.status)).length;
@@ -91,7 +94,7 @@ export default async function DashboardPage() {
       cleaningCount={stats.roomsCleaning}
       attention={attentionItems}
       recent={recent.slice(0, 2).map((item) => ({ id: item.id, guest: item.guest.fullName, room: item.room.number, dateLabel: formatMediumDate(item.checkIn), day: new Date(item.checkIn).getUTCDate() }))}
-      canCreateReservation={permissions.includes("RESERVATIONS")}
+      canCreateReservation={canViewReservations}
     />
     <DesktopOnly><div className="space-y-5"><PageHeader title={user?.firstName ? `${greeting(hotel.timezone)}, ${user.firstName}` : greeting(hotel.timezone)} description={`${hotel.name} · ${formatMediumDate(day)}`}>
       {PRODUCT_AVAILABILITY.channels ? <SyncAllButton /> : null}
@@ -137,13 +140,13 @@ export default async function DashboardPage() {
 
     <div className="flex flex-col gap-5">
       <section className="order-2 grid gap-4 md:order-1 xl:grid-cols-2"><OccupancyChart points={stats.occupancyTrend} /><BookingChart points={stats.bookingTrend} /></section>
-      <section className="order-1 grid gap-4 md:order-2 xl:grid-cols-[1.35fr_0.65fr]"><OccupancyForecast points={stats.occupancyForecast} /><div className="order-first xl:order-none"><QuickActions rooms={rooms} ratePlans={ratePlans} guests={guests} hotelCurrency={hotel.currency} canCreateReservation={permissions.includes("RESERVATIONS")} canOpenCalendar={permissions.includes("CALENDAR")} canOpenGuests={permissions.includes("GUESTS")} canOpenRooms={permissions.includes("ROOMS")} /></div></section>
+      <section className="order-1 grid gap-4 md:order-2 xl:grid-cols-[1.35fr_0.65fr]"><OccupancyForecast points={stats.occupancyForecast} /><div className="order-first xl:order-none"><QuickActions canCreateReservation={canViewReservations} canOpenCalendar={permissions.includes("CALENDAR")} canOpenGuests={permissions.includes("GUESTS")} canOpenRooms={permissions.includes("ROOMS")} /></div></section>
     </div>
 
-    <section className="rounded-xl border bg-card p-5 shadow-sm">
+    {canViewReservations ? <section className="rounded-xl border bg-card p-5 shadow-sm">
       <header className="mb-4 flex items-start justify-between gap-4"><div><h2 className="font-semibold">Последние бронирования</h2><p className="text-sm text-muted-foreground">Фактические записи текущего отеля</p></div><Sparkles className="size-4 text-muted-foreground" /></header>
       {recent.length ? <RecentReservationsTable reservations={recent.map(toReservationVM)} rooms={rooms} ratePlans={ratePlans} guests={guests} hotelCurrency={hotel.currency} /> : <EmptyState icon={CalendarCheck2} title="Бронирований пока нет" description="Создайте первую бронь — она сразу появится в обзоре." className="py-10" />}
-    </section>
+    </section> : null}
     {PRODUCT_AVAILABILITY.channels ? <ChannelHealthCard rows={channelHealth} /> : null}</div></DesktopOnly>
   </div>;
 }

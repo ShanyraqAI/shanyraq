@@ -4,11 +4,9 @@ import Link from "next/link";
 import { BedDouble, CalendarDays, Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { GuestVM, RatePlanVM, RoomVM } from "@/lib/types";
 import type { AppLocale } from "@/lib/locale";
 
 export function QuickActions({ canCreateReservation, canOpenCalendar, canOpenGuests, canOpenRooms, mobile = false, locale = "ru" }: {
-  rooms: RoomVM[]; ratePlans: RatePlanVM[]; guests: GuestVM[]; hotelCurrency: string;
   canCreateReservation: boolean; canOpenCalendar: boolean; canOpenGuests: boolean; canOpenRooms: boolean; mobile?: boolean; locale?: AppLocale;
 }) {
   const links = [

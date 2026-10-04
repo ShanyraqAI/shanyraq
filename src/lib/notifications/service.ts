@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { parseISODate } from "@/lib/dates";
 import { sendDailyOperationsDigest, sendNewReservationNotification } from "@/lib/email";
 import { decryptSecret } from "@/lib/security/credentials";
+import { canReceiveNotification, hiddenNotificationTypes, isAllowedPushEndpoint } from "@/lib/notifications/policy";
 
 export interface NotificationInput {
   hotelId: string;
@@ -16,10 +17,11 @@ export interface NotificationInput {
 }
 
 export async function createHotelNotification(input: NotificationInput): Promise<void> {
-  const recipients = await db.membership.findMany({
+  const members = await db.membership.findMany({
     where: { hotelId: input.hotelId },
-    select: { userId: true },
+    select: { userId: true, role: true, accessLevel: true, permissions: true },
   });
+  const recipients = members.filter((member) => canReceiveNotification(member, input.type));
   if (!recipients.length) return;
   const inserted = await db.notification.createManyAndReturn({
     data: recipients.map(({ userId }) => ({
@@ -49,6 +51,10 @@ async function sendPushNotification(hotelId: string, userId: string, notificatio
   const subscriptions = await db.pushSubscription.findMany({ where: { hotelId, userId } });
   await Promise.all(subscriptions.map(async (row) => {
     const subscription = decryptSecret<webpush.PushSubscription>(row.encryptedData);
+    if (!isAllowedPushEndpoint(subscription.endpoint)) {
+      await db.pushSubscription.delete({ where: { id: row.id } }).catch(() => undefined);
+      return;
+    }
     try {
       await webpush.sendNotification(subscription, JSON.stringify({
         title: notification.title,
@@ -67,15 +73,16 @@ async function sendPushNotification(hotelId: string, userId: string, notificatio
   }));
 }
 
-export async function getNotificationCenter(hotelId: string, userId: string) {
+export async function getNotificationCenter(hotelId: string, userId: string, permissions: readonly string[]) {
+  const where = { hotelId, recipientUserId: userId, type: { notIn: hiddenNotificationTypes(permissions) } };
   const [items, unreadCount] = await Promise.all([
     db.notification.findMany({
-      where: { hotelId, recipientUserId: userId },
+      where,
       orderBy: { createdAt: "desc" },
       take: 30,
       select: { id: true, type: true, title: true, body: true, href: true, readAt: true, createdAt: true },
     }),
-    db.notification.count({ where: { hotelId, recipientUserId: userId, readAt: null } }),
+    db.notification.count({ where: { ...where, readAt: null } }),
   ]);
   return { items, unreadCount };
 }
@@ -94,10 +101,11 @@ export async function sendImmediateReservationEmails(
     currency: string;
   },
 ): Promise<void> {
-  const recipients = await db.membership.findMany({
+  const members = await db.membership.findMany({
     where: { hotelId, newReservationEmail: true, user: { email: { not: null } } },
-    select: { userId: true, user: { select: { email: true, fullName: true } }, hotel: { select: { name: true } } },
+    select: { userId: true, role: true, accessLevel: true, permissions: true, user: { select: { email: true, fullName: true } }, hotel: { select: { name: true } } },
   });
+  const recipients = members.filter((member) => canReceiveNotification(member, "NEW_RESERVATION"));
   await Promise.all(recipients.map(async (recipient) => {
     if (!recipient.user.email) return;
     await sendNewReservationNotification({

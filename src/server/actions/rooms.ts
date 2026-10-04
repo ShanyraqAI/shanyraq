@@ -4,10 +4,10 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireSessionHotelId } from "@/server/guards";
 import { assertRoomCapacity } from "@/lib/billing/service";
-import { deleteRoomSchema, firstZodError, roomStatusSchema, upsertRoomSchema } from "@/lib/constants";
-import { writeAudit } from "@/lib/reservations/service";
+import { ACTIVE_RESERVATION_STATUSES, deleteRoomSchema, firstZodError, roomStatusSchema, upsertRoomSchema } from "@/lib/constants";
+import { lockBusinessKeys, writeAudit } from "@/lib/reservations/service";
 import { ok, fail, type ActionResult } from "@/server/types";
-import { toErrorMessage } from "@/server/errors";
+import { PublicError, toErrorMessage } from "@/server/errors";
 import { t } from "@/lib/i18n";
 import { recomputeExistingAvailability } from "@/lib/availability/service";
 import { enqueueHotelChannelSyncs } from "@/lib/channels/sync-outbox";
@@ -113,10 +113,20 @@ export async function upsertRoomAction(input: unknown): Promise<ActionResult<{ i
           })();
 
       if (data.id) {
+        await lockBusinessKeys(tx, [`room:${data.id}`]);
         const previous = await tx.room.findFirstOrThrow({
           where: { id: data.id, hotelId },
           select: { roomTypeId: true, number: true, floor: true, status: true, roomType: { select: { name: true } } },
         });
+        if (previous.roomTypeId !== roomType.id) {
+          // Active stays keep their room type for availability; moving the unit would desync inventory.
+          const activeStays = await tx.reservation.count({
+            where: { hotelId, roomId: data.id, status: { in: [...ACTIVE_RESERVATION_STATUSES] } },
+          });
+          if (activeStays > 0) {
+            throw new PublicError("Нельзя сменить категорию номера с активными бронированиями. Перенесите или завершите брони и повторите.");
+          }
+        }
         const nextOrder = previous.roomTypeId === roomType.id ? undefined : ((await tx.room.aggregate({ where: { hotelId, roomTypeId: roomType.id }, _max: { sortOrder: true } }))._max.sortOrder ?? -1);
         const result = await tx.room.updateMany({
           where: { id: data.id, hotelId },

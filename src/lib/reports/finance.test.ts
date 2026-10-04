@@ -1,6 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateCommission, calculateOutstanding, summarizeOperations } from "./finance";
+import { calculateCommission, calculateOutstanding, depositOperations, summarizeOperations } from "./finance";
+
+test("deposit cash movements belong to the period in which they happened", () => {
+  const from = new Date("2030-01-01T00:00:00Z");
+  const toExclusive = new Date("2030-02-01T00:00:00Z");
+  const rows = [
+    { depositAmount: 100, currency: "KZT", depositCollectedAt: new Date("2029-12-20T10:00:00Z"), depositReturnedAt: new Date("2030-01-05T10:00:00Z") },
+    { depositAmount: 50, currency: "KZT", depositCollectedAt: new Date("2030-01-31T23:00:00Z"), depositReturnedAt: new Date("2030-02-01T00:00:00Z") },
+  ];
+  assert.deepEqual(depositOperations(rows, from, toExclusive), [
+    { amount: 100, currency: "KZT", type: "REFUND", status: "COMPLETED" },
+    { amount: 50, currency: "KZT", type: "PAYMENT", status: "COMPLETED" },
+  ]);
+});
 
 test("uses actual Channex commission when present", () => {
   assert.deepEqual(calculateCommission({ bookingAmount: 1000, channexCommission: 125, ratePercent: 12, fixedFee: 3, currencyMatches: true }), { amount: 125, source: "CHANNEX" });

@@ -142,7 +142,7 @@ export class OverbookingError extends PublicError {
   }
 }
 
-async function lockBusinessKeys(tx: Prisma.TransactionClient, keys: string[]): Promise<void> {
+export async function lockBusinessKeys(tx: Prisma.TransactionClient, keys: string[]): Promise<void> {
   for (const key of [...new Set(keys)].sort()) {
     await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
   }

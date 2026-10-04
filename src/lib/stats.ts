@@ -73,7 +73,7 @@ export async function getDashboardStats(hotelId: string, date: Date, timeZone = 
   const forecastEnd = addDays(date, 7);
 
   const [totalRooms, tonightReservations, arrivals, departures, monthReservations, activeReservations, trendReservations, recentBookings, roomsCleaning, roomsUnavailable] = await Promise.all([
-    db.room.count({ where: { hotelId, status: { not: "OUT_OF_ORDER" } } }),
+    db.room.count({ where: { hotelId, status: { notIn: ["OUT_OF_ORDER", "MAINTENANCE"] } } }),
     // Reservations whose stay covers "tonight" (date → date+1).
     db.reservation.findMany({
       where: {
