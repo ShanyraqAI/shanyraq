@@ -2,6 +2,7 @@ import { z } from "zod";
 import { getSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { sendSupportRequestNotification } from "@/lib/email";
+import { sendSupportRequestTelegram } from "@/lib/support/telegram";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { RateLimitError, toErrorMessage } from "@/server/errors";
 
@@ -61,18 +62,20 @@ export async function POST(request: Request) {
     });
 
     const reference = referenceFor(ticket.id);
-    try {
-      await sendSupportRequestNotification({
-        reference,
-        name: parsed.data.name || null,
-        contact: parsed.data.contact,
-        message: parsed.data.message,
-        sourcePath: parsed.data.sourcePath,
-        hotelName: hotel?.name ?? null,
-      });
-    } catch (error) {
-      console.error("Support request email notification failed", error);
-    }
+    const notification = {
+      reference,
+      name: parsed.data.name || null,
+      contact: parsed.data.contact,
+      message: parsed.data.message,
+      sourcePath: parsed.data.sourcePath,
+      hotelName: hotel?.name ?? null,
+    };
+    const [email, telegram] = await Promise.allSettled([
+      sendSupportRequestNotification(notification),
+      sendSupportRequestTelegram(notification),
+    ]);
+    if (email.status === "rejected") console.error("Support request email notification failed", email.reason);
+    if (telegram.status === "rejected") console.error("Support request Telegram notification failed", telegram.reason);
 
     return Response.json({ reference }, { status: 201 });
   } catch (error) {
