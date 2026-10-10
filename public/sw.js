@@ -121,27 +121,30 @@ self.addEventListener("fetch", (event) => {
 
 async function warmPages(urls) {
   const pages = await caches.open(PAGES_CACHE);
-  let html = "";
-  for (const href of urls) {
-    const url = new URL(href, self.location.origin);
-    if (url.origin !== self.location.origin || !isWorkspacePage(url)) continue;
-    try {
-      const response = await fetch(url.toString(), { credentials: "same-origin", headers: { accept: "text/html" } });
-      if (!isCacheablePage(response)) continue;
-      html += await response.clone().text();
-      await pages.put(pageKey(url), response);
-    } catch {
-      return;
-    }
+  const targets = urls.map((href) => new URL(href, self.location.origin)).filter((url) => url.origin === self.location.origin && isWorkspacePage(url));
+  const chunks = [];
+  let failed = false;
+  // Three pages at a time: fast, but gentle on the server and the connection.
+  for (let index = 0; index < targets.length && !failed; index += 3) {
+    await Promise.all(targets.slice(index, index + 3).map(async (url) => {
+      try {
+        const response = await fetch(url.toString(), { credentials: "same-origin", headers: { accept: "text/html" } });
+        if (!isCacheablePage(response)) return;
+        chunks.push(await response.clone().text());
+        await pages.put(pageKey(url), response);
+      } catch {
+        failed = true;
+      }
+    }));
   }
-  await cacheAssetsFrom(html);
+  await cacheAssetsFrom(chunks.join(""));
   await trimStaticCache();
 }
 
 self.addEventListener("message", (event) => {
   const data = event.data || {};
   if (data.type === "warm" && Array.isArray(data.urls)) {
-    event.waitUntil(warmPages(data.urls.slice(0, 20)));
+    event.waitUntil(warmPages(data.urls.slice(0, 30)));
   } else if (data.type === "clear-pages") {
     event.waitUntil(caches.delete(PAGES_CACHE));
   }

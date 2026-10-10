@@ -22,7 +22,8 @@ export async function warmOfflinePages(urls: string[]) {
   if (!("serviceWorker" in navigator) || navigator.onLine === false) return;
   const last = Number(window.localStorage.getItem(WARM_KEY) ?? 0);
   if (Date.now() - last < WARM_INTERVAL_MS) return;
-  const registration = await navigator.serviceWorker.getRegistration();
+  // `ready` also covers the very first visit, while the worker is still installing.
+  const registration = await navigator.serviceWorker.ready.catch(() => undefined);
   const worker = registration?.active;
   if (!worker) return;
   window.localStorage.setItem(WARM_KEY, String(Date.now()));

@@ -26,6 +26,7 @@ import { getRequestLocale } from "@/lib/locale-server";
 import { OfflineSync } from "@/components/pwa/offline-sync";
 import { PwaInstallBanner } from "@/components/pwa/pwa-install-banner";
 import type { HotelPermission } from "@/lib/access";
+import { NAV_MAIN, NAV_SECONDARY } from "@/components/layout/nav-config";
 
 // Workspace pages saved on the device for offline use, by required permission.
 const OFFLINE_SECTIONS: Array<[string, HotelPermission | null]> = [
@@ -74,10 +75,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
       : Promise.resolve([]),
   ]);
   const hotelOptions = hotels.map((item) => item.hotel);
-  const offlineUrls = [
+  const canOpen = (permission: HotelPermission | "FULL" | HotelPermission[]) =>
+    Array.isArray(permission) ? permission.some((item) => permissions.includes(item)) : permission === "FULL" ? (user.accessLevel ?? "FULL") === "FULL" : permissions.includes(permission);
+  const navUrls = [...NAV_MAIN, ...NAV_SECONDARY]
+    .filter((item) => canOpen(item.permission) && (!item.ownerOnly || user.role === "OWNER"))
+    .map((item) => item.href.split("#")[0]);
+  const offlineUrls = [...new Set([
     ...OFFLINE_SECTIONS.filter(([, permission]) => !permission || permissions.includes(permission)).map(([href]) => href),
+    ...navUrls,
     ...upcomingReservations.map((reservation) => `/dashboard/reservations/${reservation.id}`),
-  ];
+  ])];
   const [searchGuests, searchRooms, searchReservations] = searchableData;
   const searchItems: GlobalSearchItem[] = [
     ...(permissions.includes("GUESTS") ? searchGuests.map((guest) => ({ id: `guest-${guest.id}`, type: "guest" as const, title: guest.fullName, subtitle: `${guestDisplayId(guest.sequenceNumber)} · ${guest.email ?? guest.phone ?? "карточка гостя"}`, href: `/dashboard/guests?guest=${guest.id}` })) : []),
