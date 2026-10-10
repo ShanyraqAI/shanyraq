@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && node scripts/vercel-migrate.mjs && next build",
     "deploy:prod": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-production.ps1",
     "start": "next start",
     "start:e2e": "node --env-file=.env scripts/start-e2e-server.mjs",
