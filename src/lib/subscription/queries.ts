@@ -3,11 +3,16 @@ import "server-only";
 import { db } from "@/lib/db";
 import { subscriptionStatus, type SubscriptionStatus } from "./access";
 
-/** Latest grant decides current access; null means a subscription was never issued. */
+/** Latest grant decides current access; null means none was issued or the lookup failed (the banner must never break the dashboard). */
 export async function getOrganizationSubscription(organizationId: string) {
-  const grant = await db.subscriptionGrant.findFirst({ where: { organizationId }, orderBy: { endsAt: "desc" }, select: { planId: true, endsAt: true } });
-  if (!grant) return null;
-  return { planId: grant.planId, endsAt: grant.endsAt, status: subscriptionStatus(grant.endsAt) };
+  try {
+    const grant = await db.subscriptionGrant.findFirst({ where: { organizationId }, orderBy: { endsAt: "desc" }, select: { planId: true, endsAt: true } });
+    if (!grant) return null;
+    return { planId: grant.planId, endsAt: grant.endsAt, status: subscriptionStatus(grant.endsAt) };
+  } catch (error) {
+    console.error("Subscription lookup failed", { organizationId, error });
+    return null;
+  }
 }
 
 export async function listSubscriptionOrganizations() {
