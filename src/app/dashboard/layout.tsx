@@ -1,3 +1,5 @@
+import { SubscriptionBanner } from "@/components/subscription/subscription-banner";
+import { getOrganizationSubscription } from "@/lib/subscription/queries";
 import { BillingBanner } from "@/components/billing/billing-banner";
 import { getSubscription } from "@/lib/billing/service";
 import { accessUntil, isExpired } from "@/lib/billing/policy";
@@ -48,8 +50,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const locale = await getRequestLocale();
   const userName = user.fullName;
   const permissions = resolveHotelPermissions(user);
-  const [subscription, hotels, productExperience, reservationCount, notificationCenter, searchableData, upcomingReservations] = await Promise.all([
+  const [subscription, manualSubscription, hotels, productExperience, reservationCount, notificationCenter, searchableData, upcomingReservations] = await Promise.all([
     PRODUCT_AVAILABILITY.billing && user.organizationId ? getSubscription(user.organizationId) : Promise.resolve(null),
+    user.organizationId ? getOrganizationSubscription(user.organizationId) : Promise.resolve(null),
     db.membership.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: "asc" },
@@ -106,6 +109,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <span aria-hidden>→</span>
             </Link>
           )}
+          {manualSubscription && <SubscriptionBanner status={manualSubscription.status} endsAt={manualSubscription.endsAt} organizationName={hotelName} />}
           {subscription && <BillingBanner endsAt={accessUntil(subscription).toISOString()} paid={Boolean(subscription.paidUntil)} initiallyExpired={isExpired(subscription)} />}
           <OfflineSync scope={`${user.id}:${hotel.id}`} warmUrls={offlineUrls} locale={locale} />
           <MobileContextBack locale={locale} />

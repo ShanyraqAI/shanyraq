@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, ExternalLink, LogOut, ShieldCheck } from "lucide-react";
+import { BarChart3, CreditCard, ExternalLink, LogOut, ShieldCheck } from "lucide-react";
 import { requirePlatformAdmin } from "@/lib/superadmin/auth";
 import { signOutAction } from "@/server/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,8 @@ export default async function SuperAdminLayout({ children }: { children: React.R
         <nav className="mb-7 flex items-center gap-2 text-sm text-slate-400">
           <BarChart3 className="size-4" />
           <Link href="/superadmin" className="hover:text-white">Обзор закрытой беты</Link>
+          <CreditCard className="ml-4 size-4" />
+          <Link href="/superadmin/subscriptions" className="hover:text-white">Подписки</Link>
         </nav>
         {children}
       </div>
