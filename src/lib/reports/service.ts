@@ -12,12 +12,18 @@ export type GeneralExpense = { id: string; occurredAt: Date; amount: number; cat
 /** Property-level expenses entered in the Expenses tab. A channel filter shows channel economics, so they are left out then. */
 export async function getGeneralExpenses(hotelId: string, filters: ReportFilters): Promise<GeneralExpense[]> {
   if (filters.source) return [];
-  const rows = await db.expense.findMany({
-    where: { hotelId, occurredAt: { gte: filters.from, lt: addDays(filters.to, 1) } },
-    orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
-    select: { id: true, occurredAt: true, amount: true, category: true, comment: true, roomIds: true },
-  });
-  return rows.map((row) => ({ ...row, amount: Number(row.amount) }));
+  try {
+    const rows = await db.expense.findMany({
+      where: { hotelId, occurredAt: { gte: filters.from, lt: addDays(filters.to, 1) } },
+      orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+      select: { id: true, occurredAt: true, amount: true, category: true, comment: true, roomIds: true },
+    });
+    return rows.map((row) => ({ ...row, amount: Number(row.amount) }));
+  } catch (error) {
+    // Reports must stay usable if the expenses table is not migrated yet.
+    console.error("Expense lookup failed", { hotelId, error });
+    return [];
+  }
 }
 
 export async function getHotelPerformanceReport(hotelId: string, filters: ReportFilters, generalExpenses: GeneralExpense[] = []) {
