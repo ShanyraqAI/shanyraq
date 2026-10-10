@@ -8,11 +8,12 @@ import { MonthSelector } from "@/components/reports/month-selector";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { formatISODate, formatShortDate, todayInTimeZone, toISODate } from "@/lib/dates";
 import { channelLabel } from "@/lib/i18n";
 import { parseReportFilters } from "@/lib/reports/performance";
-import { getHotelPerformanceReport } from "@/lib/reports/service";
+import { getHotelPerformanceReport, getUnitFinanceReport } from "@/lib/reports/service";
 import { getCurrentHotel } from "@/lib/tenant";
 import { formatPercent } from "@/lib/utils";
 import { requireSectionAccess } from "@/server/guards";
@@ -50,6 +51,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
     return { value: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`, label: new Intl.DateTimeFormat(locale === "kk" ? "kk-KZ" : "ru-RU", { month: "long", year: "numeric", timeZone: "UTC" }).format(date) };
   });
   const report = await getHotelPerformanceReport(hotel.id, filters);
+  const unitRows = await getUnitFinanceReport(hotel.id, filters, report.currency);
   const commissionSources = [...new Set([...report.sources, ...report.commissionSettings.map((item) => item.sourceChannel), "booking", "airbnb", "ostrovok", "bronevik", "expedia", "krisha"])];
   const selectedSource = filters.source ?? "all";
   const maxRevenue = Math.max(1, ...report.revenueBySource.map((row) => row.value));
@@ -169,6 +171,21 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
           </CardContent>
         </Card>
       </div>
+
+      <Card className="order-4 shadow-sm">
+        <CardHeader><CardTitle className="text-base">{kk ? "Пәтерлер бойынша қаржы және жүктеме" : "Финансы и загрузка по квартирам"}</CardTitle>
+          <CardDescription>{kk ? "Тек кезеңге кіретін түндер есептеледі. Пайда = табыс − арна комиссиясы − шығындар. Шығындар броньға байланған." : "Считаются только ночи внутри периода. Прибыль = доход − комиссия канала − расходы. Расходы привязаны к броням."}</CardDescription></CardHeader>
+        <CardContent className="overflow-x-auto">
+          <Table>
+            <TableHeader><TableRow>{(kk ? ["Пәтер", "Табыс", "Шығын", "Комиссия", "Пайда", "Жүктеме", "ADR", "RevPAR"] : ["Квартира", "Доход", "Расход", "Комиссия", "Прибыль", "Загрузка", "ADR", "RevPAR"]).map((title) => <TableHead key={title} className={title === "Квартира" || title === "Пәтер" ? "" : "text-right"}>{title}</TableHead>)}</TableRow></TableHeader>
+            <TableBody>
+              {unitRows.map((row) => <TableRow key={row.roomId}><TableCell className="font-medium">{row.number}</TableCell><TableCell className="text-right tabular-nums">{money(row.revenue)}</TableCell><TableCell className="text-right tabular-nums">{money(row.expenses)}</TableCell><TableCell className="text-right tabular-nums">{money(row.commission)}</TableCell><TableCell className={`text-right font-semibold tabular-nums ${row.profit < 0 ? "text-red-600" : ""}`}>{money(row.profit)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(row.occupancy)}</TableCell><TableCell className="text-right tabular-nums">{money(row.adr)}</TableCell><TableCell className="text-right tabular-nums">{money(row.revpar)}</TableCell></TableRow>)}
+              {unitRows.length > 1 ? <TableRow className="font-semibold"><TableCell>{kk ? "Барлығы" : "Итого"}</TableCell><TableCell className="text-right tabular-nums">{money(unitRows.reduce((sum, row) => sum + row.revenue, 0))}</TableCell><TableCell className="text-right tabular-nums">{money(unitRows.reduce((sum, row) => sum + row.expenses, 0))}</TableCell><TableCell className="text-right tabular-nums">{money(unitRows.reduce((sum, row) => sum + row.commission, 0))}</TableCell><TableCell className="text-right tabular-nums">{money(unitRows.reduce((sum, row) => sum + row.profit, 0))}</TableCell><TableCell colSpan={3} /></TableRow> : null}
+            </TableBody>
+          </Table>
+          {unitRows.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">{kk ? "Пәтерлер жоқ" : "Квартир пока нет"}</p> : null}
+        </CardContent>
+      </Card>
 
       <Card className="relative order-4 hidden overflow-hidden border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.035] shadow-sm sm:block">
         <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary via-chart-2/65 to-transparent" />

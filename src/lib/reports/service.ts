@@ -3,6 +3,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { addDays, diffDays } from "@/lib/dates";
 import { calculatePerformance, type ReportFilters } from "@/lib/reports/performance";
+import { calculateUnitFinance } from "@/lib/reports/units";
 import { calculateOutstanding, depositOperations, summarizeOperations } from "@/lib/reports/finance";
 
 export async function getHotelPerformanceReport(hotelId: string, filters: ReportFilters) {
@@ -110,4 +111,27 @@ export async function getHotelPerformanceReport(hotelId: string, filters: Report
     commissionSettings: commissionSettings.map((row) => ({ sourceChannel: row.sourceChannel, ratePercent: Number(row.ratePercent), fixedFee: Number(row.fixedFee), currency: row.currency })),
     reservationOptions: scopedReservations.map((row) => ({ id: row.id, total: Number(row.channelBookingAmount ?? row.totalAmount), currency: row.currency })),
   };
+}
+
+export async function getUnitFinanceReport(hotelId: string, filters: ReportFilters, currency: string) {
+  const toExclusive = addDays(filters.to, 1);
+  const sourceFilter = filters.source ? { sourceChannel: filters.source } : {};
+  const [rooms, reservations, expenses] = await Promise.all([
+    db.room.findMany({ where: { hotelId }, orderBy: [{ sortOrder: "asc" }, { number: "asc" }], select: { id: true, number: true } }),
+    db.reservation.findMany({
+      where: { hotelId, checkIn: { lt: toExclusive }, checkOut: { gt: filters.from }, ...sourceFilter },
+      select: { roomId: true, checkIn: true, checkOut: true, status: true, totalAmount: true, sourceChannel: true, currency: true, otaCommissionAmount: true },
+    }),
+    db.financialOperation.findMany({
+      where: { hotelId, type: "EXPENSE", status: "COMPLETED", occurredAt: { gte: filters.from, lt: toExclusive }, reservation: sourceFilter },
+      select: { amount: true, currency: true, reservation: { select: { roomId: true } } },
+    }),
+  ]);
+  return calculateUnitFinance(
+    rooms,
+    reservations.map((row) => ({ ...row, totalAmount: Number(row.totalAmount), otaCommissionAmount: row.otaCommissionAmount === null ? null : Number(row.otaCommissionAmount) })),
+    expenses.map((row) => ({ roomId: row.reservation.roomId, amount: Number(row.amount), currency: row.currency })),
+    currency,
+    filters,
+  );
 }
