@@ -118,11 +118,12 @@ export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, def
         depositCollected: (Number(depositAmount) || 0) > 0 && depositCollected,
       });
       if (!result.ok) { toast.error(result.error); return; }
-      if (result.queued) { toast.success(result.message); router.push("/dashboard/reservations"); return; }
+      if (result.queued) { toast.success(result.message); router.replace("/dashboard/reservations"); return; }
       const reservationId = result.data?.id;
       if (!reservationId) { toast.error(kk ? "Бронь ашылмады" : "Не удалось открыть бронь"); return; }
       toast.success(kk ? "Бронь жасалды" : "Бронь создана");
-      router.push(`/dashboard/reservations/${reservationId}`);
+      // replace: the finished wizard must not stay in history, otherwise "Back" reopens it.
+      router.replace(`/dashboard/reservations/${reservationId}`);
     });
   }
 

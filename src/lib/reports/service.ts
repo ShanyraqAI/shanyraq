@@ -3,9 +3,24 @@ import "server-only";
 import { db } from "@/lib/db";
 import { addDays, diffDays } from "@/lib/dates";
 import { calculatePerformance, type ReportFilters } from "@/lib/reports/performance";
+import { calculateUnitFinance } from "@/lib/reports/units";
+import { expensesByRoom } from "@/lib/reports/expenses";
 import { calculateOutstanding, depositOperations, summarizeOperations } from "@/lib/reports/finance";
 
-export async function getHotelPerformanceReport(hotelId: string, filters: ReportFilters) {
+export type GeneralExpense = { id: string; occurredAt: Date; amount: number; category: string; comment: string | null; roomIds: string[] };
+
+/** Property-level expenses entered in the Expenses tab. A channel filter shows channel economics, so they are left out then. */
+export async function getGeneralExpenses(hotelId: string, filters: ReportFilters): Promise<GeneralExpense[]> {
+  if (filters.source) return [];
+  const rows = await db.expense.findMany({
+    where: { hotelId, occurredAt: { gte: filters.from, lt: addDays(filters.to, 1) } },
+    orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+    select: { id: true, occurredAt: true, amount: true, category: true, comment: true, roomIds: true },
+  });
+  return rows.map((row) => ({ ...row, amount: Number(row.amount) }));
+}
+
+export async function getHotelPerformanceReport(hotelId: string, filters: ReportFilters, generalExpenses: GeneralExpense[] = []) {
   const toExclusive = addDays(filters.to, 1);
   const sourceFilter = filters.source ? { reservation: { sourceChannel: filters.source } } : {};
   const [hotel, roomCount, reservations, sourceRows, commissionSettings, periodExpenses, periodPayments, periodDeposits] = await Promise.all([
@@ -51,7 +66,8 @@ export async function getHotelPerformanceReport(hotelId: string, filters: Report
     ...depositOperations(periodDeposits.map((row) => ({ ...row, depositAmount: Number(row.depositAmount) })), filters.from, toExclusive),
   ];
   const paymentSummary = summarizeOperations(operations, hotel.currency);
-  const expenses = periodExpenses.filter((row) => row.currency === hotel.currency).reduce((sum, row) => sum + Number(row.amount), 0);
+  const reservationExpenses = periodExpenses.filter((row) => row.currency === hotel.currency).reduce((sum, row) => sum + Number(row.amount), 0);
+  const expenses = reservationExpenses + generalExpenses.reduce((sum, row) => sum + row.amount, 0);
   const performance = calculatePerformance(
     reservations.filter((reservation) => reservation.currency === hotel.currency).map((reservation) => ({ ...reservation, totalAmount: Number(reservation.totalAmount) })),
     roomCount,
@@ -110,4 +126,32 @@ export async function getHotelPerformanceReport(hotelId: string, filters: Report
     commissionSettings: commissionSettings.map((row) => ({ sourceChannel: row.sourceChannel, ratePercent: Number(row.ratePercent), fixedFee: Number(row.fixedFee), currency: row.currency })),
     reservationOptions: scopedReservations.map((row) => ({ id: row.id, total: Number(row.channelBookingAmount ?? row.totalAmount), currency: row.currency })),
   };
+}
+
+export async function getUnitFinanceReport(hotelId: string, filters: ReportFilters, currency: string, generalExpenses: GeneralExpense[] = []) {
+  const toExclusive = addDays(filters.to, 1);
+  const sourceFilter = filters.source ? { sourceChannel: filters.source } : {};
+  const [rooms, reservations, expenses] = await Promise.all([
+    db.room.findMany({ where: { hotelId }, orderBy: [{ sortOrder: "asc" }, { number: "asc" }], select: { id: true, number: true } }),
+    db.reservation.findMany({
+      where: { hotelId, checkIn: { lt: toExclusive }, checkOut: { gt: filters.from }, ...sourceFilter },
+      select: { roomId: true, checkIn: true, checkOut: true, status: true, totalAmount: true, sourceChannel: true, currency: true, otaCommissionAmount: true },
+    }),
+    db.financialOperation.findMany({
+      where: { hotelId, type: "EXPENSE", status: "COMPLETED", occurredAt: { gte: filters.from, lt: toExclusive }, reservation: sourceFilter },
+      select: { amount: true, currency: true, reservation: { select: { roomId: true } } },
+    }),
+  ]);
+  const general = expensesByRoom(generalExpenses, rooms.map((room) => room.id));
+  const rows = calculateUnitFinance(
+    rooms,
+    reservations.map((row) => ({ ...row, totalAmount: Number(row.totalAmount), otaCommissionAmount: row.otaCommissionAmount === null ? null : Number(row.otaCommissionAmount) })),
+    expenses.map((row) => ({ roomId: row.reservation.roomId, amount: Number(row.amount), currency: row.currency })),
+    currency,
+    filters,
+  );
+  return rows.map((row) => {
+    const extra = general.get(row.roomId) ?? 0;
+    return { ...row, expenses: row.expenses + extra, profit: row.profit - extra };
+  });
 }

@@ -1,18 +1,22 @@
 import Link from "next/link";
-import { BedDouble, CalendarRange, ChevronLeft, CircleDollarSign, Percent, ReceiptText, TableProperties } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { DataExportDialog } from "@/components/exports/data-export-dialog";
-import { KpiCard } from "@/components/dashboard/kpi-card";
 import { InteractiveTrendChart } from "@/components/charts/interactive-trend-chart";
 import { DailyMetricsTable } from "@/components/reports/daily-metrics-table";
-import { MonthSelector } from "@/components/reports/month-selector";
+import { ExpensePanel } from "@/components/reports/expense-panel";
+import { PeriodFilter } from "@/components/reports/period-filter";
+import { ReportTabs, parseReportTab } from "@/components/reports/report-tabs";
+import { UnitFinanceList } from "@/components/reports/unit-finance-list";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { db } from "@/lib/db";
 import { formatISODate, formatShortDate, todayInTimeZone, toISODate } from "@/lib/dates";
 import { channelLabel } from "@/lib/i18n";
+import { expensesByCategory } from "@/lib/reports/expenses";
+import { formatReportMoney } from "@/lib/reports/format";
 import { parseReportFilters } from "@/lib/reports/performance";
-import { getHotelPerformanceReport } from "@/lib/reports/service";
+import { getGeneralExpenses, getHotelPerformanceReport, getUnitFinanceReport } from "@/lib/reports/service";
 import { getCurrentHotel } from "@/lib/tenant";
 import { formatPercent } from "@/lib/utils";
 import { requireSectionAccess } from "@/server/guards";
@@ -26,6 +30,7 @@ type ReportSearchParams = Promise<{
   to?: string | string[];
   source?: string | string[];
   month?: string | string[];
+  tab?: string | string[];
 }>;
 
 export default async function ReportsPage({ searchParams }: { searchParams: ReportSearchParams }) {
@@ -38,6 +43,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
   const currentDate = todayInTimeZone(hotel.timezone);
   const currentDateText = toISODate(currentDate);
   const params = await searchParams;
+  const tab = parseReportTab(params.tab);
   const currentMonth = `${currentDate.getUTCFullYear()}-${String(currentDate.getUTCMonth() + 1).padStart(2, "0")}`;
   const firstReportDate = new Date(Date.UTC(hotel.createdAt.getUTCFullYear(), hotel.createdAt.getUTCMonth(), 1));
   const firstReportMonth = `${firstReportDate.getUTCFullYear()}-${String(firstReportDate.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -47,14 +53,19 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
   const monthCount = Math.max(1, (currentDate.getUTCFullYear() - firstReportDate.getUTCFullYear()) * 12 + currentDate.getUTCMonth() - firstReportDate.getUTCMonth() + 1);
   const monthOptions = Array.from({ length: monthCount }, (_, index) => {
     const date = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() - index, 1));
-    return { value: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`, label: new Intl.DateTimeFormat(locale === "kk" ? "kk-KZ" : "ru-RU", { month: "long", year: "numeric", timeZone: "UTC" }).format(date) };
+    return { value: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`, label: new Intl.DateTimeFormat(kk ? "kk-KZ" : "ru-RU", { month: "long", year: "numeric", timeZone: "UTC" }).format(date) };
   });
-  const report = await getHotelPerformanceReport(hotel.id, filters);
+  const generalExpenses = await getGeneralExpenses(hotel.id, filters);
+  const report = await getHotelPerformanceReport(hotel.id, filters, generalExpenses);
+  const [unitRows, rooms] = await Promise.all([
+    tab === "units" ? getUnitFinanceReport(hotel.id, filters, report.currency, generalExpenses) : Promise.resolve([]),
+    tab === "expenses" ? db.room.findMany({ where: { hotelId: hotel.id }, orderBy: [{ sortOrder: "asc" }, { number: "asc" }], select: { id: true, number: true } }) : Promise.resolve([]),
+  ]);
   const commissionSources = [...new Set([...report.sources, ...report.commissionSettings.map((item) => item.sourceChannel), "booking", "airbnb", "ostrovok", "bronevik", "expedia", "krisha"])];
   const selectedSource = filters.source ?? "all";
-  const maxRevenue = Math.max(1, ...report.revenueBySource.map((row) => row.value));
   const money = (amount: number, compact = false) => formatReportMoney(amount, report.currency, compact);
   const chronologicalDaily = [...report.daily].reverse();
+  const maxRevenue = Math.max(1, ...report.revenueBySource.map((row) => row.value));
   const occupancyPoints = chronologicalDaily.map((day) => ({
     key: day.date.toISOString(),
     label: formatShortDate(day.date),
@@ -71,35 +82,81 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
     adr: money(day.adr),
     revpar: money(day.revpar),
   }));
+  const roomNames = new Map(rooms.map((room) => [room.id, room.number]));
+  const expenseItems = generalExpenses.map((row) => ({
+    id: row.id,
+    date: formatShortDate(row.occurredAt),
+    amount: row.amount,
+    category: row.category,
+    comment: row.comment,
+    roomLabel: row.roomIds.length === 0 ? "все квартиры" : row.roomIds.map((id) => roomNames.get(id)).filter(Boolean).join(", ") || "все квартиры",
+  }));
+  const generalTotal = generalExpenses.reduce((sum, row) => sum + row.amount, 0);
+  const finance = report.finance;
+  const profit = finance.netProfitAfterTax ?? finance.netProfitBeforeTax;
+  const filterQuery: Record<string, string> = { month: monthValue };
+  if (selectedSource !== "all") filterQuery.source = selectedSource;
 
   return (
-    <div className="flex flex-col gap-5 sm:block sm:space-y-6">
-      <div className="order-0 hidden sm:block"><PageHeader title={kk ? "Есептер" : "Отчёты"} description={kk ? "Таңдалған кезеңдегі жүктеме, табыс және пәтерлердің тиімділігі." : "Загрузка, выручка и эффективность номерного фонда за выбранный период."}>
+    <div className="space-y-5">
+      <div className="hidden sm:block"><PageHeader title={kk ? "Есептер" : "Отчёты"} description={kk ? "Табыс, шығын, пайда және жүктеме: объект бойынша және әр пәтер бойынша." : "Доход, расходы, прибыль и загрузка — по объекту и по каждой квартире."}>
         <DataExportDialog dataset="reports" defaultFrom={report.period.from} defaultTo={report.period.to} defaultSource={selectedSource} maxTo={currentDateText} />
       </PageHeader></div>
+      <header className="flex items-start gap-3 sm:hidden"><Link href="/dashboard/more" className="grid size-9 shrink-0 place-items-center rounded-full bg-white ring-1 ring-[#e6e8df]" aria-label={kk ? "Артқа" : "Назад"}><ChevronLeft className="size-5" /></Link><div className="min-w-0 flex-1"><h1 className="sh-mobile-title">{kk ? "Есептер" : "Отчёты"}</h1><p className="sh-mobile-eyebrow">{formatISODate(report.period.from)} — {formatISODate(report.period.to)}</p></div></header>
 
-      <form action="/dashboard/reports" method="get" className="order-2 hidden gap-3 rounded-xl border bg-card p-3 shadow-sm sm:grid sm:grid-cols-2 sm:gap-4 sm:p-4 lg:grid-cols-[1fr_1.2fr_auto_auto] lg:items-end">
-        <div className="space-y-1.5"><Label htmlFor="report-month">Месяц</Label><select id="report-month" name="month" defaultValue={monthValue} className="flex h-10 w-full rounded-md border bg-background px-3 text-sm">{monthOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-        <div className="space-y-1.5">
-          <Label htmlFor="report-source">Источник бронирования</Label>
-          <select id="report-source" name="source" defaultValue={selectedSource} className="flex h-10 w-full rounded-md border bg-background px-3 text-sm">
-            <option value="all">Все источники</option>
-            {report.sources.map((source) => <option key={source} value={source}>{channelLabel(source)}</option>)}
-          </select>
+      <PeriodFilter month={monthValue} months={monthOptions} source={selectedSource} sources={report.sources.map((source) => ({ value: source, label: channelLabel(source) }))} tab={tab} locale={locale} />
+      <ReportTabs active={tab} query={filterQuery} locale={locale} />
+
+      {tab === "overview" ? <>
+        <section aria-label={kk ? "Пайда" : "Прибыль"} className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#158b72] to-[#08634f] p-5 text-white shadow-lg shadow-emerald-950/10">
+          <div className="absolute -bottom-16 -right-8 size-44 rounded-full border-[18px] border-[#dbc783]/25" />
+          <div className="relative">
+            <p className="text-xs font-semibold text-white/75">{kk ? "Таза пайда" : "Прибыль за период"}</p>
+            <p className={`mt-1 text-3xl font-extrabold tracking-tight tabular-nums ${profit < 0 ? "text-[#ffd3cd]" : ""}`}>{money(profit)}</p>
+            <p className="mt-1 text-[11px] text-white/60">{finance.taxRatePercent === null ? (kk ? "Салыққа дейін" : "До налога · ставка не задана на вкладке «Платежи»") : (kk ? "Салық шегерілген" : `После налога ${finance.taxRatePercent}%`)}</p>
+            <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-white/15 pt-3 text-xs">
+              <div><dt className="text-white/65">{kk ? "Табыс" : "Доход"}</dt><dd className="mt-0.5 font-extrabold tabular-nums">{money(report.summary.revenue, true)}</dd></div>
+              <div><dt className="text-white/65">{kk ? "Комиссия" : "Комиссия"}</dt><dd className="mt-0.5 font-extrabold tabular-nums">−{money(finance.commission, true)}</dd></div>
+              <div><dt className="text-white/65">{kk ? "Шығын" : "Расходы"}</dt><dd className="mt-0.5 font-extrabold tabular-nums">−{money(finance.expenses, true)}</dd></div>
+            </dl>
+          </div>
+        </section>
+        {finance.missingCommissionCount > 0 ? <p className="rounded-xl bg-[#fff7e6] p-3 text-xs font-semibold text-[#8a5a12]">{kk ? `Комиссиясы белгісіз броньдар: ${finance.missingCommissionCount}. Пайда шамамен.` : `Не указана комиссия у ${finance.missingCommissionCount} броней — прибыль приблизительная. Задайте ставки на вкладке «Платежи».`}</p> : null}
+        {finance.expenses === 0 ? <p className="rounded-xl bg-[#eef6f2] p-3 text-xs font-semibold text-[#2c6a58]">{kk ? "Шығындар енгізілмеген — пайда табысқа тең. «Шығындар» бөлімінде қосыңыз." : "Расходы не внесены — прибыль равна доходу за вычетом комиссии. Добавьте их на вкладке «Расходы»."} <Link href={`/dashboard/reports?${new URLSearchParams({ ...filterQuery, tab: "expenses" })}`} className="underline">{kk ? "Қосу" : "Добавить"}</Link></p> : null}
+
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label={kk ? "Көрсеткіштер" : "Показатели"}>
+          <Stat label={kk ? "Жүктеме" : "Загрузка"} value={formatPercent(report.summary.occupancy)} note={`${report.summary.occupiedRoomNights} из ${report.summary.availableRoomNights} ${kk ? "түн" : "ночей"}`} />
+          <Stat label="ADR" value={money(report.summary.adr)} note={kk ? "Сатылған түннің орташа бағасы" : "Средняя цена занятой ночи"} />
+          <Stat label="RevPAR" value={money(report.summary.revpar)} note={kk ? "Қолжетімді түнге табыс" : "Доход на доступную ночь"} />
+          <Stat label={kk ? "Түндер" : "Занято ночей"} value={String(report.summary.occupiedRoomNights)} note={`${report.period.days} ${kk ? "күн" : "дн."}`} />
+        </section>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
+          <section className="sh-mobile-card min-w-0 p-4">
+            <h2 className="sh-mobile-section-title">{kk ? "Жүктеме динамикасы" : "Загрузка по дням"}</h2>
+            <p className="mb-3 text-[11px] text-[#8b9189]">{kk ? "Сызыққа тиіп күнді қараңыз" : "Коснитесь графика, чтобы увидеть день"}</p>
+            <InteractiveTrendChart points={occupancyPoints} maxValue={100} ariaLabel="Интерактивная динамика загрузки по дням" />
+          </section>
+          <section className="sh-mobile-card p-4">
+            <h2 className="sh-mobile-section-title">{kk ? "Арналар бойынша табыс" : "Доход по источникам"}</h2>
+            <ul className="mt-3 space-y-3">
+              {report.revenueBySource.map((row) => <li key={row.source}><div className="mb-1 flex justify-between text-xs"><span className="font-bold text-[#39463f]">{channelLabel(row.source)}</span><span className="tabular-nums"><b>{money(row.value, true)}</b> · {Math.round(row.value / Math.max(1, report.summary.revenue) * 100)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-[#edf0e8]"><div className="h-full rounded-full bg-[#07866b]" style={{ width: `${Math.max(3, row.value / maxRevenue * 100)}%` }} /></div></li>)}
+              {report.revenueBySource.length === 0 ? <li className="py-4 text-center text-sm text-[#8b9189]">{kk ? "Дерек жоқ" : "Нет броней за период"}</li> : null}
+            </ul>
+          </section>
         </div>
-        <Button type="submit"><CalendarRange className="size-4" />Показать</Button>
-        <Button asChild type="button" variant="outline"><Link href="/dashboard/reports">Сбросить</Link></Button>
-      </form>
+        <details className="sh-mobile-card"><summary className="cursor-pointer px-4 py-3 text-sm font-extrabold">{kk ? "Күндер бойынша көрсеткіштер" : "Показатели по дням"}</summary><div className="overflow-x-auto border-t p-3"><DailyMetricsTable rows={dailyRows} locale={locale} /></div></details>
+      </> : null}
 
-      <section className="order-1 space-y-4 sm:hidden"><header className="flex items-start gap-3"><Link href="/dashboard/more" className="grid size-9 shrink-0 place-items-center rounded-full bg-white ring-1 ring-[#e6e8df]" aria-label={kk ? "Артқа" : "Назад"}><ChevronLeft className="size-5" /></Link><div className="min-w-0 flex-1"><h1 className="sh-mobile-title">{kk ? "Есептер" : "Отчёты"}</h1><p className="sh-mobile-eyebrow">{kk ? "Айлық көрсеткіштер" : "Показатели по месяцам"}</p></div></header><MonthSelector value={monthValue} options={monthOptions} source={selectedSource} locale={locale} /><div className="grid grid-cols-3 gap-2"><MiniKpi label={kk ? "Табыс" : "Доход"} value={money(report.summary.revenue, true)} delta={kk ? `${report.period.days} күн` : `${report.period.days} дней`} tone="green" /><MiniKpi label={kk ? "Жүктеме" : "Загрузка"} value={formatPercent(report.summary.occupancy)} delta={kk ? "кезеңде" : "за период"} tone="blue" /><MiniKpi label="ADR" value={money(report.summary.adr, true)} delta={kk ? "орташа" : "средняя"} tone="amber" /></div><div><h2 className="sh-mobile-section-title mb-2">{kk ? "Күндер бойынша табыс" : "Доход по дням"}</h2><div className="sh-mobile-card relative flex h-44 items-end gap-2 overflow-hidden px-4 pb-6 pt-5">{chronologicalDaily.slice(-7).map((row) => { const max = Math.max(1, ...chronologicalDaily.slice(-7).map((item) => item.revenue)); return <div key={row.date.toISOString()} className="flex h-full flex-1 flex-col justify-end gap-1"><div className="w-full rounded-t-md bg-gradient-to-t from-[#07866b] to-[#1ca184]" style={{ height: `${Math.max(12, row.revenue / max * 100)}%` }} /><span className="text-center text-[8px] font-semibold text-[#727a73]">{row.date.getUTCDate()}</span></div>; })}</div></div><div><h2 className="sh-mobile-section-title mb-2">{kk ? "Арналар" : "Каналы"}</h2><div className="sh-mobile-card space-y-3 p-4">{report.revenueBySource.map((row, index) => <div key={row.source} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 text-[11px]"><span className="flex items-center gap-2 font-extrabold text-[#39463f]"><i className={`size-2 rounded-full ${["bg-[#07866b]", "bg-[#568ddd]", "bg-[#7458b5]", "bg-[#f2ac2f]"][index % 4]}`} />{channelLabel(row.source)}</span><b className="text-[#2f3b35]">{money(row.value, true)}</b><span className="w-8 text-right font-semibold text-[#737b74]">{Math.round(row.value / Math.max(1, report.summary.revenue) * 100)}%</span></div>)}</div></div></section>
-      <div className="order-3 hidden grid-cols-1 gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Загрузка" value={formatPercent(report.summary.occupancy)} sub={`${report.summary.occupiedRoomNights} из ${report.summary.availableRoomNights} номеро-ночей`} icon={Percent} accent />
-        <KpiCard label="Выручка" value={money(report.summary.revenue)} sub={`За ${report.period.days} дн.`} icon={ReceiptText} />
-        <KpiCard label="ADR" value={money(report.summary.adr)} sub="Средняя цена проданной ночи" icon={CircleDollarSign} />
-        <KpiCard label="RevPAR" value={money(report.summary.revpar)} sub="Выручка на доступный номер" icon={BedDouble} />
-      </div>
+      {tab === "units" ? <>
+        <p className="text-xs text-[#7b847d]">{kk ? "Тек кезеңге кіретін түндер есептеледі. Пайда = табыс − арна комиссиясы − шығындар." : "Считаются только ночи внутри периода. Прибыль = доход − комиссия канала − расходы (общие расходы делятся поровну между выбранными квартирами)."}</p>
+        <UnitFinanceList rows={unitRows} currency={report.currency} locale={locale} />
+      </> : null}
 
-      <Card id="payments" className="order-3 scroll-mt-6 border-primary/15 sm:order-4">
+      {tab === "expenses" ? <ExpensePanel currency={report.currency} today={currentDateText} rooms={rooms} expenses={expenseItems} categories={expensesByCategory(generalExpenses)} total={generalTotal} filteredBySource={Boolean(filters.source)} /> : null}
+
+      {tab === "payments" ? (
+      <Card id="payments" className="scroll-mt-6 border-primary/15">
         <CardHeader><CardTitle className="text-base">{kk ? "Қаржы бойынша брондау" : "Финансы бронирований"}</CardTitle>
           <CardDescription>{kk ? "Арна комиссиясы және төлем жазбалары. Сомалар тек бір валютада қосылады." : "Комиссия канала и записанные оплаты. Складываются только суммы в одной валюте."}</CardDescription></CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -150,47 +207,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
           <p className="mt-3 text-xs text-muted-foreground">{kk ? "Channex нақты комиссияны Booking.com мен Airbnb үшін жібереді. Басқа арналар үшін осы мәнді шарттағы мөлшерлемеге сай енгізіңіз; жалпы мөлшер барлық серіктестерге бірдей емес. Ставка келесі жаңартуларға ғана қолданылады." : "Channex передаёт фактическую комиссию для Booking.com и Airbnb. Для других каналов укажите ставку из договора: универсального процента для всех объектов нет. Настройка применяется к новым обновлениям и сохраняется в брони как оценка."}</p>
         </CardContent> : null}
       </Card>
-
-      <div className="order-3 hidden gap-6 sm:grid xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
-        <Card className="min-w-0 shadow-sm">
-          <CardHeader><CardTitle className="text-base">Динамика загрузки</CardTitle><CardDescription>{formatISODate(report.period.from)} — {formatISODate(report.period.to)} · наведите на линию, чтобы увидеть день</CardDescription></CardHeader>
-          <CardContent><InteractiveTrendChart points={occupancyPoints} maxValue={100} ariaLabel="Интерактивная динамика загрузки по дням" /></CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardHeader><CardTitle className="text-base">Выручка по источникам</CardTitle><CardDescription>{filters.source ? `Фильтр: ${channelLabel(filters.source)}` : "Распределение за выбранный период"}</CardDescription></CardHeader>
-          <CardContent className="space-y-4">
-            {report.revenueBySource.length === 0 ? <p className="py-10 text-center text-sm text-muted-foreground">За период нет выручки.</p> : report.revenueBySource.map((row) => (
-              <div key={row.source}>
-                <div className="mb-1 flex items-center justify-between gap-3 text-sm"><span className="font-medium">{channelLabel(row.source)}</span><span className="tabular-nums text-muted-foreground">{money(row.value, true)}</span></div>
-                <div className="h-2 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.round(row.value / maxRevenue * 100)}%` }} /></div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="relative order-4 hidden overflow-hidden border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.035] shadow-sm sm:block">
-        <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary via-chart-2/65 to-transparent" />
-        <CardHeader className="border-b border-primary/10 bg-primary/[0.025] pb-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/10"><TableProperties className="size-5" /></span>
-              <div><CardTitle className="text-base">Показатели по дням</CardTitle><CardDescription className="mt-1">Выручка распределяется по ночам проживания пропорционально полной стоимости бронирования.</CardDescription></div>
-            </div>
-            <span className="hidden rounded-full border border-primary/15 bg-card px-3 py-1 text-[11px] font-medium text-primary sm:inline-flex">Детализация периода</span>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-5"><DailyMetricsTable rows={dailyRows} locale={locale} /></CardContent>
-      </Card>
-      <details className="order-4 rounded-xl border bg-card sm:hidden"><summary className="cursor-pointer px-4 py-3 text-sm font-extrabold">{kk ? "Күндер бойынша көрсеткіштер · толық есеп" : "Показатели по дням · полный отчёт"}</summary><div className="overflow-x-auto border-t p-3"><DailyMetricsTable rows={dailyRows} locale={locale} /></div></details>
+      ) : null}
     </div>
   );
 }
 
-function MiniKpi({ label, value, delta, tone }: { label: string; value: string; delta: string; tone: "green" | "blue" | "amber" }) {
-  const color = tone === "green" ? "text-[#13836a]" : tone === "blue" ? "text-[#4f86d6]" : "text-[#c48729]";
-  return <div className="sh-mobile-card min-w-0 p-3"><p className="truncate text-[10px] font-bold text-[#737b74]">{label}</p><p className="mt-1 truncate text-base font-extrabold text-[#26342d]">{value}</p><p className={`mt-1 text-[9px] font-bold ${color}`}>{delta}</p></div>;
+function Stat({ label, value, note }: { label: string; value: string; note: string }) {
+  return <div className="sh-mobile-card min-w-0 p-3"><p className="truncate text-[11px] font-bold text-[#737b74]">{label}</p><p className="mt-1 truncate text-lg font-extrabold tabular-nums text-[#26342d]">{value}</p><p className="mt-0.5 truncate text-[10px] text-[#939991]">{note}</p></div>;
 }
 
 function FinanceMetric({ label, value, note }: { label: string; value: string; note: string }) {
@@ -203,15 +226,3 @@ function operationsLabel(rows: Array<{ currency: string; paid: number; refunded:
   return nonZero.map((row) => `${row.currency}: ${kk ? "төленді" : "оплачено"} ${formatReportMoney(row.paid, row.currency)} / ${kk ? "қайтарылды" : "возвращено"} ${formatReportMoney(row.refunded, row.currency)}`).join(" · ");
 }
 
-function formatReportMoney(amount: number, currency: string, compact = false): string {
-  try {
-    return new Intl.NumberFormat("ru-KZ", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 0,
-      ...(compact ? { notation: "compact" as const } : {}),
-    }).format(amount);
-  } catch {
-    return `${Math.round(amount).toLocaleString("ru-RU")} ${currency}`;
-  }
-}

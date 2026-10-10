@@ -6,7 +6,7 @@ import { requireSessionHotelId } from "@/server/guards";
 import { AuthenticationError, AuthorizationError, PublicError, toErrorMessage } from "@/server/errors";
 import type { HotelPermission } from "@/lib/access";
 import { parseReportFilters } from "@/lib/reports/performance";
-import { getHotelPerformanceReport } from "@/lib/reports/service";
+import { getGeneralExpenses, getHotelPerformanceReport } from "@/lib/reports/service";
 import { channelLabel } from "@/lib/i18n";
 import { guestDisplayId, reservationDisplayId } from "@/lib/types";
 
@@ -195,7 +195,7 @@ async function reportDocument(hotelId: string, url: URL): Promise<ExportDocument
   if (to > currentDate || from > currentDate) throw new PublicError("Отчёт можно сформировать только по завершённым датам.");
   if (diffDays(from, to) > 366) throw new PublicError("За один раз можно экспортировать максимум 367 дней.");
   const parsed = parseReportFilters({ from: fromText, to: toText, source: url.searchParams.get("source") ?? "all" }, currentDate);
-  const report = await getHotelPerformanceReport(hotelId, parsed);
+  const report = await getHotelPerformanceReport(hotelId, parsed, await getGeneralExpenses(hotelId, parsed));
   return {
     title: "Показатели отеля",
     subtitle: `${fromText} — ${toText} · ${parsed.source ? channelLabel(parsed.source) : "все источники"} · ${report.currency}`,

@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireSessionHotelId } from "@/server/guards";
 import { writeAudit } from "@/lib/reservations/service";
+import { getCurrentUser } from "@/lib/tenant";
+import { toErrorMessage } from "@/server/errors";
+import { fail, ok, type ActionResult } from "@/server/types";
 
 export async function saveChannelCommissionAction(formData: FormData) {
   const hotelId = await requireSessionHotelId({ permission: "REPORTS" });
@@ -69,4 +72,41 @@ export async function createFinancialOperationAction(formData: FormData) {
   await writeAudit(hotelId, "finance.operation_created", "FinancialOperation", operation.id, { reservationId, type, amount, currency: reservation.currency, method, source: "MANUAL" });
   revalidatePath("/dashboard/reports");
   revalidatePath(`/dashboard/reservations/${reservationId}`);
+}
+
+export async function createExpenseAction(input: { date: string; amount: number; category: string; comment?: string; roomIds: string[] }): Promise<ActionResult> {
+  try {
+    const hotelId = await requireSessionHotelId({ permission: "REPORTS" });
+    const user = await getCurrentUser();
+    const category = String(input?.category ?? "").trim().slice(0, 40);
+    const comment = String(input?.comment ?? "").trim().slice(0, 240);
+    const amount = Number(input?.amount);
+    const occurredAt = new Date(`${input?.date}T12:00:00.000Z`);
+    if (!category) return fail("Выберите статью расходов.");
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000 || Math.round(amount * 100) !== amount * 100) return fail("Укажите сумму больше нуля, не более двух знаков после запятой.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(input?.date)) || Number.isNaN(occurredAt.getTime()) || occurredAt.toISOString().slice(0, 10) !== input.date) return fail("Укажите корректную дату.");
+    const requested = Array.isArray(input.roomIds) ? [...new Set(input.roomIds.map(String))].slice(0, 500) : [];
+    const rooms = await db.room.findMany({ where: { hotelId, id: { in: requested } }, select: { id: true } });
+    if (rooms.length !== requested.length) return fail("Одна из выбранных квартир не найдена.");
+    const expense = await db.expense.create({ data: { hotelId, occurredAt, amount, category, comment: comment || null, roomIds: requested, createdById: user?.id ?? null } });
+    await writeAudit(hotelId, "finance.expense_created", "Expense", expense.id, { amount, category, roomCount: requested.length });
+    revalidatePath("/dashboard/reports");
+    return ok(undefined, "Расход добавлен");
+  } catch (error) {
+    return fail(toErrorMessage(error));
+  }
+}
+
+export async function deleteExpenseAction(id: string): Promise<ActionResult> {
+  try {
+    const hotelId = await requireSessionHotelId({ permission: "REPORTS" });
+    const expense = await db.expense.findFirst({ where: { id: String(id), hotelId }, select: { id: true, amount: true, category: true } });
+    if (!expense) return fail("Расход не найден.");
+    await db.expense.delete({ where: { id: expense.id } });
+    await writeAudit(hotelId, "finance.expense_deleted", "Expense", expense.id, { amount: Number(expense.amount), category: expense.category });
+    revalidatePath("/dashboard/reports");
+    return ok(undefined, "Расход удалён");
+  } catch (error) {
+    return fail(toErrorMessage(error));
+  }
 }
