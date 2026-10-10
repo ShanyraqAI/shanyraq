@@ -42,6 +42,7 @@ model Organization {
   billingSubscription BillingSubscription?
   billingPayments     BillingPayment[]
   billingNotices      BillingNotice[]
+  subscriptionGrants  SubscriptionGrant[]
   id                  String               @id @default(cuid())
   name                String
   createdAt           DateTime             @default(now())
@@ -92,6 +93,7 @@ model User {
   calendarPreferences      CalendarPreference[]
   guestNotes               GuestNote[]
   generatedDocuments       GeneratedDocument[]      @relation("DocumentCreator")
+  subscriptionGrants       SubscriptionGrant[]      @relation("SubscriptionGrantAdmin")
 }
 
 model OAuthAccount {
@@ -1277,4 +1279,21 @@ model BillingNotice {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId, kind, periodEnd], map: "BillingNotice_period_recipient_key")
+}
+
+/// Subscription issued manually by a platform admin. Current access = grant with the latest endsAt.
+model SubscriptionGrant {
+  id             String       @id @default(cuid())
+  organizationId String
+  planId         String // start | pro | business
+  startsAt       DateTime
+  endsAt         DateTime
+  months         Int
+  note           String?
+  grantedById    String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  grantedBy      User?        @relation("SubscriptionGrantAdmin", fields: [grantedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, endsAt])
 }
