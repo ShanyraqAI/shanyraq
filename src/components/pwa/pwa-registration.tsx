@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { captureInstallPrompt } from "@/components/pwa/use-pwa-install";
+import { setOutboxScope } from "@/lib/offline/outbox";
 import { clearSavedPages } from "@/lib/offline/device-data";
 
 export function PwaRegistration({ enabled }: { enabled: boolean }) {
@@ -11,13 +12,20 @@ export function PwaRegistration({ enabled }: { enabled: boolean }) {
   useEffect(() => captureInstallPrompt(), []);
 
   useEffect(() => {
-    if ((!enabled && window.location.hostname !== "localhost") || !("serviceWorker" in navigator)) return;
+    if (
+      (!enabled && window.location.hostname !== "localhost") ||
+      !("serviceWorker" in navigator)
+    )
+      return;
     navigator.serviceWorker.register("/sw.js").catch(() => undefined);
   }, [enabled]);
 
   // Saved workspace pages belong to one session; the login screen means it has ended.
   useEffect(() => {
-    if (pathname === "/login" || pathname === "/register") void clearSavedPages();
+    if (pathname === "/login" || pathname === "/register") {
+      setOutboxScope("");
+      void clearSavedPages();
+    }
   }, [pathname]);
 
   return null;

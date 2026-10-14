@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && node scripts/vercel-migrate.mjs && next build",
+    "build": "prisma generate && next build",
     "deploy:prod": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-production.ps1",
     "start": "next start",
     "start:e2e": "node --env-file=.env scripts/start-e2e-server.mjs",
@@ -27,7 +27,10 @@
     "test:rental-property": "tsx --test src/lib/rental-properties.test.ts",
     "test:rental-property-migration": "node --env-file=.env scripts/verify-rental-property-migration.mjs",
     "test:migrations:clean": "node --env-file=.env scripts/verify-clean-migrations.mjs",
-    "test:channex-property-migration": "node --env-file=.env scripts/verify-channex-property-migration.mjs"
+    "test:channex-property-migration": "node --env-file=.env scripts/verify-channex-property-migration.mjs",
+    "db:migrate:release": "node scripts/vercel-migrate.mjs --apply-reviewed-release",
+    "test:reliability": "tsx --test src/lib/reservations/operation.test.ts src/lib/channels/channex/revision-order.test.ts src/lib/offline/outbox.test.ts scripts/release-safety.test.mjs scripts/service-worker.test.mjs src/lib/offline/dispatch.test.ts src/lib/guests/pagination.test.ts",
+    "test:reliability:db": "node --require ./scripts/test-server-preload.cjs --import tsx scripts/test-reliability.ts"
   },
   "engines": {
     "node": ">=20.9.0"

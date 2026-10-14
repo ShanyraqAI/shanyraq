@@ -94,6 +94,7 @@ model User {
   guestNotes               GuestNote[]
   generatedDocuments       GeneratedDocument[]      @relation("DocumentCreator")
   subscriptionGrants       SubscriptionGrant[]      @relation("SubscriptionGrantAdmin")
+  operationReceipts OperationReceipt[]
 }
 
 model OAuthAccount {
@@ -245,6 +246,7 @@ model Hotel {
   ttlockEvents        TTLockEvent[]
 
   @@unique([id, orgId])
+  operationReceipts OperationReceipt[]
 }
 
 // A customer-facing accommodation inside the legacy Hotel workspace.
@@ -669,6 +671,8 @@ model Reservation {
   @@index([hotelId, status])
   @@index([roomId, checkIn, checkOut])
   @@index([rentalPropertyId, hotelId])
+  @@index([hotelId, roomTypeId, checkIn, checkOut])
+  @@index([hotelId, guestId, checkIn])
 }
 
 // Manual OTA fee settings are applied only to future imported revisions and snapshotted per booking.
@@ -1068,6 +1072,7 @@ model ChannexBooking {
   otaName            String?
   otaReservationCode String?
   firstSeenAt        DateTime  @default(now())
+  lastProviderRevisionAt DateTime?
   lastRevisionAt     DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -1313,4 +1318,19 @@ model Expense {
   hotel       Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
   @@index([hotelId, occurredAt])
+}
+
+model OperationReceipt {
+  userId      String
+  hotelId     String
+  key         String   @db.VarChar(36)
+  action      String   @db.VarChar(80)
+  requestHash String   @db.VarChar(64)
+  resultJson  String
+  createdAt   DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hotel Hotel @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+
+  @@id([userId, hotelId, key])
 }
