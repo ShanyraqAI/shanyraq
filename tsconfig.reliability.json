@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "es2022"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "src/lib/reservations/service.ts",
+    "src/lib/reservations/operation.ts",
+    "src/server/mutation.ts",
+    "src/server/actions/reservations.ts",
+    "src/server/actions/guests.ts",
+    "src/server/actions/rooms.ts",
+    "src/lib/channels/channex/booking-sync.ts",
+    "src/lib/offline/**/*.ts",
+    "src/components/pwa/offline-sync.tsx",
+    "src/app/dashboard/guests/page.tsx",
+    "src/components/guests/guests-table.tsx",
+    "src/lib/guests/**/*.ts",
+    "src/lib/reservations/operation.test.ts",
+    "scripts/test-reliability.ts",
+    "src/components/pwa/pwa-registration.tsx",
+    "src/lib/reservations/import-service.ts",
+    "src/lib/channels/sync-service.ts"
+  ]
+}

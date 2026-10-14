@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { BarChart3, BedDouble, ChevronRight, CreditCard, FileSpreadsheet, Settings, Sparkles, Users, WashingMachine, KeyRound } from "lucide-react";
+import { BarChart3, BedDouble, ChevronRight, CreditCard, FileSpreadsheet, Settings, Sparkles, Users, WashingMachine, KeyRound, MessageCircle } from "lucide-react";
+import { hasHotelPermission } from "@/lib/access";
 import { db } from "@/lib/db";
 import { getCurrentHotel, getCurrentUser } from "@/lib/tenant";
 import { getRequestLocale } from "@/lib/locale-server";
@@ -21,6 +22,7 @@ export default async function MorePage() {
     {
       title: kk ? "Операциялар" : "Операции",
       items: [
+        ...(hasHotelPermission(user, "RESERVATIONS") ? [{ href: "/dashboard/communications", icon: MessageCircle, title: kk ? "Қонақпен байланыс" : "Коммуникации", subtitle: kk ? "Хабарламалар, пәтер деректері және фото" : "Сообщения, данные квартиры и фото" }] : []),
         { href: "/dashboard/guests", icon: Users, title: kk ? "Қонақтар" : "Гости", subtitle: kk ? `${guests} профиль және сапарлар тарихы` : `${guests} профилей и история поездок` },
         { href: "/dashboard/rooms", icon: BedDouble, title: kk ? "Пәтерлер" : "Квартиры", subtitle: kk ? `${rooms} белсенді · қызмет көрсету` : `${rooms} активных · обслуживание` },
         { href: "/dashboard/rooms", icon: WashingMachine, title: kk ? "Тапсырмалар мен жинау" : "Задачи и уборка", subtitle: kk ? `${cleaning} жинау керек` : `${cleaning} требуют уборки` },

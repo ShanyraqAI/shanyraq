@@ -28,10 +28,16 @@ const nextConfig: NextConfig = {
   // and no engine-resolution issues in serverless environments.
   serverExternalPackages: ["@prisma/client", "bcryptjs", "pdfkit"],
   outputFileTracingIncludes: {
+    "/api/document-signing": ["./node_modules/@expo-google-fonts/tinos/**/*.ttf", "./node_modules/@expo-google-fonts/roboto/**/*.ttf"],
     "/api/documents/*/pdf": ["./src/assets/fonts/manrope-variable.ttf"],
   },
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    return [{ source: "/(.*)", headers: securityHeaders }, { source: "/guest/:path*", headers: [
+      { key: "Cache-Control", value: "private, no-store" },
+      { key: "Referrer-Policy", value: "no-referrer" },
+      { key: "X-Robots-Tag", value: "noindex, nofollow" },
+      { key: "Content-Security-Policy", value: `default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'` },
+    ] }];
   },
 };
 
