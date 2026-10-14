@@ -78,6 +78,8 @@ const pricingFields = {
 
 export const createReservationSchema = z
   .object({
+    expectedRateTotal: z.number().finite().min(0).max(1_000_000_000).optional(),
+    expectedRateCurrency: z.string().regex(/^[A-Z]{3}$/).optional(),
     guestId: z.string().optional(),
     guestName: z.string().trim().max(160).optional(),
     guestEmail: z.string().trim().email("Некорректный email").or(z.literal("")).optional(),
