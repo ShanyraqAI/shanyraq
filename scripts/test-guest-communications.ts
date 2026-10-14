@@ -50,6 +50,9 @@ async function main() {
     await db.guest.update({ where: { id: ids.guest }, data: { phone: null } });
     const withoutPhone = await runCommunicationCommand(member, { ...input, requestKey: crypto.randomUUID() }) as { phone: string | null };
     assert.equal(withoutPhone.phone, null);
+    await db.guest.update({ where: { id: ids.guest }, data: { phone: "00000000000" } });
+    const invalidPhone = await runCommunicationCommand(member, { ...input, requestKey: crypto.randomUUID() }) as { phone: string | null };
+    assert.equal(invalidPhone.phone, null);
     const profile = documents.documentProfileSchema.parse({ entityType: "INDIVIDUAL", legalName: "Synthetic owner", iinBin: "000000000001", legalAddress: "Test address", signerName: "Synthetic owner", signerTitle: "Owner", vatMode: "WITHOUT_VAT", defaultPaymentTerms: "Test payment" });
     const data = documents.createDocumentSchema.parse({ reservationId: ids.reservation, type: "CONTRACT", documentDate: "2026-10-14", customerType: "INDIVIDUAL", guestFullName: "Synthetic Guest", guestIin: "000000000002", guestIdentityDocument: "Test identity", propertyAddress: "Test address", checkIn: "2026-10-14", checkOut: "2026-10-16", checkInTime: "14:00", checkOutTime: "12:00", unit: "night", quantity: 2, unitPrice: 10000, totalAmount: 20000, serviceDescription: "Synthetic accommodation", paymentTerms: "Test payment", completionDate: "2026-10-16", maxGuests: 2, keyLossFine: 0 });
     const doc = await db.generatedDocument.create({ data: { organizationId: ids.org, hotelId: ids.hotel, reservationId: ids.reservation, createdById: ids.user, type: "CONTRACT", sequenceNumber: 1, documentNumber: "1", documentDate: new Date("2026-10-14"), snapshot: { version: 1, type: "CONTRACT", documentNumber: "1", documentDate: "2026-10-14", currency: "KZT", city: "Astana", hotelName: "Test workspace", profile, data } } });

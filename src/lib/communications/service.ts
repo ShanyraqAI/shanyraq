@@ -7,6 +7,8 @@ import type { z } from "zod";
 import { validateFinalMessage, validateTemplateSyntax } from "./template";
 import type { CommunicationWorkspace, ReservationCommunicationWorkspace } from "./types";
 
+function optionalRecipientPhone(value: string | null | undefined) { const phone = normalizeWhatsAppPhone(value); return phone && /^[1-9][0-9]{9,14}$/.test(phone) ? phone : null; }
+
 export const scopeOf = (m: CurrentMembership) => `${m.organizationId}:${m.hotelId}`;
 const tenant = (m: CurrentMembership) => ({ organizationId: m.organizationId, hotelId: m.hotelId });
 const photoSelect = { id: true, name: true, position: true } as const;
@@ -48,7 +50,7 @@ export async function getReservationCommunicationWorkspace(m: CurrentMembership,
   templates.sort((a, b) => Number(b.roomId === r.roomId && b.isDefault) - Number(a.roomId === r.roomId && a.isDefault) || Number(b.language === r.hotel.language) - Number(a.language === r.hotel.language));
   const p = r.room.communicationProfile;
   const date = (value: Date) => value.toISOString().slice(0, 10).split("-").reverse().join(".");
-  return { reservationId: r.id, guestName: r.guest.fullName, phone: normalizeWhatsAppPhone(r.guest.phone), roomName: `${r.room.number} · ${r.room.rentalProperty.publicName}`, scope: scopeOf(m), templates, photos,
+  return { reservationId: r.id, guestName: r.guest.fullName, phone: optionalRecipientPhone(r.guest.phone), roomName: `${r.room.number} · ${r.room.rentalProperty.publicName}`, scope: scopeOf(m), templates, photos,
     values: {
       guest_name: r.guest.fullName, guest_phone: r.guest.phone ?? "", reservation_number: r.sequenceNumber?.toString() ?? r.id,
       checkin_date: date(r.checkIn), checkin_time: r.checkInTime, checkout_date: date(r.checkOut), checkout_time: r.checkOutTime,
@@ -111,7 +113,7 @@ export async function runCommunicationCommand(m: CurrentMembership, command: z.i
       const signing = await db.documentSigningRequest.findFirst({ where: { id: command.signingRequestId, ...t, reservationId: r.id, revokedAt: null, expiresAt: { gt: new Date() } }, select: { signedAt: true, reservationVersion: true } });
       if (!signing || (!signing.signedAt && signing.reservationVersion.getTime() !== r.updatedAt.getTime())) throw new PublicError("Ссылка на документ устарела. Создайте новую и проверьте текст.");
     }
-    const phone = normalizeWhatsAppPhone(r.guest.phone);
+    const phone = optionalRecipientPhone(r.guest.phone);
     const ids = [...new Set(command.photoIds)];
     const photos = await db.communicationPhoto.findMany({ where: { ...t, roomId: r.roomId, archivedAt: null, id: { in: ids } }, select: { id: true, name: true } });
     if (photos.length !== ids.length) throw new PublicError("Некоторые фото недоступны. Обновите список.");
