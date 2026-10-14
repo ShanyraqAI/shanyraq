@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BedDouble, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -148,7 +149,7 @@ export function RoomsGrid({
                     <BedDouble className="size-4" />
                   </div>
                   <div className="min-w-0 leading-tight">
-                    <div className="truncate text-base font-semibold" title={room.number}>{room.number}</div>
+                    <Link href={`/dashboard/rooms/${encodeURIComponent(room.id)}/calendar`} className="flex min-h-11 items-center text-base font-semibold text-[#07866b]" title={room.number}><span className="truncate">{room.number}</span></Link>
                     <div className="truncate text-xs text-muted-foreground">{room.roomTypeName}</div>
                   </div>
                 </div>

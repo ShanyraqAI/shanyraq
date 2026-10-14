@@ -8,7 +8,7 @@ import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Clock3, Loader2, 
 import { ACTIVE_RESERVATION_STATUSES } from "@/lib/constants";
 import { reservationMatchesCalendarSearch } from "@/lib/reservations/calendar-search";
 import { calendarStayPosition, calendarTimelineRange, shiftCalendarAnchor, staysOverlap, type CalendarRangeDays } from "@/lib/reservations/calendar-range";
-import { buildTurnaroundMap, suggestQuickBookingSlot, turnaroundMessage } from "@/lib/reservations/calendar-turnaround";
+import { buildTurnaroundMap, turnaroundMessage } from "@/lib/reservations/calendar-turnaround";
 import { findSelectedReservation } from "@/lib/reservations/calendar-selection";
 import { EmptyState } from "@/components/shared/page-header";
 import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
@@ -376,12 +376,12 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   }
 
   function openQuickBooking(roomId: string, date: string) {
-    const slot = suggestQuickBookingSlot(activeStays, roomId, date);
-    if (!slot) {
+    const busy = activeStays.some((stay) => stay.roomId === roomId && stay.checkIn <= date && stay.checkOut > date);
+    if (busy) {
       toast.error("На эту ночь номер уже забронирован.");
       return;
     }
-    const query = new URLSearchParams({ checkIn: slot.checkIn, checkOut: slot.checkOut, roomId });
+    const query = new URLSearchParams({ checkIn: date, roomId });
     router.push(`/dashboard/reservations/new?${query.toString()}`);
   }
 
@@ -663,7 +663,7 @@ function RoomLabel({ room, width, compact }: { room: RoomVM; width: number; comp
   return (
     <div className={cn("sticky left-0 z-30 flex shrink-0 items-center border-r bg-card", compact ? "gap-1 px-1.5" : "gap-2.5 px-3")} style={{ width }}>
       <Tooltip><TooltipTrigger asChild><span className={cn("size-2.5 shrink-0 rounded-full ring-2 ring-background", status.dot)} aria-label={status.label} /></TooltipTrigger><TooltipContent side="right"><div className="font-medium">Номер {room.number}</div><div className="opacity-80">{status.label}</div></TooltipContent></Tooltip>
-      <div className="min-w-0"><div className={cn("truncate font-semibold leading-tight", compact ? "text-xs" : "text-sm")} title={room.number}>{room.number}</div>{!compact ? <div className="truncate text-[11px] text-muted-foreground">этаж {room.floor}</div> : null}</div>
+      <div className="min-w-0"><Link href={`/dashboard/rooms/${encodeURIComponent(room.id)}/calendar`} className={cn("flex items-center font-semibold leading-tight text-primary", compact ? "min-h-11 text-xs" : "text-sm")} title={room.number}><span className="truncate">{room.number}</span></Link>{!compact ? <div className="truncate text-[11px] text-muted-foreground">этаж {room.floor}</div> : null}</div>
     </div>
   );
 }

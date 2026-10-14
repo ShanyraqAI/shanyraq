@@ -76,7 +76,7 @@ export function MobileCalendar(props: Props) {
             {props.rooms.length ? props.rooms.map((room) => {
               const roomReservations = props.reservations.filter((item) => item.roomId === room.id && item.status !== "CANCELLED" && item.status !== "NO_SHOW" && item.checkIn <= toISODate(end) && item.checkOut > props.anchorISO);
               return <div key={room.id} className="relative grid min-h-[58px] border-b border-[#eceee7] last:border-0" style={{ gridTemplateColumns: gridTemplate }}>
-                <div className="sticky left-0 z-20 flex flex-col justify-center border-r border-[#eceee7] bg-white px-2"><span className="truncate text-xs font-extrabold text-[#334039]">{room.number}</span><span className="truncate text-[8px] text-[#a0a59f]">{room.roomTypeName}</span></div>
+                <div className="sticky left-0 z-20 flex flex-col justify-center border-r border-[#eceee7] bg-white px-2"><Link href={`/dashboard/rooms/${encodeURIComponent(room.id)}/calendar`} className="flex min-h-11 items-center text-xs font-extrabold text-[#07866b]" aria-label={`${props.locale === "kk" ? "Пәтер күнтізбесі" : "Календарь квартиры"}: ${room.number}`}><span className="truncate">{room.number}</span></Link><span className="truncate text-[8px] text-[#a0a59f]">{room.roomTypeName}</span></div>
                 {days.map((day) => <button key={toISODate(day)} type="button" aria-label={`${copy.newBooking}, ${room.number}, ${toISODate(day)}`} onClick={() => props.onCreate(room.id, toISODate(day))} className="border-r border-[#f0f1eb] last:border-0 active:bg-[#eff8f4]" />)}
                 {roomReservations.map((reservation) => {
                   const from = Math.max(0, diffDays(start, parseISODate(reservation.checkIn)));
