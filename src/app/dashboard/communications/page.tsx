@@ -8,5 +8,5 @@ export default async function CommunicationsPage() {
   const membership = await getCurrentMembership();
   if (!membership) redirect("/login");
   if (!hasHotelPermission(membership, "RESERVATIONS")) return <p>Нет доступа к сообщениям гостей. Обратитесь к владельцу объекта.</p>;
-  return <CommunicationsWorkspace />;
+  return <CommunicationsWorkspace owner={membership.role === "OWNER"} />;
 }

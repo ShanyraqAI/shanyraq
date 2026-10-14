@@ -1,0 +1,3 @@
+export function StepProgress({ step, labels }: { step: number; labels: readonly string[] }) {
+  return <ol aria-label="Шаги" className="flex gap-2">{labels.map((label, i) => <li key={label} aria-current={step === i + 1 ? "step" : undefined} className={`flex min-w-0 flex-1 flex-col gap-2 rounded-xl border p-3 text-sm ${step === i + 1 ? "border-primary bg-accent/40 font-semibold" : "bg-card text-[#52645a] dark:text-muted-foreground"}`}><span className={`flex size-6 items-center justify-center rounded-full text-sm ${step >= i + 1 ? "bg-primary text-primary-foreground" : "border"}`}>{i + 1}</span><span>{label}</span></li>)}</ol>;
+}

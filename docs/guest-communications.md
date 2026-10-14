@@ -34,8 +34,8 @@ Audited against main commit `1bbb4b1894e0d614c54ddba610a68fafbc9a025f`:
 
 The user explicitly removed the requirement for an official WhatsApp integration. Provider credentials, Business API setup, webhooks and provider delivery receipts are **out of scope**, not prerequisites or pending setup. No automatic send is implemented or implied.
 
-- Inside «Сообщение гостю», expand «Документ для онлайн-подписания», choose an existing PDF generated for this reservation, set its link lifetime (1–14 days) and create the link. It is inserted into the editable check-in message.
-- If no PDF exists, create it with the existing «Документы» button first. New links replace earlier pending links for the same document; the composer replaces its previous inserted link rather than appending a stale one.
+- On step 2 of «Сообщение гостю», opt into «Добавить ссылку на документ» and open «Документ для онлайн-подписания», choose an existing PDF generated for this reservation, set its link lifetime (1–14 days) and create the link. It is appended to the final message preview without overwriting the editable source text.
+- If no PDF exists, create it with the existing «Документы» button first. New links replace earlier pending links for the same document; the composer uses the latest issued link in the final preview rather than appending a stale one.
 - Guest page: `/guest/documents#<capability>`, no account required. The full original PDF must be opened before UI consent controls become available. Opening is an operator action, **not proof that the guest read every page**.
 - Signing requires a typed name, two unchecked-by-default explicit confirmations, the frozen PDF hash and the known consent version in a deliberate POST. Loading, link previews and downloading PDF cannot sign.
 - This is self-asserted consent by the holder of a link, **not Kazakhstan qualified EDS and not verified identity**. The UI says so before signing. Legal suitability of this confirmation for a specific contract must be reviewed independently.
@@ -44,6 +44,19 @@ The user explicitly removed the requirement for an official WhatsApp integration
 - Reissue/revoke, expiry, unsigned reservation modification and cancellation invalidate access. Signing locks the request and reservation to serialize with edits/cancellation. Signed evidence remains stored; expiry/revocation blocks guest access but does not delete the staff evidence.
 - Guest responses/page are no-store, no-referrer, noindex. Guest CSP excludes third-party scripts/connections. The service worker does not cache guest pages or API data. Links should be opened as full navigations from the selected messaging app, not embedded in analytics-enabled public pages.
 - Tenant permissions and scope checks apply to issuance, revocation and staff evidence access. The server checks an inserted signing request is still valid before preparing the message. The OS share operation is not evidence of sending/delivery or of who received it.
+
+## Guided mobile UX and actionable setup failures
+
+- The default Communications tab is «Отправка». Its three-step guide and booking shortcut remain available even if workspace data cannot load.
+- The composer separates Text → Optional additions → Review/send. Ready text is personalized from the reservation; the standard check-in text omits absent optional values rather than inventing them. Active saved defaults remain selectable.
+- «Свой текст» starts a separate draft; toggling modes and returning between steps do not erase it. Copying ready text over an existing own draft requires an explicit replacement choice, including when editing from review. Drafts remain only in the open editor, not localStorage; closing/reloading does not persist them.
+- Photos and signing links are optional and selected deliberately. The final preview shows the actual immutable prepared message. Back/edit resets its preparation key while keeping operator choices; retries of unchanged preparation remain idempotent.
+- Template creation has two steps: text, then name/unit/default settings. New templates are active by default; language and archive/draft settings are optional advanced controls. Existing template status is preserved on edit.
+- The sheet has a scrollable content region and a separate safe-area-aware action footer, not an overlapping sticky button. Form controls and main tap targets are at least 44px tall.
+- Missing tables/columns, database configuration, temporary connectivity and authorization failures have distinct safe responses. The UI provides incident references and owner-only setup guidance without exposing ORM exceptions, SQL or credentials.
+- `scripts/check-communications-schema.mjs` is a **read-only** Vercel build gate. It checks the six feature models' generated scalar/enum columns and nullable recipient phone. It does not certify every constraint/index or run migrations. A missing schema fails the build rather than publishing a known-broken feature.
+- Preview migrations are intentionally not automatic. Configure a separate preview database, apply reviewed migrations to that database explicitly, and set the preview HTTPS `APP_URL`. Do not change production to repair a preview. The existing production migration behavior is unchanged.
+- The screenshot's live error has not been reproduced against its Vercel environment. Missing migrations are a possible explanation, not a verified diagnosis; the actual preview URL and server incident/logs are still needed.
 
 ## Remaining original specification work
 
@@ -97,7 +110,8 @@ No `.env` file is loaded by that test script. It overrides the Prisma URL only a
 
 ## Validation performed in this session
 
-- 16 pure tests (12 communications + 4 signing security tests): rendering, missing/unknown/malformed/prototype tokens, nonrecursive expansion, message bounds, phone normalization/URL encoding, HTTPS links, allowed manual states, attachment bounds and streamed request limits.
+- 24 pure tests (20 communications + 4 signing security tests): rendering, missing/unknown/malformed/prototype tokens, nonrecursive expansion, message bounds, phone normalization/URL encoding, HTTPS links, allowed manual states, attachment bounds and streamed request limits.
+- New pure checks also cover optional-value automatic text, saved vs built-in template IDs, source-text immutability, link deduplication, safe database-error classification and preservation of typed API errors.
 - Prisma schema validation and client generation succeeded.
 - Strict TypeScript check of the new communication slice and its fetched dependencies succeeded. This is not a full-repository typecheck.
 - ESLint ran on all changed TS/TSX/JS files without errors or warnings.
@@ -105,5 +119,7 @@ No `.env` file is loaded by that test script. It overrides the Prisma URL only a
 - The real Prisma service and the committed integration-test script were run against that isolated engine through a local PostgreSQL wire bridge. Tenant guards, optimistic concurrency, immutable snapshots, template versions, idempotency, final-token checks, foreign attachments, manual states, CSRF and scoped workspace passed.
 - Actual new React components were tested in a local Chromium harness with **synthetic API fixtures**, at 390px and 1280px. Profile edits, token insertion, text/photo selection, preparation, native text-only/file sharing, signing-link insertion, explicit guest consent, signed state and no horizontal overflow were checked. Component screenshots were inspected. This is not end-to-end authentication or an actual WhatsApp transmission.
 - Signing integration tests passed: actual original PDF rendering/hash, no signing on load, explicit consent required, idempotent signing, immutable PDF after signing, tenant isolation, replacement/revocation, cancellation and expiry. Tests used synthetic guests and the isolated local PostgreSQL engine, not production.
+- The updated wizard was tested with synthetic API fixtures: ready/custom retention (including edit from review), two-step active/default template save, optional photo/link selection, fresh preparation keys after edits, text-only fallback, safe setup errors, and no mobile/desktop horizontal overflow. The scroll region was checked not to overlap the action footer. Mobile and desktop screenshots were inspected; native sharing was mocked, not performed on real devices.
+- The read-only deployment gate passed against the isolated migrated schema and failed as expected against a separate pre-feature baseline. No migrations or guest-row queries were performed by the gate.
 - No real guests were contacted. No provider credentials were requested or fabricated. No production database was accessed.
 - Full application build/lint, full historical migrations, existing-booking regression and real iOS/Android app transmission remain unverified. No production deployment or migrations were performed.
