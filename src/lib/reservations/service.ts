@@ -1,3 +1,4 @@
+import { nightlyTotal, staysConflict } from "./date-range";
 import { db } from "@/lib/db";
 import {
   ACTIVE_RESERVATION_STATUSES,
@@ -70,15 +71,7 @@ export async function computeStayTotal(
     where: { ratePlanId, date: { gte: checkIn, lt: addDays(checkIn, nights) } },
     select: { date: true, price: true },
   });
-  if (dailyRates.length === 0)
-    return { total: Number(plan.basePrice) * nights, currency: plan.currency };
-  let total = 0;
-  for (let i = 0; i < nights; i++) {
-    const d = addDays(checkIn, i);
-    const rate = dailyRates.find((r) => r.date.getTime() === d.getTime());
-    total += Number(rate ? rate.price : plan.basePrice);
-  }
-  return { total, currency: plan.currency };
+  return { total: nightlyTotal(Number(plan.basePrice), toISODate(checkIn), toISODate(checkOut), dailyRates.map((rate) => ({ date: toISODate(rate.date), price: Number(rate.price) }))), currency: plan.currency };
 }
 
 async function resolveStayPrice(
@@ -132,22 +125,16 @@ async function assertNoRoomOverlap(
   checkOut: Date,
   excludeReservationId?: string,
   client: ReservationDb = db,
+  times: { checkInTime?: string; checkOutTime?: string } = {},
 ): Promise<void> {
-  const clash = await client.reservation.findFirst({
-    where: {
-      hotelId,
-      roomId,
-      status: { in: [...ACTIVE_RESERVATION_STATUSES] },
-      checkIn: { lt: checkOut },
-      checkOut: { gt: checkIn },
-      ...(excludeReservationId ? { id: { not: excludeReservationId } } : {}),
-    },
-    select: { id: true },
+  // Include adjacent dates: a departure night is free, but a late departure
+  // must not overlap an earlier arrival. The room lock is held by every writer.
+  const stays = await client.reservation.findMany({
+    where: { hotelId, roomId, status: { in: [...ACTIVE_RESERVATION_STATUSES] }, checkIn: { lte: checkOut }, checkOut: { gte: checkIn }, ...(excludeReservationId ? { id: { not: excludeReservationId } } : {}) },
+    select: { checkIn: true, checkOut: true, checkInTime: true, checkOutTime: true },
   });
-  if (clash)
-    throw new OverbookingError(
-      "В этом номере уже есть бронь на выбранные даты.",
-    );
+  const range = { checkIn: toISODate(checkIn), checkOut: toISODate(checkOut), checkInTime: times.checkInTime ?? "14:00", checkOutTime: times.checkOutTime ?? "12:00" };
+  if (stays.some((stay) => staysConflict(range, { ...stay, checkIn: toISODate(stay.checkIn), checkOut: toISODate(stay.checkOut) }))) throw new OverbookingError("В этой квартире уже есть бронь на выбранные даты или время. Измените даты либо выберите другую квартиру.");
 }
 
 /**
@@ -242,6 +229,8 @@ export interface CreateReservationParams {
   paymentMethod?: "ONLINE" | "CASH" | null;
   depositAmount?: number;
   depositCollected?: boolean;
+  expectedRateTotal?: number;
+  expectedRateCurrency?: string;
   /** Channel-originated imports must not recursively trigger another pull. */
   enqueueChannelSync?: boolean;
 }
@@ -280,6 +269,7 @@ export async function createReservation(
       checkOut,
       undefined,
       tx,
+      params,
     );
     await assertTypeAvailability(
       params.hotelId,
@@ -301,6 +291,9 @@ export async function createReservation(
       params.manualCurrency,
       tx,
     );
+    if (pricingMode === "RATE_PLAN" && params.expectedRateTotal !== undefined && (Math.round(price.total * 100) !== Math.round(params.expectedRateTotal * 100) || price.currency !== params.expectedRateCurrency)) {
+      throw new PublicError("Цена изменилась. Проверьте новую сумму и подтвердите бронь повторно. Введённые данные сохранены.");
+    }
     const reservation = await tx.reservation.create({
       data: {
         hotelId: params.hotelId,
@@ -484,6 +477,7 @@ export async function updateReservationDetails(
       checkOut,
       existing.id,
       tx,
+      params,
     );
     await assertTypeAvailability(
       params.hotelId,
@@ -636,6 +630,7 @@ export async function setReservationStatus(
           current.checkOut,
           current.id,
           tx,
+          current,
         );
       }
       const next = await tx.reservation.update({

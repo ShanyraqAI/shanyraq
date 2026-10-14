@@ -8,7 +8,8 @@ import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Clock3, Loader2, 
 import { ACTIVE_RESERVATION_STATUSES } from "@/lib/constants";
 import { reservationMatchesCalendarSearch } from "@/lib/reservations/calendar-search";
 import { calendarStayPosition, calendarTimelineRange, shiftCalendarAnchor, staysOverlap, type CalendarRangeDays } from "@/lib/reservations/calendar-range";
-import { buildTurnaroundMap, suggestQuickBookingSlot, turnaroundMessage } from "@/lib/reservations/calendar-turnaround";
+import { buildTurnaroundMap, turnaroundMessage } from "@/lib/reservations/calendar-turnaround";
+import { calendarSelectionHref } from "@/lib/reservations/calendar-navigation";
 import { findSelectedReservation } from "@/lib/reservations/calendar-selection";
 import { EmptyState } from "@/components/shared/page-header";
 import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
@@ -376,13 +377,12 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   }
 
   function openQuickBooking(roomId: string, date: string) {
-    const slot = suggestQuickBookingSlot(activeStays, roomId, date);
-    if (!slot) {
+    const busy = activeStays.some((stay) => stay.roomId === roomId && stay.checkIn <= date && stay.checkOut > date);
+    if (busy) {
       toast.error("На эту ночь номер уже забронирован.");
       return;
     }
-    const query = new URLSearchParams({ checkIn: slot.checkIn, checkOut: slot.checkOut, roomId });
-    router.push(`/dashboard/reservations/new?${query.toString()}`);
+    router.push(calendarSelectionHref(roomId, date));
   }
 
   async function undoMove(reservation: ReservationVM) {
@@ -456,7 +456,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
       onShift={shift}
       onFiltersChange={setFilters}
       onPreferencesChange={savePreferences}
-      onCreate={() => router.push("/dashboard/reservations/new")}
+      onCreate={() => router.push(calendarSelectionHref())}
       onFullscreen={openFullscreen}
       fullscreen={fullscreen}
     />
@@ -480,7 +480,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
         <div className="flex">{days.map((day) => {
           const isToday = isSameDay(day, today);
           const weekend = day.getUTCDay() === 0 || day.getUTCDay() === 6;
-          return <button type="button" key={day.toISOString()} onClick={() => focusDay(toISODate(day))} style={{ width: dayWidth }} title={formatISODate(toISODate(day))} className={cn("flex shrink-0 flex-col items-center justify-center overflow-hidden border-l first:border-l-0", weekend && !isToday && "bg-secondary/40", isToday && "bg-primary/10")}>
+          return <button type="button" key={day.toISOString()} onClick={() => router.push(calendarSelectionHref(undefined, toISODate(day)))} style={{ width: dayWidth }} title={formatISODate(toISODate(day))} className={cn("flex shrink-0 flex-col items-center justify-center overflow-hidden border-l first:border-l-0", weekend && !isToday && "bg-secondary/40", isToday && "bg-primary/10")}>
             {dayWidth >= (overview ? 36 : 42) ? <span className={cn("text-[10px] uppercase tracking-wide text-muted-foreground", isToday && "font-semibold text-primary")}>{isToday && !overview ? "Сегодня" : weekdayShort(day)}</span> : null}
             {(!overview || dayWidth >= 24 || day.getUTCDate() === 1 || day.getUTCDate() % 5 === 0 || isToday) ? <span className={cn("tabular-nums", overview ? "text-[9px] font-semibold" : "mt-0.5 text-sm", isToday && !overview ? "flex size-6 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground" : "font-medium", isToday && overview && "text-primary")}>{day.getUTCDate()}</span> : null}
           </button>;
@@ -514,9 +514,9 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
                         <button
                           key={iso}
                           type="button"
-                          aria-label={t.calendar.newReservationCell(room.number, iso)}
+                          aria-label={`${data.locale === "kk" ? "Күндерді таңдау" : "Выбрать даты"}, ${room.number}, ${iso}`}
                           onClick={() => {
-                            if (!overview) openQuickBooking(room.id, iso);
+                            openQuickBooking(room.id, iso);
                           }}
                           onDragEnter={(event) => {
                             event.preventDefault();
@@ -578,7 +578,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
   );
 
   if (viewportWidth < 640 && !fullscreen) return <>
-    <MobileCalendar locale={data.locale ?? "ru"} anchorISO={anchorISO} todayISO={data.todayISO} rangeDays={rangeDays} rooms={visibleRooms} reservations={visibleReservations} navigating={navigating} onShift={(count) => navigate(toISODate(addDays(parseISODate(anchorISO), count)))} onToday={() => navigate(data.todayISO)} onRangeChange={(days) => navigate(anchorISO, days)} onOpen={(id) => { setSelectedId(id); setDetailsOpen(true); }} onCreate={(roomId, date) => { if (roomId && date) openQuickBooking(roomId, date); else router.push("/dashboard/reservations/new"); }} onExpand={openFullscreen} />
+    <MobileCalendar locale={data.locale ?? "ru"} anchorISO={anchorISO} todayISO={data.todayISO} rangeDays={rangeDays} rooms={visibleRooms} reservations={visibleReservations} navigating={navigating} onShift={(count) => navigate(toISODate(addDays(parseISODate(anchorISO), count)))} onToday={() => navigate(data.todayISO)} onRangeChange={(days) => navigate(anchorISO, days)} onOpen={(id) => { setSelectedId(id); setDetailsOpen(true); }} onCreate={(roomId, date) => { if (roomId && date) openQuickBooking(roomId, date); else router.push(calendarSelectionHref(roomId, date)); }} onExpand={openFullscreen} />
     {dialogs}
   </>;
 
@@ -650,7 +650,7 @@ export function CalendarBoard(data: CalendarBoardData & { rangeDays: CalendarRan
           </div>
         )}
 
-        {!mobileFullscreen ? <p className="text-xs text-muted-foreground">Нажмите на свободную ячейку для новой брони. Перетащите бронь на свободный номер или дату — сервер повторно проверит доступность.</p> : null}
+        {!mobileFullscreen ? <p className="text-xs text-muted-foreground">{data.locale === "kk" ? "Кезеңді таңдау үшін пәтерді немесе бос күнді басыңыз. Бронь тек растағаннан кейін жасалады. Бар броньды бос пәтерге немесе күнге ауыстыруға болады — сервер қолжетімділікті қайта тексереді." : "Нажмите на квартиру или свободную дату, чтобы выбрать период. Бронь создаётся только после подтверждения. Существующую бронь можно перетащить на свободную квартиру или дату — сервер повторно проверит доступность."}</p> : null}
 
         {!fullscreen ? dialogs : null}
       </div>
@@ -663,7 +663,7 @@ function RoomLabel({ room, width, compact }: { room: RoomVM; width: number; comp
   return (
     <div className={cn("sticky left-0 z-30 flex shrink-0 items-center border-r bg-card", compact ? "gap-1 px-1.5" : "gap-2.5 px-3")} style={{ width }}>
       <Tooltip><TooltipTrigger asChild><span className={cn("size-2.5 shrink-0 rounded-full ring-2 ring-background", status.dot)} aria-label={status.label} /></TooltipTrigger><TooltipContent side="right"><div className="font-medium">Номер {room.number}</div><div className="opacity-80">{status.label}</div></TooltipContent></Tooltip>
-      <div className="min-w-0"><div className={cn("truncate font-semibold leading-tight", compact ? "text-xs" : "text-sm")} title={room.number}>{room.number}</div>{!compact ? <div className="truncate text-[11px] text-muted-foreground">этаж {room.floor}</div> : null}</div>
+      <div className="min-w-0"><Link href={calendarSelectionHref(room.id)} className={cn("flex items-center font-semibold leading-tight text-primary", compact ? "min-h-11 text-xs" : "text-sm")} title={room.number}><span className="truncate">{room.number}</span></Link>{!compact ? <div className="truncate text-[11px] text-muted-foreground">этаж {room.floor}</div> : null}</div>
     </div>
   );
 }

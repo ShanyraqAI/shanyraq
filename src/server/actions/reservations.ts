@@ -126,6 +126,8 @@ export async function createReservationAction(
             children: data.children,
             pricingMode: data.pricingMode,
             manualTotalAmount: data.manualTotalAmount,
+            expectedRateTotal: data.expectedRateTotal,
+            expectedRateCurrency: data.expectedRateCurrency,
             sourceChannel: data.sourceChannel,
             notes: data.notes ?? null,
             paymentMethod: data.paymentMethod,

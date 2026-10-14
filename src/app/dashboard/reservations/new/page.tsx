@@ -1,27 +1,27 @@
-import { db, getCurrentHotelId } from "@/lib/db";
+import { notFound } from "next/navigation";
+import { db } from "@/lib/db";
 import { getRequestLocale } from "@/lib/locale-server";
-import { todayInTimeZone, toISODate } from "@/lib/dates";
+import { isISODate, todayInTimeZone, toISODate } from "@/lib/dates";
 import type { GuestVM, RatePlanVM, RoomVM } from "@/lib/types";
 import { MobileNewReservation } from "@/components/reservations/mobile-new-reservation";
+import { getCurrentMembership } from "@/lib/tenant";
 import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewReservationPage({ searchParams }: { searchParams: Promise<{ checkIn?: string | string[]; checkOut?: string | string[]; roomId?: string | string[] }> }) {
+export default async function NewReservationPage({ searchParams }: { searchParams: Promise<{ checkIn?: string | string[]; checkOut?: string | string[]; roomId?: string | string[]; datesSelected?: string | string[] }> }) {
   await requireSectionAccess("RESERVATIONS");
+  const membership = await getCurrentMembership();
+  if (!membership) return null;
   const params = await searchParams;
-  const hotelId = await getCurrentHotelId();
-  const [hotel, locale, roomsRaw, roomTypes, plansRaw, guestsRaw, busyReservations] = await Promise.all([
+  const hotelId = membership.hotelId;
+  const [hotel, locale, roomsRaw, roomTypes, plansRaw, guestsRaw] = await Promise.all([
     db.hotel.findUniqueOrThrow({ where: { id: hotelId }, select: { timezone: true, defaultCheckInTime: true, defaultCheckOutTime: true } }),
     getRequestLocale(),
     db.room.findMany({ where: { hotelId, status: { notIn: ["OUT_OF_ORDER", "MAINTENANCE"] } }, include: { roomType: { select: { name: true, capacity: true, basePrice: true } } }, orderBy: { number: "asc" } }),
     db.roomType.findMany({ where: { hotelId }, select: { id: true, name: true } }),
     db.ratePlan.findMany({ where: { hotelId }, orderBy: { name: "asc" } }),
     db.guest.findMany({ where: { hotelId }, orderBy: { fullName: "asc" } }),
-    db.reservation.findMany({
-      where: { hotelId, status: { in: ["PENDING", "CONFIRMED", "CHECKED_IN"] } },
-      select: { roomId: true, checkIn: true, checkOut: true },
-    }),
   ]);
   const names = new Map(roomTypes.map((type) => [type.id, type.name]));
   const rooms: RoomVM[] = roomsRaw.map((room) => ({ id: room.id, number: room.number, floor: room.floor, status: room.status as RoomVM["status"], roomTypeId: room.roomTypeId, roomTypeName: room.roomType.name, capacity: room.roomType.capacity, basePrice: Number(room.roomType.basePrice), guestTonight: null }));
@@ -31,8 +31,9 @@ export default async function NewReservationPage({ searchParams }: { searchParam
   const requestedCheckIn = typeof params.checkIn === "string" ? params.checkIn : undefined;
   const requestedCheckOut = typeof params.checkOut === "string" ? params.checkOut : undefined;
   const requestedRoomId = typeof params.roomId === "string" ? params.roomId : undefined;
-  const validCheckIn = requestedCheckIn && /^\d{4}-\d{2}-\d{2}$/.test(requestedCheckIn) ? requestedCheckIn : undefined;
-  const validCheckOut = requestedCheckOut && /^\d{4}-\d{2}-\d{2}$/.test(requestedCheckOut) ? requestedCheckOut : undefined;
+  const validCheckIn = requestedCheckIn && isISODate(requestedCheckIn) ? requestedCheckIn : undefined;
+  const validCheckOut = requestedCheckOut && isISODate(requestedCheckOut) ? requestedCheckOut : undefined;
+  if (requestedRoomId && !rooms.some((room) => room.id === requestedRoomId)) notFound();
   const validRoomId = requestedRoomId && rooms.some((room) => room.id === requestedRoomId) ? requestedRoomId : undefined;
-  return <MobileNewReservation locale={locale} todayISO={todayISO} defaultCheckInTime={hotel.defaultCheckInTime} defaultCheckOutTime={hotel.defaultCheckOutTime} rooms={rooms} ratePlans={plans} guests={guests} busyStays={busyReservations.map((stay) => ({ roomId: stay.roomId, checkIn: toISODate(stay.checkIn), checkOut: toISODate(stay.checkOut) }))} initialCheckIn={validCheckIn} initialCheckOut={validCheckOut} initialRoomId={validRoomId} />;
+  return <MobileNewReservation locale={locale} todayISO={todayISO} defaultCheckInTime={hotel.defaultCheckInTime} defaultCheckOutTime={hotel.defaultCheckOutTime} rooms={rooms} ratePlans={plans} guests={guests} scope={`${membership.userId}:${membership.hotelId}`} initialCheckIn={validCheckIn} initialCheckOut={validCheckOut} initialRoomId={validRoomId} datesSelected={params.datesSelected === "1"} />;
 }
