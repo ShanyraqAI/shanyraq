@@ -1,31 +1,31 @@
-import { clearScopedOutbox } from "@/lib/offline/outbox";
-
-export const PAGES_CACHE = "shanyraq-pages-v1";
+import {
+  ACTIVE_SCOPE_KEY,
+  clearScopedOutbox,
+  setOutboxScope,
+} from "@/lib/offline/outbox";
+export const PAGES_CACHE = "shanyraq-pages-disabled-v4";
 export const SNAPSHOT_KEY = "shanyraq-offline-snapshot-at";
-const WARM_KEY = "shanyraq-offline-warm-at";
-const WARM_INTERVAL_MS = 10 * 60_000;
-
 export async function clearSavedPages() {
   window.localStorage.removeItem(SNAPSHOT_KEY);
-  window.localStorage.removeItem(WARM_KEY);
-  if ("caches" in window) await window.caches.delete(PAGES_CACHE).catch(() => false);
+  window.localStorage.removeItem("shanyraq-offline-warm-at");
+  if ("caches" in window) {
+    const keys = await window.caches.keys();
+    await Promise.all(
+      keys
+        .filter((key) => key.startsWith("shanyraq-pages-"))
+        .map((key) => window.caches.delete(key)),
+    );
+  }
+  navigator.serviceWorker?.controller?.postMessage({ type: "clear-pages" });
 }
-
-/** Removes everything this account stored on the device: saved pages and unsent changes. */
 export async function clearDeviceData() {
   clearScopedOutbox();
+  setOutboxScope("");
+  window.localStorage.removeItem(ACTIVE_SCOPE_KEY);
   await clearSavedPages();
 }
-
-/** Asks the service worker to save workspace pages for offline use, at most every 10 minutes. */
-export async function warmOfflinePages(urls: string[]) {
-  if (!("serviceWorker" in navigator) || navigator.onLine === false) return;
-  const last = Number(window.localStorage.getItem(WARM_KEY) ?? 0);
-  if (Date.now() - last < WARM_INTERVAL_MS) return;
-  const registration = await navigator.serviceWorker.getRegistration();
-  const worker = registration?.active;
-  if (!worker) return;
-  window.localStorage.setItem(WARM_KEY, String(Date.now()));
-  window.localStorage.setItem(SNAPSHOT_KEY, new Date().toISOString());
-  worker.postMessage({ type: "warm", urls });
+/** Private HTML is no longer saved; retain the caller contract while purging legacy snapshots. */
+export async function warmOfflinePages(_urls: string[]) {
+  void _urls;
+  await clearSavedPages();
 }
