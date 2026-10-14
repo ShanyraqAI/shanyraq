@@ -107,8 +107,11 @@ export async function runCommunicationCommand(m: CurrentMembership, command: z.i
     if (error) throw new PublicError(error);
     const r = await requireReservation(m, command.reservationId);
     if (["CANCELLED", "NO_SHOW"].includes(r.status)) throw new PublicError("Нельзя подготовить сообщение для отменённой брони или неявки");
+    if (command.signingRequestId) {
+      const signing = await db.documentSigningRequest.findFirst({ where: { id: command.signingRequestId, ...t, reservationId: r.id, revokedAt: null, expiresAt: { gt: new Date() } }, select: { signedAt: true, reservationVersion: true } });
+      if (!signing || (!signing.signedAt && signing.reservationVersion.getTime() !== r.updatedAt.getTime())) throw new PublicError("Ссылка на документ устарела. Создайте новую и проверьте текст.");
+    }
     const phone = normalizeWhatsAppPhone(r.guest.phone);
-    if (!phone || !/^[1-9][0-9]{9,14}$/.test(phone)) throw new PublicError("Укажите корректный телефон гостя в карточке бронирования");
     const ids = [...new Set(command.photoIds)];
     const photos = await db.communicationPhoto.findMany({ where: { ...t, roomId: r.roomId, archivedAt: null, id: { in: ids } }, select: { id: true, name: true } });
     if (photos.length !== ids.length) throw new PublicError("Некоторые фото недоступны. Обновите список.");

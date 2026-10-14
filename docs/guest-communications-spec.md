@@ -1153,3 +1153,8 @@ Shanyraq — система управления посуточной аренд
 ## Additional user requirement
 
 Prioritize the existing mobile Shanyraq PWA design. Let the operator send editable apartment details and optionally apartment photos to the guest.
+
+
+## Latest user clarification — supersedes official integration requirements
+
+Не нужна официальная интеграция WhatsApp. Нужна кнопка «Отправить», открывающая системное меню доступных приложений для текста и фото. В сообщение о заселении добавляется ссылка на ознакомление с полным документом и онлайн-подписание. Реализация по ссылке фиксирует явное согласие и указанное гостем имя; это не ЭЦП и не независимая проверка личности.

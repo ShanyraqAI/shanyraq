@@ -29,7 +29,8 @@
     "test:migrations:clean": "node --env-file=.env scripts/verify-clean-migrations.mjs",
     "test:channex-property-migration": "node --env-file=.env scripts/verify-channex-property-migration.mjs",
     "test:communications": "tsx --test src/lib/communications/template.test.ts",
-    "test:communications:db": "tsx scripts/test-guest-communications.ts"
+    "test:communications:db": "tsx scripts/test-guest-communications.ts",
+    "test:document-signing": "tsx --test src/lib/documents/signing/security.test.ts"
   },
   "engines": {
     "node": ">=20.9.0"

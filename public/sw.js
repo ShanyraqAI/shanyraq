@@ -1,6 +1,6 @@
 /* Shanyraq Mobile service worker: offline app shell, saved workspace pages and push notifications. */
 const STATIC_CACHE = "shanyraq-static-v2";
-const PAGES_CACHE = "shanyraq-pages-v2";
+const PAGES_CACHE = "shanyraq-pages-v3";
 const KNOWN_CACHES = [STATIC_CACHE, PAGES_CACHE];
 const PRECACHE_URLS = ["/manifest.webmanifest", "/icons/shanyraq-192.png", "/icons/shanyraq-512.png"];
 const STATIC_LIMIT = 400;
@@ -47,6 +47,7 @@ function isStaticAsset(url) {
 }
 
 function isWorkspacePage(url) {
+  if (url.pathname.startsWith("/guest/")) return false;
   // Do not retain communication settings, passwords or guest messages offline.
   if (url.pathname === "/dashboard/communications" || url.pathname.startsWith("/dashboard/communications/")) return false;
   return url.pathname === "/dashboard" || url.pathname.startsWith("/dashboard/");

@@ -61,6 +61,7 @@ model Organization {
 }
 
 model User {
+  documentSigningRequests DocumentSigningRequest[]
   guestCommunications GuestCommunication[]
   id                  String    @id @default(cuid())
   email               String?   @unique // nullable: phone-only accounts are allowed
@@ -190,6 +191,7 @@ model Membership {
 }
 
 model Hotel {
+  documentSigningRequests DocumentSigningRequest[]
   communicationProfiles CommunicationProfile[]
   communicationTemplates CommunicationTemplate[]
   communicationPhotos CommunicationPhoto[]
@@ -367,6 +369,7 @@ model DocumentSequence {
 
 // The snapshot is immutable: later profile or reservation changes do not alter issued PDFs.
 model GeneratedDocument {
+  signingRequests DocumentSigningRequest[]
   id             String   @id @default(cuid())
   organizationId String
   hotelId        String
@@ -384,6 +387,7 @@ model GeneratedDocument {
   reservation  Reservation  @relation(fields: [reservationId], references: [id], onDelete: Restrict)
   createdBy    User         @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Restrict)
 
+  @@unique([id, organizationId, hotelId, reservationId])
   @@unique([organizationId, type, sequenceNumber])
   @@index([hotelId, createdAt])
   @@index([reservationId, createdAt])
@@ -621,6 +625,7 @@ model GuestNote {
 }
 
 model Reservation {
+  documentSigningRequests DocumentSigningRequest[]
   guestCommunications GuestCommunication[]
   id                    String   @id @default(cuid())
   hotelId               String
@@ -1402,7 +1407,7 @@ model GuestCommunication {
   requestKey String
   templateId String?
   templateVersion Int?
-  recipientPhone String
+  recipientPhone String?
   body String @db.VarChar(4096)
   attachments Json
   state String @default("DRAFT")
@@ -1414,4 +1419,32 @@ model GuestCommunication {
   createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
   @@unique([hotelId, requestKey])
   @@index([organizationId, hotelId, createdAt, id])
+}
+
+// A capability link to an immutable issued PDF, not a new document generator.
+model DocumentSigningRequest {
+  id String @id @default(cuid())
+  organizationId String
+  hotelId String
+  reservationId String
+  documentId String
+  createdById String
+  tokenHash String @unique @db.VarChar(64)
+  title String @db.VarChar(240)
+  pdfBytes Bytes
+  pdfHash String @db.VarChar(64)
+  reservationVersion DateTime
+  expiresAt DateTime
+  revokedAt DateTime?
+  signedAt DateTime?
+  signerName String? @db.VarChar(160)
+  consentVersion String?
+  evidence Json?
+  createdAt DateTime @default(now())
+  hotel Hotel @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  reservation Reservation @relation(fields: [reservationId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  document GeneratedDocument @relation(fields: [documentId, organizationId, hotelId, reservationId], references: [id, organizationId, hotelId, reservationId], onDelete: Restrict)
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  @@index([organizationId, hotelId, reservationId, createdAt])
+  @@index([documentId, signedAt])
 }

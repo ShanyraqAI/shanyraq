@@ -9,7 +9,7 @@ export interface ReservationCommunicationWorkspace {
   reservationId: string; guestName: string; phone: string | null; roomName: string; values: TemplateValues;
   templates: TemplateVM[]; photos: PhotoVM[]; scope: string;
 }
-export interface PreparedMessage { id: string; text: string; phone: string; photoIds: string[]; scope: string }
+export interface PreparedMessage { id: string; text: string; phone: string | null; photoIds: string[]; scope: string }
 export const HISTORY_LABELS: Record<string, string> = {
   DRAFT: "Подготовлено — не отправлено",
   MANUAL_WHATSAPP_OPENED: "Открыт WhatsApp — ожидается ручная отправка",
