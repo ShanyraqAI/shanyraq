@@ -6,6 +6,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Maximize2, Plus } from "lucide-
 import { addDays, diffDays, formatISOCompactDate, parseISODate, toISODate, weekdayShort } from "@/lib/dates";
 import type { ReservationVM, RoomVM } from "@/lib/types";
 import { mobileCopy, type AppLocale } from "@/lib/locale";
+import { calendarSelectionHref } from "@/lib/reservations/calendar-navigation";
 import { cn } from "@/lib/utils";
 import type { CalendarRangeDays } from "@/lib/reservations/calendar-range";
 
@@ -71,13 +72,13 @@ export function MobileCalendar(props: Props) {
           <div style={{ width: timelineWidth }}>
             <div className="grid border-b border-[#eceee7] bg-[#fafaf7]" style={{ gridTemplateColumns: gridTemplate }}>
               <div className="sticky left-0 z-20 bg-[#fafaf7]" />
-              {days.map((day) => { const iso = toISODate(day); return <div key={iso} className={cn("flex h-12 flex-col items-center justify-center text-[9px] text-[#979d96]", iso === props.todayISO && "text-[#07866b]")}><span className="uppercase">{weekdayShort(day)}</span><span className={cn("mt-0.5 grid size-6 place-items-center rounded-full text-[11px] font-extrabold", iso === props.todayISO && "bg-[#07866b] text-white")}>{day.getUTCDate()}</span></div>; })}
+              {days.map((day) => { const iso = toISODate(day); return <button type="button" key={iso} onClick={() => props.onCreate(undefined, iso)} aria-label={`${props.locale === "kk" ? "Күндерді таңдау" : "Выбрать даты"}: ${iso}`} className={cn("flex h-12 flex-col items-center justify-center text-[9px] text-[#979d96]", iso === props.todayISO && "text-[#07866b]")}><span className="uppercase">{weekdayShort(day)}</span><span className={cn("mt-0.5 grid size-6 place-items-center rounded-full text-[11px] font-extrabold", iso === props.todayISO && "bg-[#07866b] text-white")}>{day.getUTCDate()}</span></button>; })}
             </div>
             {props.rooms.length ? props.rooms.map((room) => {
               const roomReservations = props.reservations.filter((item) => item.roomId === room.id && item.status !== "CANCELLED" && item.status !== "NO_SHOW" && item.checkIn <= toISODate(end) && item.checkOut > props.anchorISO);
               return <div key={room.id} className="relative grid min-h-[58px] border-b border-[#eceee7] last:border-0" style={{ gridTemplateColumns: gridTemplate }}>
-                <div className="sticky left-0 z-20 flex flex-col justify-center border-r border-[#eceee7] bg-white px-2"><Link href={`/dashboard/rooms/${encodeURIComponent(room.id)}/calendar`} className="flex min-h-11 items-center text-xs font-extrabold text-[#07866b]" aria-label={`${props.locale === "kk" ? "Пәтер күнтізбесі" : "Календарь квартиры"}: ${room.number}`}><span className="truncate">{room.number}</span></Link><span className="truncate text-[8px] text-[#a0a59f]">{room.roomTypeName}</span></div>
-                {days.map((day) => <button key={toISODate(day)} type="button" aria-label={`${copy.newBooking}, ${room.number}, ${toISODate(day)}`} onClick={() => props.onCreate(room.id, toISODate(day))} className="border-r border-[#f0f1eb] last:border-0 active:bg-[#eff8f4]" />)}
+                <div className="sticky left-0 z-20 flex flex-col justify-center border-r border-[#eceee7] bg-white px-2"><Link href={calendarSelectionHref(room.id)} className="flex min-h-11 items-center text-xs font-extrabold text-[#07866b]" aria-label={`${props.locale === "kk" ? "Пәтер күнтізбесі" : "Календарь квартиры"}: ${room.number}`}><span className="truncate">{room.number}</span></Link><span className="truncate text-[8px] text-[#a0a59f]">{room.roomTypeName}</span></div>
+                {days.map((day) => <button key={toISODate(day)} type="button" aria-label={`${props.locale === "kk" ? "Күндерді таңдау" : "Выбрать даты"}, ${room.number}, ${toISODate(day)}`} onClick={() => props.onCreate(room.id, toISODate(day))} className="border-r border-[#f0f1eb] last:border-0 active:bg-[#eff8f4]" />)}
                 {roomReservations.map((reservation) => {
                   const from = Math.max(0, diffDays(start, parseISODate(reservation.checkIn)));
                   const to = Math.min(visibleDays, Math.max(from + 1, diffDays(start, parseISODate(reservation.checkOut))));

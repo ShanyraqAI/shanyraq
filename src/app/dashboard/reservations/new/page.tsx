@@ -9,7 +9,7 @@ import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewReservationPage({ searchParams }: { searchParams: Promise<{ checkIn?: string | string[]; checkOut?: string | string[]; roomId?: string | string[] }> }) {
+export default async function NewReservationPage({ searchParams }: { searchParams: Promise<{ checkIn?: string | string[]; checkOut?: string | string[]; roomId?: string | string[]; datesSelected?: string | string[] }> }) {
   await requireSectionAccess("RESERVATIONS");
   const membership = await getCurrentMembership();
   if (!membership) return null;
@@ -35,5 +35,5 @@ export default async function NewReservationPage({ searchParams }: { searchParam
   const validCheckOut = requestedCheckOut && isISODate(requestedCheckOut) ? requestedCheckOut : undefined;
   if (requestedRoomId && !rooms.some((room) => room.id === requestedRoomId)) notFound();
   const validRoomId = requestedRoomId && rooms.some((room) => room.id === requestedRoomId) ? requestedRoomId : undefined;
-  return <MobileNewReservation locale={locale} todayISO={todayISO} defaultCheckInTime={hotel.defaultCheckInTime} defaultCheckOutTime={hotel.defaultCheckOutTime} rooms={rooms} ratePlans={plans} guests={guests} scope={`${membership.userId}:${membership.hotelId}`} initialCheckIn={validCheckIn} initialCheckOut={validCheckOut} initialRoomId={validRoomId} />;
+  return <MobileNewReservation locale={locale} todayISO={todayISO} defaultCheckInTime={hotel.defaultCheckInTime} defaultCheckOutTime={hotel.defaultCheckOutTime} rooms={rooms} ratePlans={plans} guests={guests} scope={`${membership.userId}:${membership.hotelId}`} initialCheckIn={validCheckIn} initialCheckOut={validCheckOut} initialRoomId={validRoomId} datesSelected={params.datesSelected === "1"} />;
 }

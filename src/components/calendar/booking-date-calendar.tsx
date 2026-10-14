@@ -175,7 +175,7 @@ export function BookingDateCalendar({
               day > value.checkIn &&
               day < value.checkOut,
             );
-            const label = `${formatISODate(day)} · ${day === todayISO ? (kk ? "бүгін · " : "сегодня · ") : ""}${day === value.checkIn ? (kk ? "келу" : "заезд") : day === value.checkOut ? (kk ? "кету" : "выезд") : busy ? (kk ? "бос емес" : "занято") : kk ? "бос" : "свободно"}${selectingEnd && !blocked ? (kk ? " · кетуді таңдау" : " · выбрать выезд") : ""}`;
+            const label = `${formatISODate(day)} · ${day === todayISO ? (kk ? "бүгін · " : "сегодня · ") : ""}${day === value.checkIn ? (kk ? "келу" : "заезд") : day === value.checkOut ? (kk ? "кету" : "выезд") : busy ? (kk ? "бос емес" : "занято") : roomId ? (kk ? "бос" : "свободно") : kk ? "күнді таңдау" : "выбрать дату"}${selectingEnd && !blocked ? (kk ? " · кетуді таңдау" : " · выбрать выезд") : ""}`;
             return (
               <button
                 key={day}
@@ -202,8 +202,10 @@ export function BookingDateCalendar({
           })}
         </div>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 border-t pt-3 text-xs text-[#626f5b]">
-          <span>○ {kk ? "Бос" : "Свободно"}</span>
-          <span>● {kk ? "Бос емес" : "Занято"}</span>
+          <span>
+            ○ {roomId ? (kk ? "Бос" : "Свободно") : kk ? "Күндер" : "Даты"}
+          </span>
+          {roomId ? <span>● {kk ? "Бос емес" : "Занято"}</span> : null}
           <span className="font-bold text-[#07866b]">
             ✓ {kk ? "Таңдалды" : "Выбрано"}
           </span>

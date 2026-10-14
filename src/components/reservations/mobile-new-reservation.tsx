@@ -10,6 +10,7 @@ import type { GuestVM, RatePlanVM, RoomVM } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BookingDateCalendar } from "@/components/calendar/booking-date-calendar";
 import { useBookingOptions } from "@/components/calendar/use-booking-options";
+import { initialBookingStep } from "@/lib/reservations/calendar-navigation";
 import { validBookingRange } from "@/lib/reservations/date-range";
 
 interface Props {
@@ -24,13 +25,14 @@ interface Props {
   initialCheckIn?: string;
   initialCheckOut?: string;
   initialRoomId?: string;
+  datesSelected?: boolean;
 }
 
-export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, defaultCheckOutTime, rooms, guests, ratePlans, scope, initialCheckIn, initialCheckOut, initialRoomId }: Props) {
+export function MobileNewReservation({ locale, todayISO, defaultCheckInTime, defaultCheckOutTime, rooms, guests, ratePlans, scope, initialCheckIn, initialCheckOut, initialRoomId, datesSelected = false }: Props) {
   const router = useRouter();
   const kk = locale === "kk";
   const [pending, startTransition] = useTransition();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState<number>(() => initialBookingStep({ checkIn: initialCheckIn ?? "", checkOut: initialCheckOut ?? "" }, datesSelected, initialRoomId));
   const [checkIn, setCheckIn] = useState(initialCheckIn ?? "");
   const [checkOut, setCheckOut] = useState(initialCheckOut ?? "");
   // A unit preselected from the calendar must not be filtered out by the default guest count.

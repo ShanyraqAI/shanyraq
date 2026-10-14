@@ -4,33 +4,58 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AppLocale } from "@/lib/locale";
 import type { DateRange } from "@/lib/reservations/date-range";
+import { bookingFromCalendarHref } from "@/lib/reservations/calendar-navigation";
 import { BookingDateCalendar } from "./booking-date-calendar";
 
 export function ApartmentCalendar(props: {
-  roomId: string;
-  roomName: string;
+  roomId?: string;
+  roomName?: string;
   locale: AppLocale;
   scope: string;
   todayISO: string;
   checkInTime: string;
   checkOutTime: string;
   canBook: boolean;
+  initialCheckIn?: string;
+  returnTo?: "calendar" | "rooms";
 }) {
   const router = useRouter();
-  const [range, setRange] = useState<DateRange>({ checkIn: "", checkOut: "" });
+  const [range, setRange] = useState<DateRange>({
+    checkIn: props.initialCheckIn ?? "",
+    checkOut: "",
+  });
   const kk = props.locale === "kk";
   return (
     <div className="mx-auto max-w-md space-y-4 pb-[max(env(safe-area-inset-bottom),16px)]">
       <Link
-        href="/dashboard/rooms"
+        href={
+          props.returnTo === "calendar"
+            ? "/dashboard/calendar"
+            : "/dashboard/rooms"
+        }
         className="inline-flex min-h-11 items-center text-sm font-bold text-[#07866b]"
       >
-        ← {kk ? "Пәтерлер" : "Квартиры"}
+        ←{" "}
+        {props.returnTo === "calendar"
+          ? kk
+            ? "Күнтізбе"
+            : "Календарь"
+          : kk
+            ? "Пәтерлер"
+            : "Квартиры"}
       </Link>
       <header>
-        <h1 className="sh-mobile-title break-words">{props.roomName}</h1>
+        <h1 className="sh-mobile-title break-words">
+          {props.roomName ?? (kk ? "Күндерді таңдаңыз" : "Выберите даты")}
+        </h1>
         <p className="sh-mobile-eyebrow">
-          {kk ? "Пәтер күнтізбесі" : "Календарь квартиры"}
+          {props.roomId
+            ? kk
+              ? "Пәтер күнтізбесі"
+              : "Календарь квартиры"
+            : kk
+              ? "Алдымен келу, содан кейін кету күнін таңдаңыз"
+              : "Сначала заезд, затем выезд"}
         </p>
       </header>
       <BookingDateCalendar
@@ -39,9 +64,7 @@ export function ApartmentCalendar(props: {
         onChange={setRange}
         disabled={!props.canBook}
         onContinue={() =>
-          router.push(
-            `/dashboard/reservations/new?${new URLSearchParams({ roomId: props.roomId, ...range })}`,
-          )
+          router.push(bookingFromCalendarHref(range, props.roomId))
         }
         onOpenReservation={
           props.canBook
