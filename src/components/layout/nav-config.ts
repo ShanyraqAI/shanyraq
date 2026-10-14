@@ -11,6 +11,7 @@ import {
   Settings,
   CreditCard,
   History,
+  MessageCircle,
   type LucideIcon,
 } from "lucide-react";
 import { t } from "@/lib/i18n";
@@ -39,6 +40,7 @@ const ALL_NAV_MAIN: (NavItem & { visible: boolean })[] = [
 export const NAV_MAIN: NavItem[] = ALL_NAV_MAIN.filter((item) => item.visible);
 
 const ALL_NAV_SECONDARY: (NavItem & { visible: boolean })[] = [
+  { title: "Коммуникации", href: "/dashboard/communications", icon: MessageCircle, permission: "RESERVATIONS", visible: true },
   { title: "Подписка и оплата", href: "/dashboard/billing", icon: CreditCard, permission: "FULL", visible: PRODUCT_AVAILABILITY.billing },
   { title: t.nav.reports, href: "/dashboard/reports", icon: BarChart3, permission: "REPORTS", visible: true },
   { title: t.nav.payments, href: "/dashboard/reports#payments", icon: CreditCard, permission: "REPORTS", visible: true },

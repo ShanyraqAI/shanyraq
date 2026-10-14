@@ -27,7 +27,9 @@
     "test:rental-property": "tsx --test src/lib/rental-properties.test.ts",
     "test:rental-property-migration": "node --env-file=.env scripts/verify-rental-property-migration.mjs",
     "test:migrations:clean": "node --env-file=.env scripts/verify-clean-migrations.mjs",
-    "test:channex-property-migration": "node --env-file=.env scripts/verify-channex-property-migration.mjs"
+    "test:channex-property-migration": "node --env-file=.env scripts/verify-channex-property-migration.mjs",
+    "test:communications": "tsx --test src/lib/communications/template.test.ts",
+    "test:communications:db": "tsx scripts/test-guest-communications.ts"
   },
   "engines": {
     "node": ">=20.9.0"

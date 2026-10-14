@@ -61,6 +61,7 @@ model Organization {
 }
 
 model User {
+  guestCommunications GuestCommunication[]
   id                  String    @id @default(cuid())
   email               String?   @unique // nullable: phone-only accounts are allowed
   phone               String?   @unique
@@ -189,6 +190,10 @@ model Membership {
 }
 
 model Hotel {
+  communicationProfiles CommunicationProfile[]
+  communicationTemplates CommunicationTemplate[]
+  communicationPhotos CommunicationPhoto[]
+  guestCommunications GuestCommunication[]
   id           String       @id @default(cuid())
   orgId        String
   slug         String       @unique
@@ -552,6 +557,10 @@ model RoomType {
 }
 
 model Room {
+  communicationProfile CommunicationProfile?
+  communicationTemplates CommunicationTemplate[]
+  communicationPhotos CommunicationPhoto[]
+  guestCommunications GuestCommunication[]
   id               String @id @default(cuid())
   hotelId          String
   rentalPropertyId String
@@ -612,6 +621,7 @@ model GuestNote {
 }
 
 model Reservation {
+  guestCommunications GuestCommunication[]
   id                    String   @id @default(cuid())
   hotelId               String
   rentalPropertyId      String
@@ -661,6 +671,7 @@ model Reservation {
   ttlockPasscodes     TTLockPasscode[]
   financialOperations FinancialOperation[]
 
+  @@unique([id, roomId, hotelId])
   @@unique([id, hotelId])
   @@unique([id, rentalPropertyId, hotelId])
   @@unique([hotelId, sourceChannel, externalReservationId])
@@ -1313,4 +1324,94 @@ model Expense {
   hotel       Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
 
   @@index([hotelId, occurredAt])
+}
+
+// Guest communication: uses the existing workspace, units, guests and reservations.
+model CommunicationProfile {
+  id String @id @default(cuid())
+  organizationId String
+  hotelId String
+  roomId String @unique
+  publicName String @default("")
+  address String @default("")
+  mapLink String @default("")
+  wifiName String @default("")
+  wifiPassword String @default("")
+  keyInstructions String @default("")
+  rulesLink String @default("")
+  checkinGuideLink String @default("")
+  supportPhone String @default("")
+  version Int @default(1)
+  updatedAt DateTime @updatedAt
+  hotel Hotel @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  room Room @relation(fields: [roomId, hotelId], references: [id, hotelId], onDelete: Cascade)
+  @@index([organizationId, hotelId])
+  @@unique([roomId, hotelId])
+}
+model CommunicationTemplate {
+  id String @id @default(cuid())
+  organizationId String
+  hotelId String
+  roomId String?
+  name String @db.VarChar(160)
+  body String @db.VarChar(4096)
+  language String @default("ru")
+  status String @default("DRAFT")
+  isDefault Boolean @default(false)
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  hotel Hotel @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  room Room? @relation(fields: [roomId, hotelId], references: [id, hotelId], onDelete: Cascade)
+  versions CommunicationTemplateVersion[]
+  @@unique([id, hotelId])
+  @@index([organizationId, hotelId, status])
+}
+model CommunicationTemplateVersion {
+  id String @id @default(cuid())
+  templateId String
+  hotelId String
+  version Int
+  snapshot Json
+  createdAt DateTime @default(now())
+  template CommunicationTemplate @relation(fields: [templateId, hotelId], references: [id, hotelId], onDelete: Cascade)
+  @@unique([templateId, version])
+}
+model CommunicationPhoto {
+  id String @id @default(cuid())
+  organizationId String
+  hotelId String
+  roomId String
+  name String @db.VarChar(160)
+  contentType String @default("image/jpeg")
+  bytes Bytes
+  position Int @default(0)
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+  hotel Hotel @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  room Room @relation(fields: [roomId, hotelId], references: [id, hotelId], onDelete: Cascade)
+  @@index([organizationId, hotelId, roomId, archivedAt])
+}
+model GuestCommunication {
+  id String @id @default(cuid())
+  organizationId String
+  hotelId String
+  roomId String
+  reservationId String
+  createdById String
+  requestKey String
+  templateId String?
+  templateVersion Int?
+  recipientPhone String
+  body String @db.VarChar(4096)
+  attachments Json
+  state String @default("DRAFT")
+  createdAt DateTime @default(now())
+  handoffAt DateTime?
+  hotel Hotel @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  room Room @relation(fields: [roomId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  reservation Reservation @relation(fields: [reservationId, roomId, hotelId], references: [id, roomId, hotelId], onDelete: Cascade)
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  @@unique([hotelId, requestKey])
+  @@index([organizationId, hotelId, createdAt, id])
 }
