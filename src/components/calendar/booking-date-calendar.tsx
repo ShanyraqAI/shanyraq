@@ -31,6 +31,8 @@ interface Props {
   onContinue: () => void;
   onOpenReservation?: (id: string) => void;
   disabled?: boolean;
+  children?: React.ReactNode;
+  continueLabel?: string;
 }
 
 export function BookingDateCalendar({
@@ -45,6 +47,8 @@ export function BookingDateCalendar({
   onContinue,
   onOpenReservation,
   disabled,
+  children,
+  continueLabel,
 }: Props) {
   const kk = locale === "kk";
   const [month, setMonth] = useState(() =>
@@ -154,6 +158,8 @@ export function BookingDateCalendar({
             const busy = stays.some(
               (stay) => stay.checkIn <= day && stay.checkOut > day,
             );
+            const arrival = stays.some((stay) => stay.checkIn === day);
+            const departure = stays.some((stay) => stay.checkOut === day);
             const candidate = selectRangeDay(value, day);
             const selectingEnd = Boolean(candidate.checkOut);
             const blocked =
@@ -167,7 +173,7 @@ export function BookingDateCalendar({
                       stay,
                     ),
                   )
-                : busy);
+                : busy || stays.some((stay) => stay.checkOut === day && checkInTime < stay.checkOutTime));
             const endpoint = day === value.checkIn || day === value.checkOut;
             const between = Boolean(
               value.checkIn &&
@@ -175,7 +181,7 @@ export function BookingDateCalendar({
               day > value.checkIn &&
               day < value.checkOut,
             );
-            const label = `${formatISODate(day)} · ${day === todayISO ? (kk ? "бүгін · " : "сегодня · ") : ""}${day === value.checkIn ? (kk ? "келу" : "заезд") : day === value.checkOut ? (kk ? "кету" : "выезд") : busy ? (kk ? "бос емес" : "занято") : roomId ? (kk ? "бос" : "свободно") : kk ? "күнді таңдау" : "выбрать дату"}${selectingEnd && !blocked ? (kk ? " · кетуді таңдау" : " · выбрать выезд") : ""}`;
+            const label = `${formatISODate(day)} · ${day === todayISO ? (kk ? "бүгін · " : "сегодня · ") : ""}${day === value.checkIn ? (kk ? "келу" : "заезд") : day === value.checkOut ? (kk ? "кету" : "выезд") : departure && !busy ? (kk ? "кету · түстен кейін бос" : "выезд · свободно после выезда") : busy ? (kk ? "бос емес" : "занято") : roomId ? (kk ? "бос" : "свободно") : kk ? "күнді таңдау" : "выбрать дату"}${selectingEnd && !blocked ? (kk ? " · кетуді таңдау" : " · выбрать выезд") : ""}`;
             return (
               <button
                 key={day}
@@ -186,17 +192,11 @@ export function BookingDateCalendar({
                 aria-current={day === todayISO ? "date" : undefined}
                 disabled={blocked}
                 onClick={() => pick(day)}
-                className={`relative min-h-11 min-w-0 rounded-lg text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#07866b] ${endpoint ? "bg-[#07866b] text-white" : between ? "bg-[#e4f3ee] text-[#075d4d]" : busy ? "bg-[#f5ead2] text-[#755720]" : "text-[#26352f] hover:bg-[#eff8f4]"} ${day === todayISO && !endpoint ? "ring-1 ring-inset ring-[#07866b]" : ""} ${day < todayISO ? "opacity-40" : ""}`}
+                className={`relative min-h-11 min-w-0 rounded-lg text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#07866b] ${endpoint ? "text-[#075d4d]" : between ? "bg-[#e4f3ee] text-[#075d4d]" : busy ? "bg-[#f5ead2] text-[#755720]" : "text-[#26352f] hover:bg-[#eff8f4]"} ${day === todayISO && !endpoint ? "ring-1 ring-inset ring-[#07866b]" : ""} ${day < todayISO ? "opacity-40" : ""}`}
               >
-                {Number(day.slice(8))}
-                {busy ? (
-                  <span
-                    aria-hidden="true"
-                    className="absolute inset-x-0 bottom-1 text-[9px]"
-                  >
-                    ●
-                  </span>
-                ) : null}
+                {endpoint ? <span aria-hidden="true" className="absolute inset-y-1 bg-[#e4f3ee]" style={{ left: day === value.checkIn ? "50%" : 0, right: day === value.checkOut ? "50%" : 0 }} /> : null}
+                {!endpoint && !between && (busy || departure) ? <span aria-hidden="true" className="absolute inset-x-0 bottom-1 h-1.5 overflow-hidden rounded-full"><span className="absolute inset-y-0 bg-[#c79836]" style={{ left: arrival && !departure ? "50%" : "0", right: departure && !busy ? "50%" : "0" }} /></span> : null}
+                <span className={`relative mx-auto grid size-8 place-items-center rounded-full ${endpoint ? "bg-[#07866b] text-white" : ""}`}>{Number(day.slice(8))}</span>
               </button>
             );
           })}
@@ -231,8 +231,8 @@ export function BookingDateCalendar({
         </p>
         <p className="mt-1 text-xs">
           {kk
-            ? "Кету күні ақылы түнге кірмейді. Екі түрту күндерді ғана таңдайды."
-            : "Выезд не считается занятой ночью. Два касания только выбирают даты."}
+            ? "Келу — күннің екінші жартысы, кету — бірінші жартысы."
+            : "Заезд — правая половина дня, выезд — левая. Оплата за ночи."}
         </p>
         {!roomId ? (
           <p className="mt-1 text-xs">
@@ -283,19 +283,20 @@ export function BookingDateCalendar({
             : "В выбранном периоде есть другая бронь. Измените даты."}
         </p>
       ) : null}
+      {children}
       <button
         type="button"
         disabled={!allowed}
         onClick={onContinue}
         className="sh-mobile-primary min-h-12 w-full rounded-xl bg-[#07866b] px-4 font-bold text-white disabled:opacity-50"
       >
-        {kk ? "Жалғастыру" : "Продолжить"}
+        {continueLabel ?? (kk ? "Жалғастыру" : "Продолжить")}
       </button>
       {onOpenReservation && stays.length ? (
-        <div className="space-y-1">
-          <h3 className="text-sm font-bold">
+        <details className="space-y-1">
+          <summary className="min-h-11 cursor-pointer text-sm font-bold">
             {kk ? "Осы айдағы броньдар" : "Брони этого месяца"}
-          </h3>
+          </summary>
           {stays
             .filter((stay) => stay.checkIn < nextMonth && stay.checkOut > month)
             .map((stay) => (
@@ -313,7 +314,7 @@ export function BookingDateCalendar({
                 </span>
               </button>
             ))}
-        </div>
+        </details>
       ) : null}
     </section>
   );
