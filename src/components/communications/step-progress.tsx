@@ -1,3 +1,12 @@
 export function StepProgress({ step, labels }: { step: number; labels: readonly string[] }) {
-  return <ol aria-label="Шаги" className="flex gap-2">{labels.map((label, i) => <li key={label} aria-current={step === i + 1 ? "step" : undefined} className={`flex min-w-0 flex-1 flex-col gap-2 rounded-xl border p-3 text-sm ${step === i + 1 ? "border-primary bg-accent/40 font-semibold" : "bg-card text-[#52645a] dark:text-muted-foreground"}`}><span className={`flex size-6 items-center justify-center rounded-full text-sm ${step >= i + 1 ? "bg-primary text-primary-foreground" : "border"}`}>{i + 1}</span><span>{label}</span></li>)}</ol>;
+  return (
+    <ol aria-label="Шаги" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      {labels.map((label, i) => (
+        <li key={label} aria-current={step === i + 1 ? "step" : undefined} className={`flex items-center gap-1.5 ${step === i + 1 ? "font-medium text-primary" : ""}`}>
+          <span className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] ${step === i + 1 ? "bg-primary/10 text-primary" : "bg-muted"}`}>{i + 1}</span>
+          <span>{label}</span>
+        </li>
+      ))}
+    </ol>
+  );
 }

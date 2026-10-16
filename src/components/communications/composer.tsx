@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- private authenticated images must not use the shared image optimizer */
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Copy, ImagePlus, Loader2, Share2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Copy, ImagePlus, Loader2, Pencil, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DocumentSigningPanel } from "@/components/documents/document-signing-panel";
@@ -28,7 +28,7 @@ export function CommunicationComposer({ reservationId, open, onOpenChange }: { r
   }, [open, reservationId, generation]);
   return <Sheet open={open} onOpenChange={onOpenChange}>
     <SheetContent data-clarity-mask="true" className="gap-0 [&>button]:size-11 [&>button]:top-[max(env(safe-area-inset-top),12px)] max-sm:!inset-0 max-sm:!h-dvh max-sm:!w-screen max-sm:!max-w-none max-sm:!rounded-none sm:!w-full sm:!max-w-lg">
-      <SheetHeader className="shrink-0 border-b pt-[max(env(safe-area-inset-top),16px)] pr-12"><SheetTitle>Сообщение гостю</SheetTitle><SheetDescription className={SECONDARY_TEXT}>Готовый или свой текст — за три шага</SheetDescription></SheetHeader>
+      <SheetHeader className="shrink-0 border-b pt-[max(env(safe-area-inset-top),16px)] pr-12"><SheetTitle>Сообщение гостю</SheetTitle><SheetDescription className={SECONDARY_TEXT}>Подготовьте текст, добавьте вложения и отправьте гостю</SheetDescription></SheetHeader>
       <div className="flex min-h-0 flex-1 flex-col">
         {workspace ? <ComposerEditor key={workspace.reservationId + workspace.scope} workspace={workspace} /> : error ? <div className="overflow-y-auto p-4"><LoadFailure error={error} onRetry={() => { setError(null); setGeneration((n) => n + 1); }} /></div> : <p role="status" className="flex items-center gap-2 p-4 py-8"><Loader2 className="size-5 animate-spin" />Загружаем данные брони…</p>}
       </div>
@@ -40,7 +40,6 @@ export function ComposerEditor({ workspace: w }: { workspace: ReservationCommuni
   const [mode, setMode] = useState<"default" | "custom">("default");
   const [templateId, setTemplateId] = useState(w.templates[0]?.id ?? AUTOMATIC_TEMPLATE);
   const [customText, setCustomText] = useState("");
-  const [replacePrompt, setReplacePrompt] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [documentEnabled, setDocumentEnabled] = useState(false);
   const [documentBusy, setDocumentBusy] = useState(false);
@@ -63,9 +62,9 @@ export function ComposerEditor({ workspace: w }: { workspace: ReservationCommuni
   useEffect(() => { heading.current?.focus({ preventScroll: true }); heading.current?.closest("[data-communication-scroll]")?.scrollTo({ top: 0 }); }, [step]);
   function resetDraft() { setPrepared(null); setFiles([]); setNotice(null); setError(null); requestKey.current = null; }
   function changeStep(next: number) { if (next !== 3) resetDraft(); setStep(next); }
-  function openCustom() { setMode("custom"); setReplacePrompt(false); resetDraft(); requestAnimationFrame(() => textarea.current?.focus()); }
+  function openCustom() { setMode("custom"); resetDraft(); requestAnimationFrame(() => textarea.current?.focus()); }
   function copyReadyText() { setCustomText(baseText); openCustom(); }
-  function editReadyText() { if (customText.trim() && customText !== baseText) setReplacePrompt(true); else copyReadyText(); }
+  function editReadyText() { copyReadyText(); }
   async function prepare() {
     if (finalError || (documentEnabled && !signingLink)) return;
     setBusy(true); setError(null); setNotice(null);
@@ -102,20 +101,20 @@ export function ComposerEditor({ workspace: w }: { workspace: ReservationCommuni
   function download(index: number) { const url = URL.createObjectURL(files[index]); const a = document.createElement("a"); a.href = url; a.download = files[index].name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10000); }
   return <div className="flex min-h-0 flex-1 flex-col">
     <div data-communication-scroll className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
-    <section className="rounded-2xl border bg-accent/40 px-4 py-3"><h2 className="font-semibold">{w.guestName}</h2><p className={`mt-1 break-words ${SECONDARY_TEXT}`}>{w.roomName}{w.phone ? ` · +${w.phone}` : ""}</p></section>
+    <section className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b pb-2 text-xs"><h2 className="text-sm font-medium">{w.guestName}</h2><p className="break-words text-muted-foreground">{w.roomName}{w.phone ? ` · +${w.phone}` : ""}</p></section>
     <StepProgress step={step} labels={STEPS} />
     <div className="flex-1 space-y-4">
-      <header><p className={SECONDARY_TEXT}>Шаг {step} из 3</p><h2 ref={heading} tabIndex={-1} className="mt-1 text-lg font-semibold outline-none">{step === 1 ? "Какой текст отправим?" : step === 2 ? "Добавьте по желанию" : "Проверьте сообщение"}</h2><p className={`mt-2 ${SECONDARY_TEXT}`}>{step === 1 ? "Можно оставить готовый текст, изменить его или написать с нуля." : step === 2 ? "Фото и документ необязательны. Можно сразу перейти к проверке." : "Выберите приложение и получателя сами — перед отправкой проверьте чат."}</p></header>
+      <header><h2 ref={heading} tabIndex={-1} className="mt-1 text-lg font-semibold outline-none">{step === 1 ? "Текст сообщения" : step === 2 ? "Добавьте по желанию" : "Проверьте сообщение"}</h2><p className={`mt-2 ${SECONDARY_TEXT}`}>{step === 1 ? "Можно оставить готовый текст, изменить его или написать с нуля." : step === 2 ? "Фото и документ необязательны. Можно сразу перейти к проверке." : "Выберите приложение и получателя сами — перед отправкой проверьте чат."}</p></header>
       {step === 1 ? <>
-        <fieldset className="grid grid-cols-2 gap-2"><legend className="sr-only">Источник текста</legend>{[["default", "Готовый текст", "Уже заполнен"], ["custom", "Свой текст", "Написать с нуля"]].map(([id, label, hint]) => <label key={id} className={`flex min-h-20 cursor-pointer gap-2 rounded-xl border p-3 ${mode === id ? "border-primary bg-accent/40" : "bg-card"}`}><input type="radio" name={`message-mode-${w.reservationId}`} checked={mode === id} disabled={locked} className="mt-1 size-4 shrink-0 accent-[#07866b]" onChange={() => { setMode(id as "default" | "custom"); setReplacePrompt(false); resetDraft(); if (id === "custom") requestAnimationFrame(() => textarea.current?.focus()); }} /><span><span className="block text-sm font-semibold">{label}</span><span className={`mt-1 block ${SECONDARY_TEXT}`}>{hint}</span></span></label>)}</fieldset>
         {mode === "default" ? <>
-          <Field label="Готовый текст"><select className={INPUT} value={templateId} disabled={locked} onChange={(e) => { setTemplateId(e.target.value); resetDraft(); }}><optgroup label="Стандартные тексты">{STARTER_TEMPLATES.map((t, i) => <option key={t.name} value={`starter:${i}`}>{i === 0 ? "Инструкция заселения · стандартная" : t.name}</option>)}</optgroup>{w.templates.length ? <optgroup label="Мои шаблоны">{w.templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.isDefault ? " · по умолчанию" : ""}</option>)}</optgroup> : null}</select></Field>
-          <div className="rounded-2xl border bg-card p-4 text-base leading-relaxed whitespace-pre-wrap break-words" aria-label="Предпросмотр готового текста">{baseText}</div>
-          {ready.missing.length || ready.unknown.length ? <p className="rounded-xl border bg-accent/40 p-3 text-sm">Не хватает данных: {[...ready.missing, ...ready.unknown].map((key) => VARIABLES[key as keyof typeof VARIABLES] ?? key).join(", ")}. Измените текст ниже или заполните данные квартиры.</p> : templateId === AUTOMATIC_TEMPLATE && (!w.values.property_address || !w.values.key_instructions) ? <p className={SECONDARY_TEXT}>Адрес и получение ключей добавятся, когда вы заполните их в данных квартиры. Сейчас в тексте только известная информация.</p> : <p className={SECONDARY_TEXT}>Всё уже заполнено. Если текст подходит, нажмите «Далее».</p>}
-          <Button variant="outline" className="min-h-11 w-full" disabled={locked} onClick={editReadyText}>Изменить этот текст</Button>
-          {replacePrompt ? <section className="space-y-3 rounded-xl border bg-accent/30 p-3"><h3 className="text-sm font-semibold">У вас уже есть свой черновик</h3><p className={SECONDARY_TEXT}>Можно продолжить его или явно заменить готовым текстом.</p><Button variant="outline" className="min-h-11 w-full" onClick={openCustom}>Продолжить свой текст</Button><Button className="min-h-11 w-full" onClick={copyReadyText}>Заменить готовым текстом</Button></section> : null}
+          <Field label="Шаблон"><select className={INPUT} value={templateId} disabled={locked} onChange={(e) => { setTemplateId(e.target.value); resetDraft(); }}><optgroup label="Стандартные тексты">{STARTER_TEMPLATES.map((t, i) => <option key={t.name} value={`starter:${i}`}>{i === 0 ? "Инструкция заселения · стандартная" : t.name}</option>)}</optgroup>{w.templates.length ? <optgroup label="Мои шаблоны">{w.templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.isDefault ? " · по умолчанию" : ""}</option>)}</optgroup> : null}</select></Field>
+          <section className="rounded-xl border bg-card p-4">
+            <div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-xs font-medium text-muted-foreground">Сообщение</h3><Button variant="ghost" size="icon" aria-label="Редактировать сообщение" title="Редактировать сообщение" disabled={locked} onClick={editReadyText}><Pencil className="size-4" /></Button></div>
+            <p className="text-base leading-relaxed whitespace-pre-wrap break-words" aria-label="Предпросмотр готового текста">{baseText}</p>
+          </section>
+          {ready.missing.length || ready.unknown.length ? <p className="rounded-xl border bg-accent/40 p-3 text-sm">Не хватает данных: {[...ready.missing, ...ready.unknown].map((key) => VARIABLES[key as keyof typeof VARIABLES] ?? key).join(", ")}. Измените текст кнопкой с карандашом или заполните данные квартиры.</p> : templateId === AUTOMATIC_TEMPLATE && (!w.values.property_address || !w.values.key_instructions) ? <p className={SECONDARY_TEXT}>Адрес и получение ключей добавятся, когда вы заполните их в данных квартиры. Сейчас в тексте только известная информация.</p> : <p className={SECONDARY_TEXT}>Всё уже заполнено. Если текст подходит, нажмите «Далее».</p>}
         </> : <Field label="Текст для гостя" hint={`${body.length}/4096 · меняется только это сообщение, не сохранённый шаблон`}><textarea ref={textarea} rows={8} className={`${INPUT} resize-y leading-relaxed`} maxLength={4096} placeholder="Напишите гостю своими словами…" value={customText} disabled={locked} onChange={(e) => { setCustomText(e.target.value); resetDraft(); }} /></Field>}
-        {mode === "custom" && !customText.trim() ? <p className={SECONDARY_TEXT}>Напишите сообщение или вернитесь к готовому тексту. Переключение не стирает ваш черновик.</p> : null}
+        {mode === "custom" && !customText.trim() ? <p className={SECONDARY_TEXT}>Напишите сообщение гостю. Изменения касаются только этой отправки.</p> : null}
       </> : null}
       {step === 2 ? <>
         <section className="space-y-3 rounded-2xl border bg-card p-4"><h3 className="flex items-center gap-2 font-semibold"><ImagePlus className="size-5" />Фото квартиры <span className={SECONDARY_TEXT}>· {selected.length} выбрано</span></h3>
@@ -125,8 +124,7 @@ export function ComposerEditor({ workspace: w }: { workspace: ReservationCommuni
         {documentEnabled ? <><DocumentSigningPanel reservationId={w.reservationId} scope={w.scope} inline onBusyChange={setDocumentBusy} onLinkCreated={(link) => { setSigningLink(link); resetDraft(); }} />{signingLink ? <p role="status" className="rounded-xl border bg-accent/40 p-3 text-sm">Ссылка на {signingLink.title} будет добавлена к сообщению. До {new Date(signingLink.expiresAt).toLocaleString("ru-RU")}.</p> : <p className={SECONDARY_TEXT}>Создайте ссылку выше или отключите добавление документа.</p>}</> : null}
       </> : null}
       {step === 3 && prepared ? <>
-        <section className="space-y-3 rounded-2xl border bg-card p-4"><p className="text-base leading-relaxed whitespace-pre-wrap break-words" aria-label="Сообщение перед отправкой">{prepared.text}</p><div className={`flex flex-wrap gap-2 border-t pt-3 ${SECONDARY_TEXT}`}><span>{files.length ? `Фото: ${files.length}` : "Без фото"}</span><span>·</span><span>{documentEnabled && signingLink ? "Ссылка на документ" : "Без документа"}</span></div></section>
-        <Button variant="outline" className="min-h-11 w-full" disabled={locked} onClick={() => { changeStep(1); if (mode === "default") editReadyText(); }}>Изменить текст</Button>
+        <section className="space-y-3 rounded-2xl border bg-card p-4"><div className="flex items-center justify-between gap-2"><h3 className="text-xs font-medium text-muted-foreground">Сообщение</h3><Button variant="ghost" size="icon" aria-label="Редактировать сообщение" title="Редактировать сообщение" disabled={locked} onClick={() => { changeStep(1); if (mode === "default") editReadyText(); }}><Pencil className="size-4" /></Button></div><p className="text-base leading-relaxed whitespace-pre-wrap break-words" aria-label="Сообщение перед отправкой">{prepared.text}</p><div className={`flex flex-wrap gap-2 border-t pt-3 ${SECONDARY_TEXT}`}><span>{files.length ? `Фото: ${files.length}` : "Без фото"}</span><span>·</span><span>{documentEnabled && signingLink ? "Ссылка на документ" : "Без документа"}</span></div></section>
         <p className={SECONDARY_TEXT}>{supportsShare ? "Кнопка «Отправить» откроет меню WhatsApp, Telegram и других доступных приложений." : "Браузер не поддерживает меню приложений. Скопируйте текст и вставьте его в чат вручную."}</p>
         {supportsFiles ? <p className={SECONDARY_TEXT}>Приложение может принять текст и фото вместе. Если текст не появился, скопируйте его отдельно.</p> : files.length ? <p className="rounded-xl border bg-accent/40 p-3 text-sm">Фото на этом устройстве нужно прикрепить вручную. Кнопка отправит только текст; скачайте фото ниже.</p> : null}
         {supportsShare ? <Button variant="outline" className="min-h-11 w-full" onClick={copy}><Copy className="size-4" />Скопировать текст</Button> : null}
