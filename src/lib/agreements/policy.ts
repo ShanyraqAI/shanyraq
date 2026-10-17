@@ -75,6 +75,16 @@ export const staffCommand = z.discriminatedUnion("action", [
   z
     .object({
       ...staffBase,
+      action: z.literal("publishRules"),
+      text: z.string().trim().min(10).max(6000),
+      version: z.number().int().min(0),
+      published: z.boolean(),
+      publicContentConfirmed: z.literal(true),
+    })
+    .strict(),
+  z
+    .object({
+      ...staffBase,
       action: z.literal("create"),
       requestKey: z.string().uuid(),
       revision: digest,

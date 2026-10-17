@@ -58,14 +58,21 @@ async function current(
 ) {
   const r = await tx.reservation.findFirst({
     where: { id: reservationId, hotelId },
-    include: { guest: true, hotel: true, room: true },
+    include: {
+      guest: true,
+      hotel: true,
+      room: { include: { rentalProperty: true } },
+    },
   });
   if (!r || (!allowCancelled && ["CANCELLED", "NO_SHOW"].includes(r.status)))
     throw unavailable();
-  const [profile, communication] = await Promise.all([
+  const [profile, communication, publication] = await Promise.all([
     tx.documentProfile.findUnique({ where: { organizationId: r.hotel.orgId } }),
     tx.communicationProfile.findFirst({
       where: { hotelId, roomId: r.roomId ?? "__no_room__" },
+    }),
+    tx.publicPropertyRules.findUnique({
+      where: { rentalPropertyId: r.rentalPropertyId },
     }),
   ]);
   // Conservative invalidation: any booking/profile/rules/contact change requires new consent.
@@ -89,18 +96,34 @@ async function current(
       room: r.room,
       profile,
       communication,
+      publication,
     }),
   );
-  return { r, revision, phone: normalizePhone(r.guest.phone) };
+  return {
+    r,
+    revision,
+    phone: normalizePhone(r.guest.phone),
+    publication,
+    rules: publication?.published
+      ? publication.text
+      : (r.hotel.houseRules ?? ""),
+  };
 }
 async function lockReservation(tx: Tx, reservationId: string, hotelId: string) {
   await tx.$queryRaw`SELECT "id" FROM "Reservation" WHERE "id"=${reservationId} AND "hotelId"=${hotelId} FOR UPDATE`;
   const r = await tx.reservation.findFirst({
     where: { id: reservationId, hotelId },
-    select: { guestId: true, roomId: true, hotel: { select: { orgId: true } } },
+    select: {
+      guestId: true,
+      roomId: true,
+      rentalPropertyId: true,
+      hotel: { select: { orgId: true } },
+    },
   });
   if (!r) throw unavailable();
   await tx.$queryRaw`SELECT "id" FROM "Hotel" WHERE "id"=${hotelId} FOR UPDATE`;
+  await tx.$queryRaw`SELECT "id" FROM "RentalProperty" WHERE "id"=${r.rentalPropertyId} FOR UPDATE`;
+  await tx.$queryRaw`SELECT "id" FROM "PublicPropertyRules" WHERE "rentalPropertyId"=${r.rentalPropertyId} FOR UPDATE`;
   await tx.$queryRaw`SELECT "id" FROM "Guest" WHERE "id"=${r.guestId} FOR UPDATE`;
   if (r.roomId) {
     await tx.$queryRaw`SELECT "id" FROM "Room" WHERE "id"=${r.roomId} FOR UPDATE`;
@@ -144,7 +167,15 @@ export async function agreementWorkspace(
       scope: agreementScope(m),
       revision: c.revision,
       documents,
-      rules: c.r.hotel.houseRules ?? "",
+      rules: c.rules,
+      publicRules: c.publication
+        ? {
+            text: c.publication.text,
+            version: c.publication.version,
+            published: c.publication.published,
+            url: publicRulesLink(c.publication.id),
+          }
+        : null,
       phone: c.phone ? `+7 ••• ••• ${c.phone.slice(-4)}` : null,
       smsConfigured: !!smsConfig(),
       bundles: bundles.map((b) => ({
@@ -221,6 +252,66 @@ export async function staffAgreement(
     async (tx) => {
       await owner(tx, m);
       await lockReservation(tx, c.reservationId, m.hotelId);
+      if (c.action === "publishRules") {
+        if (c.published && !publicRulesLink("configuration-check"))
+          throw new PublicError("Настройте HTTPS APP_URL перед публикацией правил.");
+        const r = await tx.reservation.findFirstOrThrow({
+          where: { id: c.reservationId, hotelId: m.hotelId },
+          select: { rentalPropertyId: true },
+        });
+        const previous = await tx.publicPropertyRules.findUnique({
+          where: { rentalPropertyId: r.rentalPropertyId },
+        });
+        if ((previous?.version ?? 0) !== c.version)
+          throw new PublicError(
+            "Публичные правила изменились. Обновите данные.",
+          );
+        const rule = await tx.publicPropertyRules.upsert({
+          where: { rentalPropertyId: r.rentalPropertyId },
+          create: {
+            ...tenant(m),
+            rentalPropertyId: r.rentalPropertyId,
+            text: c.text,
+            published: c.published,
+            updatedById: m.userId,
+          },
+          update: {
+            text: c.text,
+            published: c.published,
+            updatedById: m.userId,
+            version: { increment: 1 },
+          },
+        });
+        await tx.publicRuleRevision.create({
+          data: {
+            ruleId: rule.id,
+            version: rule.version,
+            text: rule.text,
+            published: rule.published,
+            actorId: m.userId,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            hotelId: m.hotelId,
+            actorUserId: m.userId,
+            actor: m.userId,
+            action: c.published ? "rules.published" : "rules.unpublished",
+            entity: "PublicPropertyRules",
+            entityId: rule.id,
+            metaJson: JSON.stringify({
+              version: rule.version,
+              contentHash: hash(rule.text),
+            }),
+          },
+        });
+        return {
+          id: rule.id,
+          version: rule.version,
+          published: rule.published,
+          url: publicRulesLink(rule.id),
+        };
+      }
       if (c.action !== "create") {
         const b = await tx.agreementBundle.findFirst({
           where: {
@@ -272,7 +363,7 @@ export async function staffAgreement(
         throw new PublicError(
           "Бронь, реквизиты или правила изменились. Обновите пакет.",
         );
-      if (!live.r.hotel.houseRules?.trim())
+      if (!live.rules.trim())
         throw new PublicError(
           "Сначала заполните правила проживания в настройках объекта.",
         );
@@ -300,7 +391,7 @@ export async function staffAgreement(
         ...[
           {
             title: "Правила проживания",
-            text: live.r.hotel.houseRules,
+            text: live.rules,
             required: true,
             kind: "RULES",
           },
@@ -757,4 +848,39 @@ export async function validateAgreementAttachment(
   throw new PublicError(
     "В сообщении отсутствует актуальная ссылка этого пакета. Создайте ссылку заново.",
   );
+}
+
+export function publicRulesLink(id: string) {
+  try {
+    const url = new URL(process.env.APP_URL ?? "");
+    if (
+      (url.protocol !== "https:" &&
+        !(url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname))) ||
+      Boolean(url.username || url.password)
+    )
+      return null;
+    return `${url.origin}/rules/${encodeURIComponent(id)}`;
+  } catch {
+    return null;
+  }
+}
+export async function publicRulesView(db: PrismaClient, id: string) {
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id)) return null;
+  const row = await db.publicPropertyRules.findFirst({
+    where: { id, published: true, rentalProperty: { status: "ACTIVE" } },
+    select: {
+      text: true,
+      version: true,
+      updatedAt: true,
+      rentalProperty: { select: { publicName: true } },
+    },
+  });
+  return row
+    ? {
+        text: row.text,
+        version: row.version,
+        updatedAt: row.updatedAt.toISOString(),
+        propertyName: row.rentalProperty.publicName,
+      }
+    : null;
 }

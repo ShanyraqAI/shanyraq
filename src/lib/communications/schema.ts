@@ -23,7 +23,7 @@ export const templateSchema = z.object({
 export const commandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("saveProfile"), roomId: id, version: z.number().int().min(0), profile: profileSchema }),
   z.object({ action: z.literal("saveTemplate"), template: templateSchema }),
-  z.object({ action: z.literal("prepare"), reservationId: id, signingRequestId: id.optional(), agreementBundleId: id.optional(), templateId: id.optional(), body: z.string().trim().min(1).max(4096), photoIds: z.array(id).max(MAX_PHOTOS), requestKey: z.string().uuid() }),
+  z.object({ action: z.literal("prepare"), reservationId: id, signingRequestId: id.optional(), agreementBundleId: id.optional(), paymentRequestId: id.optional(), revision: z.string().regex(/^[a-f0-9]{64}$/).optional(), templateId: id.optional(), body: z.string().trim().min(1).max(4096), photoIds: z.array(id).max(MAX_PHOTOS), requestKey: z.string().uuid() }),
   z.object({ action: z.literal("recordManual"), messageId: id, state: z.enum(["MANUAL_WHATSAPP_OPENED", "SHARE_RETURNED"]) }),
   z.object({ action: z.literal("archivePhoto"), photoId: id }),
 ]);

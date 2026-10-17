@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     );
     if (!value.success)
       throw new PublicError("Проверьте поля пакета и подтверждения.");
-    if (value.data.action === "create")
+    if (value.data.action === "create" || value.data.action === "publishRules")
       await assertBillingWriteAccess(m.organizationId);
     return privateJson(await staffAgreement(db, m, value.data));
   } catch (e) {

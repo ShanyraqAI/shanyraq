@@ -113,6 +113,9 @@ test("Mobizon accepted does not claim delivery; fixed endpoint, registered sende
     calls++;
     assert.equal(new URL(String(url)).hostname, "api.mobizon.kz");
     assert.equal(init?.redirect, "error");
+    const text = new URLSearchParams(String(init?.body)).get("text") ?? "";
+    assert.ok(text.length > 0 && text.length <= 160);
+    assert.match(text, /^[\x20-\x7e]+$/);
     const body = init?.body as URLSearchParams;
     assert.equal(body.get("from"), "Shanyraq");
     assert.equal(body.get("recipient"), "77000000000");
@@ -161,3 +164,5 @@ test("invalid phone or OTP never starts paid I/O", async () => {
   await sendOtpSms(cfg, "77000000000", "12345", f);
   assert.equal(calls, 0);
 });
+
+test("public rules require an explicit no-personal-data publication confirmation", () => { assert.equal(staffCommand.safeParse({ action: "publishRules", reservationId: "r", text: "Публичные правила проживания", version: 0, published: true }).success, false); });

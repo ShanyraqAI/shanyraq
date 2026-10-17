@@ -300,7 +300,15 @@ export function GuestAgreement() {
                               ? "Запросить новый код"
                               : "Запросить SMS-код"}
                         </button>
-                        {otpKey ? <button className={input} disabled={busy} onClick={() => void run(() => requestCode())}>Проверить результат того же запроса</button> : null}
+                        {otpKey ? (
+                          <button
+                            className={input}
+                            disabled={busy}
+                            onClick={() => void run(() => requestCode())}
+                          >
+                            Проверить результат того же запроса
+                          </button>
+                        ) : null}
                         <label className="block space-y-2">
                           <span>Код из SMS</span>
                           <input

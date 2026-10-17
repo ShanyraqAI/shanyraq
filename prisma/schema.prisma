@@ -61,6 +61,7 @@ model Organization {
 }
 
 model User {
+  publicPropertyRules PublicPropertyRules[]
   agreementBundles AgreementBundle[]
   guestPaymentRequests GuestPaymentRequest[]
   documentSigningRequests DocumentSigningRequest[]
@@ -194,6 +195,7 @@ model Membership {
 }
 
 model Hotel {
+  publicPropertyRules PublicPropertyRules[]
   agreementBundles AgreementBundle[]
   guestPaymentRequests GuestPaymentRequest[]
   kaspiPaymentMethods KaspiPaymentMethod[]
@@ -264,6 +266,7 @@ model Hotel {
 // A customer-facing accommodation inside the legacy Hotel workspace.
 // Hotel remains the workspace boundary during the expand-and-contract rollout.
 model RentalProperty {
+  publicRules PublicPropertyRules?
   guestPaymentRequests GuestPaymentRequest[]
   kaspiPaymentMethods KaspiPaymentMethod[]
   id             String                      @id @default(cuid())
@@ -1590,4 +1593,33 @@ model AgreementOtp {
   bundle AgreementBundle @relation(fields: [bundleId], references: [id], onDelete: Restrict)
   @@unique([bundleId, requestKey])
   @@index([phoneHash, createdAt])
+}
+
+// Public text is deliberately published, never copied from guest/key data automatically.
+model PublicPropertyRules {
+  id String @id @default(cuid())
+  organizationId String
+  hotelId String
+  rentalPropertyId String @unique
+  text String
+  version Int @default(1)
+  published Boolean @default(false)
+  updatedById String
+  updatedAt DateTime @updatedAt
+  hotel Hotel @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Restrict)
+  rentalProperty RentalProperty @relation(fields: [rentalPropertyId, hotelId, organizationId], references: [id, hotelId, organizationId], onDelete: Restrict)
+  updatedBy User @relation(fields: [updatedById], references: [id], onDelete: Restrict)
+  revisions PublicRuleRevision[]
+  @@unique([rentalPropertyId, hotelId, organizationId])
+  @@index([organizationId, hotelId])
+}
+model PublicRuleRevision {
+  ruleId String
+  version Int
+  text String
+  published Boolean
+  actorId String
+  createdAt DateTime @default(now())
+  rule PublicPropertyRules @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  @@id([ruleId, version])
 }

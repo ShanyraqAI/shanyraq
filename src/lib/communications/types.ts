@@ -7,7 +7,7 @@ export interface HistoryVM { id: string; guestName: string; reservationId: strin
 export interface CommunicationWorkspace { rooms: RoomCommunicationVM[]; templates: TemplateVM[]; history: HistoryVM[]; nextCursor: string | null; owner: boolean; scope: string }
 export interface ReservationCommunicationWorkspace {
   reservationId: string; guestName: string; phone: string | null; roomName: string; values: TemplateValues;
-  templates: TemplateVM[]; photos: PhotoVM[]; scope: string; draftScope?: string;
+  templates: TemplateVM[]; photos: PhotoVM[]; scope: string; draftScope?: string; revision?: string; paymentLinksEnabled?: boolean;
 }
 export interface PreparedMessage { id: string; text: string; phone: string | null; photoIds: string[]; scope: string }
 export const HISTORY_LABELS: Record<string, string> = {

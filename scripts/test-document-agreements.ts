@@ -12,6 +12,7 @@ import {
   staffAgreement,
   guestAgreement,
   validateAgreementAttachment,
+  publicRulesView,
   type GuestAgreementView,
 } from "../src/lib/agreements/service";
 import { hash } from "../src/lib/agreements/policy";
@@ -123,6 +124,14 @@ async function main() {
     sender: process.env.MOBIZON_SENDER,
     secret: process.env.DOCUMENT_OTP_SECRET,
   };
+  process.env.GUEST_DOCUMENT_BUNDLES_ENABLED = "true";
+  process.env.GUEST_PAYMENT_LINKS_ENABLED = "true";
+  process.env.DATABASE_URL = url;
+  (globalThis as unknown as { prisma: PrismaClient }).prisma = db;
+  const { runCommunicationCommand, getReservationCommunicationWorkspace } =
+    await import("../src/lib/communications/service");
+  const { runPaymentCommand, getPaymentWorkspace } =
+    await import("../src/lib/guest-payments/service");
   const a = await seed("A"),
     b = await seed("B");
   const profile = documentProfileSchema.parse({
@@ -358,6 +367,85 @@ async function main() {
           first.url.replace(first.token, "0".repeat(64)),
         ),
       );
+    },
+  );
+  await check(
+    "combined message prepares PDF bundle, selected photos and authoritative Kaspi text",
+    async () => {
+      await runPaymentCommand(db, a.m, {
+        action: "saveMethod",
+        rentalPropertyId: a.property.id,
+        name: "Kaspi Pay",
+        recipient: "Синтетический получатель",
+        url: "https://pay.kaspi.kz/pay/fixture",
+        enabled: true,
+        version: 0,
+      });
+      const pw = await getPaymentWorkspace(db, a.m, a.reservation.id);
+      const payment = (await runPaymentCommand(db, a.m, {
+        action: "prepare",
+        reservationId: a.reservation.id,
+        revision: pw.revision,
+        amount: "25000.00",
+        purpose: "PREPAYMENT",
+        collectionConfirmed: true,
+        locale: "ru",
+        key: randomUUID(),
+      })) as { id: string; text: string };
+      const photo = await db.communicationPhoto.create({
+        data: {
+          organizationId: a.org.id,
+          hotelId: a.hotel.id,
+          roomId: a.reservation.roomId,
+          name: "synthetic.jpg",
+          bytes: new Uint8Array([255, 216, 255, 217]),
+        },
+      });
+      const workspace = await getReservationCommunicationWorkspace(
+        a.m,
+        a.reservation.id,
+      );
+      const command = {
+        action: "prepare" as const,
+        reservationId: a.reservation.id,
+        agreementBundleId: first.id,
+        paymentRequestId: payment.id,
+        revision: workspace.revision,
+        photoIds: [photo.id],
+        body: `Здравствуйте.\nДокументы: ${first.url}\n\n${payment.text}`,
+        requestKey: randomUUID(),
+      };
+      const prepared = (await runCommunicationCommand(a.m, command)) as {
+        text: string;
+        photoIds: string[];
+      };
+      assert.equal(prepared.text, command.body);
+      assert.deepEqual(prepared.photoIds, [photo.id]);
+      await assert.rejects(() =>
+        runCommunicationCommand(a.m, {
+          ...command,
+          body: command.body + " Другой текст.",
+        }),
+      );
+      await assert.rejects(() =>
+        runCommunicationCommand(a.m, {
+          ...command,
+          requestKey: randomUUID(),
+          body: `Здравствуйте. ${first.url}`,
+        }),
+      );
+      await assert.rejects(() =>
+        runCommunicationCommand(a.m, {
+          ...command,
+          requestKey: randomUUID(),
+          revision: "0".repeat(64),
+        }),
+      );
+      await db.kaspiPaymentMethod.update({
+        where: { rentalPropertyId: a.property.id },
+        data: { enabled: false, version: { increment: 1 } },
+      });
+      await assert.rejects(() => runCommunicationCommand(a.m, command));
     },
   );
   await check(
@@ -614,6 +702,32 @@ async function main() {
       }),
     );
   });
+  await db.reservation.update({ where: { id: a.reservation.id }, data: { status: "CONFIRMED" } });
+  const beforePublic = await create();
+  let ruleId = "";
+  await check("only explicit owner publication exposes a minimal public view and invalidates old bundle", async () => {
+    await assert.rejects(() => staffAgreement(db, b.m, { action: "publishRules", reservationId: a.reservation.id, text: "Публичные правила без секретов.", version: 0, published: true, publicContentConfirmed: true }));
+    const published = await staffAgreement(db, a.m, { action: "publishRules", reservationId: a.reservation.id, text: "Публичные правила: не курить, не шуметь после 22:00.", version: 0, published: true, publicContentConfirmed: true }) as { id: string; url: string };
+    ruleId = published.id;
+    const publicView = await publicRulesView(db, ruleId);
+    assert.deepEqual(Object.keys(publicView!).sort(), ["text","version","updatedAt","propertyName"].sort());
+    assert.equal(publicView!.text.includes("Публичные правила"), true);
+    await assert.rejects(() => load(beforePublic.token));
+    const workspace = await getReservationCommunicationWorkspace(a.m, a.reservation.id);
+    assert.equal(workspace.values.rules_link, published.url);
+  });
+  await check("public rules edits use compare-and-swap and preserve published version history", async () => {
+    await assert.rejects(() => staffAgreement(db, a.m, { action: "publishRules", reservationId: a.reservation.id, text: "Другой публичный текст правил.", version: 0, published: true, publicContentConfirmed: true }));
+    await staffAgreement(db, a.m, { action: "publishRules", reservationId: a.reservation.id, text: "Новая публичная версия правил без секретов.", version: 1, published: true, publicContentConfirmed: true });
+    assert.equal((await publicRulesView(db, ruleId))!.version, 2);
+    assert.equal(await db.publicRuleRevision.count({ where: { ruleId } }), 2);
+    assert.ok((await db.publicRuleRevision.findUniqueOrThrow({ where: { ruleId_version: { ruleId, version: 1 } } })).text.includes("не курить"));
+  });
+  await check("unpublish removes public access without deleting prior rules", async () => {
+    await staffAgreement(db, a.m, { action: "publishRules", reservationId: a.reservation.id, text: "Новая публичная версия правил без секретов.", version: 2, published: false, publicContentConfirmed: true });
+    assert.equal(await publicRulesView(db, ruleId), null);
+    assert.equal(await db.publicRuleRevision.count({ where: { ruleId } }), 3);
+  });
   console.log(
     `${checks} PostgreSQL integration checks passed. No real SMS sent.`,
   );
@@ -639,6 +753,15 @@ main()
       await db.agreementEvent.deleteMany({ where: { bundleId: { in: bIds } } });
       await db.agreementItem.deleteMany({ where: { bundleId: { in: bIds } } });
       await db.agreementBundle.deleteMany({ where: { id: { in: bIds } } });
+      await db.guestCommunication.deleteMany({
+        where: { organizationId: orgId },
+      });
+      await db.guestPaymentRequest.deleteMany({
+        where: { organizationId: orgId },
+      });
+      await db.publicRuleRevision.deleteMany({ where: { rule: { organizationId: orgId } } });
+      await db.publicPropertyRules.deleteMany({ where: { organizationId: orgId } });
+      await db.auditLog.deleteMany({ where: { hotelId: { in: ids } } });
       await db.generatedDocument.deleteMany({
         where: { organizationId: orgId },
       });

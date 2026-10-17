@@ -1,4 +1,5 @@
 "use client";
+import { PublicRulesEditor } from "./public-rules-editor";
 import { useState } from "react";
 import { readApi } from "@/components/communications/api";
 import type { AgreementWorkspace } from "@/lib/agreements/service";
@@ -139,6 +140,24 @@ function AgreementEditor({
             </button>
           ) : (
             <>
+              <PublicRulesEditor
+                key={`${data.scope}:${data.publicRules?.version ?? 0}`}
+                current={data.publicRules}
+                busy={busy}
+                save={(text, version, published) =>
+                  void run(async () => {
+                    await post({
+                      action: "publishRules",
+                      text,
+                      version,
+                      published,
+                      publicContentConfirmed: true,
+                    });
+                    edited();
+                    await reload();
+                  })
+                }
+              />
               <fieldset disabled={busy || frozen} className="space-y-3">
                 <legend className="font-semibold">PDF этой брони</legend>
                 {data.documents.length ? (
