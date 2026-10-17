@@ -400,7 +400,7 @@ export function GuestsTable({
                 <a
                   href={selected.phone ? `tel:${selected.phone}` : undefined}
                   aria-disabled={!selected.phone}
-                  className="sh-mobile-card flex min-h-14 flex-col items-center justify-center gap-1 text-[9px] font-bold text-[#16826a] aria-disabled:pointer-events-none aria-disabled:opacity-45"
+                  className="sh-mobile-card flex min-h-14 flex-col items-center justify-center gap-1 text-sm font-semibold text-primary aria-disabled:pointer-events-none aria-disabled:opacity-45"
                 >
                   <Phone className="size-4" />
                   {kk ? "Қоңырау" : "Позвонить"}
@@ -410,7 +410,7 @@ export function GuestsTable({
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-disabled={!selectedWhatsApp}
-                  className="sh-mobile-card flex min-h-14 flex-col items-center justify-center gap-1 text-[9px] font-bold text-[#16826a] aria-disabled:pointer-events-none aria-disabled:opacity-45"
+                  className="sh-mobile-card flex min-h-14 flex-col items-center justify-center gap-1 text-sm font-semibold text-primary aria-disabled:pointer-events-none aria-disabled:opacity-45"
                 >
                   <MessageCircle className="size-4" />
                   WhatsApp
@@ -418,7 +418,7 @@ export function GuestsTable({
                 <button
                   type="button"
                   onClick={() => setEditOpen(true)}
-                  className="sh-mobile-card flex min-h-14 flex-col items-center justify-center gap-1 text-[9px] font-bold text-[#16826a]"
+                  className="sh-mobile-card flex min-h-14 flex-col items-center justify-center gap-1 text-sm font-semibold text-primary"
                 >
                   <Pencil className="size-4" />
                   {kk ? "Өзгерту" : "Изменить"}
@@ -624,9 +624,9 @@ export function GuestsTable({
                             >
                               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                                 <span className="font-medium max-sm:font-extrabold max-sm:text-[#2d3a33]">
-                                  {t.guests.profile.roomLabel(r.roomNumber)}
+                                  {`${kk ? "Пәтер" : "Квартира"} ${r.roomNumber}`}
                                 </span>
-                                <span className="whitespace-nowrap text-xs text-muted-foreground">
+                                <span className="min-w-0 break-words text-sm text-muted-foreground">
                                   {formatMediumDate(
                                     new Date(`${r.checkIn}T00:00:00Z`),
                                   )}{" "}
@@ -656,7 +656,7 @@ export function GuestsTable({
                               ) : null}
                               <Link
                                 href={`/dashboard/reservations/${r.id}`}
-                                className="hidden items-center gap-0.5 text-[11px] font-bold text-[#07866b] max-sm:inline-flex"
+                                className="hidden min-h-11 items-center gap-1 text-sm font-semibold text-primary max-sm:inline-flex"
                               >
                                 {kk ? "Броньды ашу" : "Открыть бронь"}
                                 <ChevronRight className="size-3.5" />
@@ -678,29 +678,13 @@ export function GuestsTable({
                   {t.common.close}
                 </Button>
               </DialogFooter>
-              <div className="-mx-4 grid grid-cols-2 gap-2 border-t border-[#e6e8df] bg-white/95 px-4 pt-3 pb-[max(env(safe-area-inset-bottom),12px)] sm:hidden">
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(null)}
-                  className="sh-mobile-card flex min-h-12 items-center justify-center text-sm font-bold text-[#536059]"
-                >
-                  {t.common.close}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditOpen(true)}
-                  className="sh-mobile-primary flex min-h-12 items-center justify-center gap-2"
-                >
-                  <Pencil className="size-4" />
-                  {kk ? "Өзгерту" : "Редактировать"}
-                </button>
-              </div>
+
 
               <GuestFormSheet
                 guest={selected}
                 open={editOpen}
                 onOpenChange={(o) => setEditOpen(o)}
-                onSaved={() => setSelectedId(null)}
+                onSaved={() => setEditOpen(false)}
                 locale={locale}
               />
             </>
