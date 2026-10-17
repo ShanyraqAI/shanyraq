@@ -254,18 +254,16 @@
   }
 }
 
+/* Short page transition; native selection/copy remains available in standalone PWA. */
 @keyframes sh-page-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
-
 .sh-page-enter { animation: sh-page-in 0.22s ease-out both; }
-
 @media (prefers-reduced-motion: reduce) {
   .sh-page-enter { animation: none; }
 }
-
 @media (display-mode: standalone) {
   html, body { overscroll-behavior-y: none; }
-  [data-dashboard-theme] { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+  [data-dashboard-theme] { -webkit-tap-highlight-color: transparent; }
 }
