@@ -28,6 +28,7 @@ const nextConfig: NextConfig = {
   // and no engine-resolution issues in serverless environments.
   serverExternalPackages: ["@prisma/client", "bcryptjs", "pdfkit"],
   outputFileTracingIncludes: {
+    "/api/agreements": ["./node_modules/@expo-google-fonts/tinos/**/*.ttf", "./node_modules/@expo-google-fonts/roboto/**/*.ttf"],
     "/api/document-signing": ["./node_modules/@expo-google-fonts/tinos/**/*.ttf", "./node_modules/@expo-google-fonts/roboto/**/*.ttf"],
     "/api/documents/*/pdf": ["./src/assets/fonts/manrope-variable.ttf"],
   },

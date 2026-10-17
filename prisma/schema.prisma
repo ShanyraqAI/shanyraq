@@ -61,6 +61,8 @@ model Organization {
 }
 
 model User {
+  publicPropertyRules PublicPropertyRules[]
+  agreementBundles AgreementBundle[]
   guestPaymentRequests GuestPaymentRequest[]
   documentSigningRequests DocumentSigningRequest[]
   guestCommunications GuestCommunication[]
@@ -193,6 +195,8 @@ model Membership {
 }
 
 model Hotel {
+  publicPropertyRules PublicPropertyRules[]
+  agreementBundles AgreementBundle[]
   guestPaymentRequests GuestPaymentRequest[]
   kaspiPaymentMethods KaspiPaymentMethod[]
   documentSigningRequests DocumentSigningRequest[]
@@ -262,6 +266,7 @@ model Hotel {
 // A customer-facing accommodation inside the legacy Hotel workspace.
 // Hotel remains the workspace boundary during the expand-and-contract rollout.
 model RentalProperty {
+  publicRules PublicPropertyRules?
   guestPaymentRequests GuestPaymentRequest[]
   kaspiPaymentMethods KaspiPaymentMethod[]
   id             String                      @id @default(cuid())
@@ -632,6 +637,7 @@ model GuestNote {
 }
 
 model Reservation {
+  agreementBundles AgreementBundle[]
   guestPaymentRequests GuestPaymentRequest[]
   documentSigningRequests DocumentSigningRequest[]
   guestCommunications GuestCommunication[]
@@ -1516,4 +1522,104 @@ model GuestPaymentRequest {
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
   @@unique([hotelId, userId, digest])
   @@index([reservationId, hotelId, createdAt])
+}
+
+// Owner-first immutable acknowledgement, explicitly not an EDS/legal conclusion.
+model AgreementBundle {
+  id String @id @default(cuid())
+  organizationId String
+  hotelId String
+  reservationId String
+  createdById String
+  requestKey String @db.VarChar(36)
+  requestHash String @db.VarChar(64)
+  tokenHash String @unique @db.VarChar(64)
+  revision String @db.VarChar(64)
+  bundleHash String @db.VarChar(64)
+  ownerName String @db.VarChar(160)
+  ownerAcceptedAt DateTime @default(now())
+  requireOtp Boolean
+  expiresAt DateTime
+  revokedAt DateTime?
+  guestAcceptedAt DateTime?
+  guestName String? @db.VarChar(160)
+  guestEvidence Json?
+  createdAt DateTime @default(now())
+  hotel Hotel @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Restrict)
+  reservation Reservation @relation(fields: [reservationId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  items AgreementItem[]
+  events AgreementEvent[]
+  challenges AgreementOtp[]
+  @@unique([hotelId, requestKey])
+  @@index([organizationId, hotelId, reservationId, createdAt])
+}
+model AgreementItem {
+  id String @id @default(cuid())
+  bundleId String
+  position Int
+  title String @db.VarChar(240)
+  kind String @db.VarChar(24)
+  required Boolean
+  text String?
+  pdfBytes Bytes?
+  contentHash String @db.VarChar(64)
+  sourceDocumentId String?
+  bundle AgreementBundle @relation(fields: [bundleId], references: [id], onDelete: Restrict)
+  @@unique([bundleId, position])
+}
+model AgreementEvent {
+  id String @id @default(cuid())
+  bundleId String
+  action String @db.VarChar(40)
+  actorId String?
+  evidence Json
+  createdAt DateTime @default(now())
+  bundle AgreementBundle @relation(fields: [bundleId], references: [id], onDelete: Restrict)
+  @@index([bundleId, createdAt])
+}
+model AgreementOtp {
+  id String @id @default(cuid())
+  bundleId String
+  requestKey String @db.VarChar(36)
+  phoneHash String @db.VarChar(64)
+  codeHash String @db.VarChar(64)
+  state String @db.VarChar(16)
+  providerMessageId String? @db.VarChar(100)
+  expiresAt DateTime
+  attempts Int @default(0)
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  bundle AgreementBundle @relation(fields: [bundleId], references: [id], onDelete: Restrict)
+  @@unique([bundleId, requestKey])
+  @@index([phoneHash, createdAt])
+}
+
+// Public text is deliberately published, never copied from guest/key data automatically.
+model PublicPropertyRules {
+  id String @id @default(cuid())
+  organizationId String
+  hotelId String
+  rentalPropertyId String @unique
+  text String
+  version Int @default(1)
+  published Boolean @default(false)
+  updatedById String
+  updatedAt DateTime @updatedAt
+  hotel Hotel @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Restrict)
+  rentalProperty RentalProperty @relation(fields: [rentalPropertyId, hotelId, organizationId], references: [id, hotelId, organizationId], onDelete: Restrict)
+  updatedBy User @relation(fields: [updatedById], references: [id], onDelete: Restrict)
+  revisions PublicRuleRevision[]
+  @@unique([rentalPropertyId, hotelId, organizationId])
+  @@index([organizationId, hotelId])
+}
+model PublicRuleRevision {
+  ruleId String
+  version Int
+  text String
+  published Boolean
+  actorId String
+  createdAt DateTime @default(now())
+  rule PublicPropertyRules @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  @@id([ruleId, version])
 }

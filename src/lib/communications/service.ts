@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import type { CurrentMembership } from "@/lib/tenant";
 import { PublicError } from "@/server/errors";
@@ -27,6 +28,7 @@ export async function requireReservation(m: CurrentMembership, reservationId: st
   if (!reservation) throw new PublicError("Бронь не найдена в текущем объекте");
   return reservation;
 }
+function communicationRevision(r: Awaited<ReturnType<typeof requireReservation>>) { return createHash("sha256").update(JSON.stringify(r)).digest("hex"); }
 export async function getCommunicationWorkspace(m: CurrentMembership, cursor?: string): Promise<CommunicationWorkspace> {
   if (cursor && !await db.guestCommunication.findFirst({ where: { id: cursor, ...tenant(m) }, select: { id: true } })) throw new PublicError("История не найдена");
   const [rooms, templates, history] = await Promise.all([
@@ -49,8 +51,10 @@ export async function getReservationCommunicationWorkspace(m: CurrentMembership,
   ]);
   templates.sort((a, b) => Number(b.roomId === r.roomId && b.isDefault) - Number(a.roomId === r.roomId && a.isDefault) || Number(b.language === r.hotel.language) - Number(a.language === r.hotel.language));
   const p = r.room.communicationProfile;
+  const publishedRules = process.env.GUEST_DOCUMENT_BUNDLES_ENABLED === "true" ? await db.publicPropertyRules.findUnique({ where: { rentalPropertyId: r.rentalPropertyId }, select: { id: true, published: true } }) : null;
+  const publicRulesUrl = publishedRules?.published ? (await import("@/lib/agreements/service")).publicRulesLink(publishedRules.id) ?? "" : "";
   const date = (value: Date) => value.toISOString().slice(0, 10).split("-").reverse().join(".");
-  return { reservationId: r.id, guestName: r.guest.fullName, phone: optionalRecipientPhone(r.guest.phone), roomName: `${r.room.number} · ${r.room.rentalProperty.publicName}`, scope: scopeOf(m), draftScope: `${m.userId}:${scopeOf(m)}:${r.id}`, templates, photos,
+  return { reservationId: r.id, guestName: r.guest.fullName, phone: optionalRecipientPhone(r.guest.phone), roomName: `${r.room.number} · ${r.room.rentalProperty.publicName}`, scope: scopeOf(m), draftScope: `${m.userId}:${scopeOf(m)}:${r.id}`, revision: communicationRevision(r), paymentLinksEnabled: process.env.GUEST_PAYMENT_LINKS_ENABLED === "true", templates, photos,
     values: {
       guest_name: r.guest.fullName, guest_phone: r.guest.phone ?? "", reservation_number: r.sequenceNumber?.toString() ?? r.id,
       checkin_date: date(r.checkIn), checkin_time: r.checkInTime, checkout_date: date(r.checkOut), checkout_time: r.checkOutTime,
@@ -59,7 +63,7 @@ export async function getReservationCommunicationWorkspace(m: CurrentMembership,
       property_name: p?.publicName || `${r.room.rentalProperty.publicName} · ${r.room.number}`,
       property_address: p?.address || r.room.rentalProperty.address || "", property_map_link: p?.mapLink ?? "",
       wifi_name: p?.wifiName ?? "", wifi_password: p?.wifiPassword ?? "", key_instructions: p?.keyInstructions ?? "",
-      rules_link: p?.rulesLink ?? "", checkin_guide_link: p?.checkinGuideLink ?? "", support_phone: p?.supportPhone ?? "",
+      rules_link: p?.rulesLink || publicRulesUrl, checkin_guide_link: p?.checkinGuideLink ?? "", support_phone: p?.supportPhone ?? "",
     },
   };
 }
@@ -109,9 +113,23 @@ export async function runCommunicationCommand(m: CurrentMembership, command: z.i
     if (error) throw new PublicError(error);
     const r = await requireReservation(m, command.reservationId);
     if (["CANCELLED", "NO_SHOW"].includes(r.status)) throw new PublicError("Нельзя подготовить сообщение для отменённой брони или неявки");
+    if (command.revision && command.revision !== communicationRevision(r)) throw new PublicError("Данные брони или гостя изменились. Откройте редактор заново и проверьте текст.");
     if (command.signingRequestId) {
       const signing = await db.documentSigningRequest.findFirst({ where: { id: command.signingRequestId, ...t, reservationId: r.id, revokedAt: null, expiresAt: { gt: new Date() } }, select: { signedAt: true, reservationVersion: true } });
       if (!signing || (!signing.signedAt && signing.reservationVersion.getTime() !== r.updatedAt.getTime())) throw new PublicError("Ссылка на документ устарела. Создайте новую и проверьте текст.");
+    }
+    if (command.agreementBundleId) {
+      if (process.env.GUEST_DOCUMENT_BUNDLES_ENABLED !== "true") throw new PublicError("Пакеты документов ещё не включены.");
+      if (command.signingRequestId) throw new PublicError("Выберите один документ или один пакет.");
+      const { validateAgreementAttachment } = await import("@/lib/agreements/service");
+      await validateAgreementAttachment(db, m, r.id, command.agreementBundleId, command.body);
+    }
+    if (command.paymentRequestId) {
+      if (process.env.GUEST_PAYMENT_LINKS_ENABLED !== "true") throw new PublicError("Ссылки оплаты ещё не включены.");
+      const { runPaymentCommand } = await import("@/lib/guest-payments/service");
+      const checked = await runPaymentCommand(db, m, { action: "validate", id: command.paymentRequestId }) as { text: string; id: string };
+      const belongs = await db.guestPaymentRequest.findFirst({ where: { id: checked.id, ...t, reservationId: r.id }, select: { id: true } });
+      if (!belongs || !command.body.includes(checked.text)) throw new PublicError("Запрос оплаты не соответствует этому сообщению или брони.");
     }
     const phone = optionalRecipientPhone(r.guest.phone);
     const ids = [...new Set(command.photoIds)];
@@ -123,6 +141,7 @@ export async function runCommunicationCommand(m: CurrentMembership, command: z.i
     const message = await db.guestCommunication.upsert({ where: { hotelId_requestKey: { hotelId: m.hotelId, requestKey: command.requestKey } },
       create: { ...t, reservationId: r.id, roomId: r.roomId, createdById: m.userId, requestKey: command.requestKey, recipientPhone: phone, body: command.body, attachments: photos, templateId: template?.id, templateVersion: template?.version }, update: {} });
     if (message.reservationId !== r.id || message.createdById !== m.userId) throw new PublicError("Повторный запрос не соответствует сообщению");
+    if (message.body !== command.body || JSON.stringify((message.attachments as Array<{ id: string }>).map(p => p.id).sort()) !== JSON.stringify([...ids].sort())) throw new PublicError("Повторный запрос содержит другой текст или вложения. Проверьте черновик.");
     return { id: message.id, text: message.body, phone: message.recipientPhone, photoIds: (message.attachments as Array<{ id: string }>).map((p) => p.id), scope: scopeOf(m) };
   }
   const message = await db.guestCommunication.findFirst({ where: { id: command.messageId, ...t, createdById: m.userId } });

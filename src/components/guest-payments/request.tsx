@@ -58,10 +58,12 @@ function RequestEditor({
   reservationId,
   locale,
   onClose,
+  onAttach,
 }: {
   reservationId: string;
   locale: "ru" | "kk";
   onClose: () => void;
+  onAttach?: (value: PreparedPayment) => void;
 }) {
   const [data, setData] = useState<PaymentWorkspace | null>(null),
     [amount, setAmount] = useState(""),
@@ -247,7 +249,10 @@ function RequestEditor({
         if (!next) close();
       }}
     >
-      <DialogContent data-clarity-mask="true" className="flex max-h-[92dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none [&_[data-slot=dialog-close]]:min-h-11 [&_[data-slot=dialog-close]]:min-w-11">
+      <DialogContent
+        data-clarity-mask="true"
+        className="flex max-h-[92dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none [&_[data-slot=dialog-close]]:min-h-11 [&_[data-slot=dialog-close]]:min-w-11"
+      >
         <DialogHeader className="shrink-0 border-b p-4 pr-14 text-left">
           <DialogTitle>{kk ? "Төлем сұрау" : "Запросить оплату"}</DialogTitle>
           <DialogDescription>
@@ -462,6 +467,36 @@ function RequestEditor({
               >
                 {kk ? "Артқа" : "Назад"}
               </Button>
+              {onAttach ? (
+                <Button
+                  className="min-h-12 w-full whitespace-normal"
+                  disabled={busy}
+                  onClick={async () => {
+                    if (busyRef.current) return;
+                    busyRef.current = true;
+                    setBusy(true);
+                    setError("");
+                    try {
+                      const checked = await paymentPost<PreparedPayment>(
+                        data.scope,
+                        { action: "validate", id: result.id },
+                      );
+                      onAttach(checked);
+                    } catch (e) {
+                      setError(
+                        e instanceof Error
+                          ? e.message
+                          : "Не удалось проверить запрос оплаты.",
+                      );
+                    } finally {
+                      busyRef.current = false;
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  Добавить запрос оплаты в сообщение
+                </Button>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button
                   className="min-h-12 flex-1 whitespace-normal hover:bg-primary"
@@ -527,5 +562,48 @@ function RequestEditor({
         </footer>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Reuses the same authoritative request editor; no second payment calculator. */
+export function GuestPaymentAttachment({
+  reservationId,
+  onPrepared,
+  onBusyChange,
+}: {
+  reservationId: string;
+  onPrepared: (value: PreparedPayment) => void;
+  onBusyChange: (busy: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  function close() {
+    setOpen(false);
+    onBusyChange(false);
+  }
+  return (
+    <>
+      <Button
+        variant="outline"
+        className="min-h-12 w-full"
+        onClick={() => {
+          setOpen(true);
+          onBusyChange(true);
+        }}
+      >
+        Настроить запрос оплаты
+      </Button>
+      {open ? (
+        <RequestEditor
+          key={reservationId}
+          reservationId={reservationId}
+          locale="ru"
+          onClose={close}
+          onAttach={(value) => {
+            onPrepared(value);
+            close();
+          }}
+        />
+      ) : null}
+    </>
   );
 }
