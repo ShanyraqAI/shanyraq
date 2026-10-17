@@ -1,3 +1,4 @@
+import { GuestPaymentSettings } from "@/components/guest-payments/settings";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BarChart3, BedDouble, BellRing, Building2, ChevronLeft, ChevronRight, FileText, LogOut, RadioTower, ShieldCheck, UserRound, UsersRound, Clock3, LockKeyhole, MessageSquare, type LucideIcon } from "lucide-react";
@@ -17,7 +18,7 @@ import { SignOutForm } from "@/components/pwa/sign-out-form";
 import { requireSectionAccess } from "@/server/guards";
 
 export const dynamic = "force-dynamic";
-type Section = "company" | "profile" | "access" | "notifications" | "documents" | "stay" | "rules" | "document-settings";
+type Section = "company" | "profile" | "access" | "notifications" | "documents" | "stay" | "rules" | "document-settings" | "payments" | "sms";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ section?: string | string[] }> }) {
   await requireSectionAccess("FULL");
@@ -52,11 +53,13 @@ function MobileSettings({ locale, hotelName, roomCount, memberCount }: { locale:
       <Row href="/dashboard/settings?section=rules" icon={FileText} title={kk ? "Тұру ережелері" : "Правила проживания"} subtitle={kk ? "Қонақтарға нұсқаулар" : "Общие условия и инструкции"} />
       <Row href="/dashboard/settings?section=stay" icon={Clock3} title={kk ? "Келу және кету" : "Заезд и выезд"} subtitle={kk ? "Әдепкі уақыт" : "Время по умолчанию"} />
       <Row href="/dashboard/communications?tab=templates" icon={MessageSquare} title={kk ? "Хабарлама үлгілері" : "Шаблоны сообщений"} subtitle={kk ? "Броньнан жіберу" : "Отправка — из бронирования"} />
+      <Row href="/dashboard/settings?section=payments" icon={BarChart3} title={kk ? "Төлем қабылдау" : "Приём оплаты"} subtitle="Kaspi Pay" />
       <Row href="/dashboard/rates" icon={BarChart3} title={kk ? "Бағалар мен тарифтер" : "Цены и тарифы"} subtitle="KZT" />
       <Row href="/dashboard/settings?section=document-settings" icon={FileText} title={kk ? "Құжаттар және растау" : "Документы и подтверждение"} subtitle={kk ? "Қолданыстағы тәсіл және шектеулер" : "Доступный способ и его ограничения"} />
     </Group>
     <Group title={kk ? "Қосылымдар" : "Подключения"}>
       <Row href="/dashboard/locks" icon={LockKeyhole} title={kk ? "Ақылды құлыптар" : "Умные замки"} subtitle="TTLock" />
+      <Row href="/dashboard/settings?section=sms" icon={MessageSquare} title="SMS" subtitle={kk ? "Провайдер талап етіледі" : "Требуется провайдер"} />
       <Row href="/dashboard/channels" icon={RadioTower} title={kk ? "Брондау арналары" : "Каналы бронирования"} subtitle={kk ? "Қосылымдардың нақты күйі" : "Состояния реальных подключений"} />
       <Row href="/dashboard/settings?section=notifications" icon={BellRing} title={kk ? "Хабарландырулар" : "Уведомления"} subtitle="Push, email" />
     </Group>
@@ -82,6 +85,8 @@ type Data = {
 
 function SectionContent({ section, data }: { section: Section; data: Data }) {
   const kk = data.locale === "kk";
+  if (section === "payments") return data.user.role === "OWNER" ? <GuestPaymentSettings enabled={process.env.GUEST_PAYMENT_LINKS_ENABLED === "true"} locale={data.locale} /> : <p>{kk ? "Төлем деректемелерін тек иесі өзгертеді." : "Платёжные реквизиты настраивает владелец."}</p>;
+  if (section === "sms") return <Panel icon={MessageSquare} title="SMS" description={kk ? "Бапталмаған · SMS жіберілмейді" : "Не настроено · SMS не отправляются"}><p className="text-base">{kk ? "OTP растауы, ақпараттық SMS және құлып коды — бөлек сценарийлер. Провайдер мен құпия деректер расталмайынша жіберу қолжетімсіз." : "OTP-подтверждение, информационная SMS и код замка — разные сценарии. Для этого сценария SMS-провайдер ещё не подтверждён; отправка недоступна."}</p><p className="text-sm leading-relaxed">{kk ? "Провайдер API-ы, серверлік кілт, жіберуші, келісім және тарифтер қажет. Ақылы тест тек нақты әрекетпен орындалады." : "Для подключения нужны API провайдера, серверный ключ, зарегистрированный отправитель, правила согласия и тарификации. Платная тестовая отправка — только отдельным явным действием."}</p><p className="text-sm">{kk ? "OTP телефонға қолжетімділікті ғана растайды, тұлғаны немесе ЭЦҚ-ны емес." : "OTP подтверждает контроль номера в сценарии, но не личность и не ЭЦП."}</p></Panel>;
   if (section === "company") return <Panel icon={Building2} title={kk ? "Компания және деректемелер" : "Компания и реквизиты"} description={kk ? "Компания деректерінің жалғыз көзі." : "Единый источник данных компании, банка и подписанта."}><SettingsForm initial={data.hotel} /><DocumentProfileForm initial={data.documentProfile ?? EMPTY_DOCUMENT_PROFILE} canManage={data.user.role === "OWNER"} /></Panel>;
   if (section === "document-settings") return <Panel icon={FileText} title={kk ? "Құжаттар және растау" : "Документы и подтверждение"} description={kk ? "Қолданыстағы тәсіл және шектеулер." : "Фактически доступный механизм и его ограничения."}><p className="text-base leading-relaxed">{kk ? "PDF құжатын броньда жасауға және жеке сілтеме дайындауға болады. Сілтеме арқылы аты-жөнін енгізіп растау тұлғаны тексермейді. Бұл SMS немесе ЭЦҚ емес." : "PDF создаётся из бронирования. Можно подготовить персональную ссылку на один документ. Подтверждение по ссылке с вводом имени не проверяет личность и не является SMS или ЭЦП."}</p><p className="text-sm text-muted-foreground">{kk ? "Екі тараптың заңдық маңызы бар қол қоюы провайдер мен заңдық тексеруді талап етеді." : "Комплекты документов и юридически проверенное двустороннее подписание требуют отдельного этапа и подтверждённого провайдера."}</p><Link href="/dashboard/settings?section=company" className="inline-flex min-h-11 items-center font-semibold text-primary underline">{kk ? "Деректемелерді толтыру" : "Заполнить реквизиты"}</Link></Panel>;
   if (section === "profile") return <Panel icon={UserRound} title={kk ? "Жеке профиль" : "Личный профиль"} description={kk ? "Байланыс деректеріңіз және профиль суреті." : "Ваши контактные данные и изображение профиля."}><AccountForm locale={data.locale} initial={{ firstName: data.user.firstName, lastName: data.user.lastName, avatarUrl: isManagedAvatar(data.user.avatarUrl) ? `/api/avatar/${data.user.id}` : data.user.avatarUrl ?? "", email: data.user.email, phone: data.user.phone }} /></Panel>;
@@ -93,4 +98,4 @@ function SectionContent({ section, data }: { section: Section; data: Data }) {
 }
 
 function Panel({ icon: Icon, title, description, children }: { icon: LucideIcon; title: string; description: string; children: ReactNode }) { return <section className="space-y-4"><header className="flex items-start gap-3 px-1"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="size-5" /></span><div><h2 className="font-semibold">{title}</h2><p className="mt-0.5 text-sm text-muted-foreground">{description}</p></div></header>{children}</section>; }
-function isSection(value: string | undefined): value is Section { return value === "company" || value === "profile" || value === "access" || value === "notifications" || value === "documents" || value === "stay" || value === "rules" || value === "document-settings"; }
+function isSection(value: string | undefined): value is Section { return value === "payments" || value === "sms" || value === "company" || value === "profile" || value === "access" || value === "notifications" || value === "documents" || value === "stay" || value === "rules" || value === "document-settings"; }
