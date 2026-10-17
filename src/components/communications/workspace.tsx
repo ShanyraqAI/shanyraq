@@ -5,18 +5,17 @@ import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CommunicationWorkspace, TemplateVM } from "@/lib/communications/types";
 import { HISTORY_LABELS } from "@/lib/communications/types";
-import { RoomCommunicationEditor } from "./room-editor";
 import { TemplateEditor } from "./template-editor";
 import { LoadFailure } from "./load-failure";
 import { SendGuide } from "./send-guide";
 import { readApi } from "./api";
 import { Field, INPUT, SECONDARY_TEXT } from "./fields";
-export function CommunicationsWorkspace({ owner = false }: { owner?: boolean }) {
+export function CommunicationsWorkspace({ owner = false, initialTab = "send" }: { owner?: boolean; initialTab?: "send" | "rooms" | "templates" | "history" }) {
   const [data, setData] = useState<CommunicationWorkspace | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [tab, setTab] = useState("send");
+  const [tab, setTab] = useState<string>(initialTab);
   const [roomId, setRoomId] = useState("");
   const [editing, setEditing] = useState<TemplateVM | "new" | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -51,7 +50,7 @@ export function CommunicationsWorkspace({ owner = false }: { owner?: boolean }) 
     {tab === "send" ? <SendGuide /> : null}
     {notice ? <p role="status" className="rounded-xl border bg-accent/40 p-3 text-sm">{notice}</p> : null}
     {!data ? !error && tab !== "send" ? <p role="status" className="flex items-center gap-2"><Loader2 className="size-5 animate-spin" />Загружаем данные…</p> : null : <>
-      {tab === "rooms" ? room ? <div className="space-y-4"><Field label="Выберите квартиру"><select className={INPUT} value={room.id} onChange={(e) => setRoomId(e.target.value)}>{data.rooms.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></Field><RoomCommunicationEditor key={`${data.scope}:${room.id}:${room.version}`} room={room} scope={data.scope} editable={data.owner} onSaved={async () => { await reload(); setNotice("Изменения сохранены"); }} /></div> : <section className="rounded-2xl border bg-card p-5"><h2 className="font-semibold">Сначала добавьте квартиру</h2><p className={`mt-2 ${SECONDARY_TEXT}`}>Квартиры создаются в существующем разделе объектов.</p><Link className="mt-4 inline-flex min-h-11 items-center font-semibold underline" href="/dashboard/rooms">Открыть квартиры</Link></section> : null}
+      {tab === "rooms" ? room ? <div className="space-y-4"><Field label="Выберите квартиру"><select className={INPUT} value={room.id} onChange={(e) => setRoomId(e.target.value)}>{data.rooms.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></Field><Link href={`/dashboard/rooms/${encodeURIComponent(room.id)}`} className="flex min-h-12 items-center justify-between gap-3 rounded-xl border bg-card p-4 font-semibold">Открыть профиль квартиры<span aria-hidden>→</span></Link></div> : <section className="rounded-2xl border bg-card p-5"><h2 className="font-semibold">Сначала добавьте квартиру</h2><p className={`mt-2 ${SECONDARY_TEXT}`}>Квартиры создаются в существующем разделе объектов.</p><Link className="mt-4 inline-flex min-h-11 items-center font-semibold underline" href="/dashboard/rooms">Открыть квартиры</Link></section> : null}
       {tab === "templates" ? editing ? <TemplateEditor key={editing === "new" ? "new" : `${editing.id}:${editing.version}`} template={editing === "new" ? null : editing} rooms={data.rooms} scope={data.scope} onSaved={async () => { await reload(); setEditing(null); setNotice("Шаблон сохранён"); }} onCancel={() => setEditing(null)} /> : <section className="space-y-3">
         {data.owner ? <Button className="min-h-12 w-full rounded-xl sm:w-auto" onClick={() => setEditing("new")}><Plus className="size-4" />Создать шаблон</Button> : <p className={SECONDARY_TEXT}>Шаблоны изменяет владелец объекта.</p>}
         {!data.templates.length ? <div className="rounded-2xl border bg-card p-5"><h2 className="font-semibold">Шаблонов пока нет</h2><p className={`mt-2 ${SECONDARY_TEXT}`}>Создайте свой текст или начните с инструкции заселения, подтверждения брони или Wi-Fi.</p></div> : data.templates.map((t) => <article key={t.id} className="rounded-2xl border bg-card p-4"><div className="flex items-start justify-between gap-3"><h2 className="min-w-0 break-words font-semibold">{t.name}</h2><span className={`shrink-0 ${SECONDARY_TEXT}`}>{t.language.toUpperCase()} · v{t.version}</span></div><p className={`mt-2 ${SECONDARY_TEXT}`}>{t.status === "ACTIVE" ? "Активный" : t.status === "ARCHIVED" ? "Архив" : "Черновик"}{t.isDefault ? " · по умолчанию" : ""} · {data.rooms.find((r) => r.id === t.roomId)?.label ?? "Все квартиры"}</p>{data.owner ? <Button className="mt-3 min-h-11 w-full sm:w-auto" variant="outline" onClick={() => setEditing(t)}>Редактировать</Button> : null}</article>)}

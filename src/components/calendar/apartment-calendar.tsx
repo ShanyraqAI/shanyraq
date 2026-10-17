@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { AppLocale } from "@/lib/locale";
 import type { DateRange } from "@/lib/reservations/date-range";
 import { bookingFromCalendarHref } from "@/lib/reservations/calendar-navigation";
+import { BookingGuestCounter } from "@/components/reservations/booking-guest-counter";
 import { BookingDateCalendar } from "./booking-date-calendar";
 
 export function ApartmentCalendar(props: {
@@ -25,6 +26,8 @@ export function ApartmentCalendar(props: {
     checkOut: "",
   });
   const kk = props.locale === "kk";
+  const [adults, setAdults] = useState(1);
+  const [children, setChildren] = useState(0);
   return (
     <div className="mx-auto max-w-md space-y-4 pb-[max(env(safe-area-inset-bottom),16px)]">
       <Link
@@ -52,10 +55,10 @@ export function ApartmentCalendar(props: {
           {props.roomId
             ? kk
               ? "Пәтер күнтізбесі"
-              : "Календарь квартиры"
+              : "Шаг 1 из 3 · Даты и гости"
             : kk
               ? "Алдымен келу, содан кейін кету күнін таңдаңыз"
-              : "Сначала заезд, затем выезд"}
+              : "Шаг 1 из 3 · Сначала заезд, затем выезд"}
         </p>
       </header>
       <BookingDateCalendar
@@ -63,8 +66,9 @@ export function ApartmentCalendar(props: {
         value={range}
         onChange={setRange}
         disabled={!props.canBook}
+        continueLabel={props.roomId ? (kk ? "Қонақ деректеріне" : "К данным гостя") : (kk ? "Пәтерді таңдау" : "Выбрать квартиру")}
         onContinue={() =>
-          router.push(bookingFromCalendarHref(range, props.roomId))
+          router.push(bookingFromCalendarHref(range, props.roomId, { adults, children }))
         }
         onOpenReservation={
           props.canBook
@@ -72,7 +76,12 @@ export function ApartmentCalendar(props: {
                 router.push(`/dashboard/reservations/${encodeURIComponent(id)}`)
             : undefined
         }
-      />
+      >
+        <section className="sh-mobile-card space-y-3 p-4" aria-label={kk ? "Қонақтар" : "Гости"}>
+          <BookingGuestCounter label={kk ? "Ересектер" : "Взрослые"} value={adults} min={1} onChange={setAdults} />
+          <BookingGuestCounter label={kk ? "Балалар" : "Дети"} value={children} min={0} onChange={setChildren} />
+        </section>
+      </BookingDateCalendar>
       {!props.canBook ? (
         <p className="text-sm text-[#626f5b]">
           {kk

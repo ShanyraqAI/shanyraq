@@ -1,0 +1,5 @@
+"use client";
+import { Minus, Plus } from "lucide-react";
+export function BookingGuestCounter({ label, value, min, onChange }: { label: string; value: number; min: number; onChange: (value: number) => void }) {
+  return <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold text-[#39453f]">{label}</span><span className="flex items-center gap-2"><button type="button" disabled={value <= min} aria-label={`− ${label}`} onClick={() => onChange(Math.max(min, value - 1))} className="grid size-11 place-items-center rounded-full bg-[#eef5f2] text-[#07866b] disabled:opacity-40"><Minus className="size-4" /></button><output aria-label={label} className="w-6 text-center text-sm font-bold">{value}</output><button type="button" disabled={value >= 20} aria-label={`+ ${label}`} onClick={() => onChange(Math.min(20, value + 1))} className="grid size-11 place-items-center rounded-full bg-[#eef5f2] text-[#07866b]"><Plus className="size-4" /></button></span></div>;
+}

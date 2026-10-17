@@ -33,10 +33,11 @@ function Field({ label, value, onChange, required, type = "text", placeholder }:
   return <div className="space-y-1.5"><Label>{label}{required ? " *" : ""}</Label><Input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} placeholder={placeholder} /></div>;
 }
 
-export function ReservationDocumentsDialog({ reservationId, open, onOpenChange }: { reservationId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
+function ReservationDocumentsEditor({ reservationId, open, onOpenChange, onCreated, settingsInNewTab = false }: { reservationId: string; open: boolean; onOpenChange: (open: boolean) => void; onCreated?: () => void; settingsInNewTab?: boolean }) {
   const router = useRouter();
   const [draft, setDraft] = useState<DocumentDraft | null>(null);
   const [documents, setDocuments] = useState<GeneratedDocumentListItem[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [profileReady, setProfileReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -46,15 +47,17 @@ export function ReservationDocumentsDialog({ reservationId, open, onOpenChange }
   const set = <K extends keyof DocumentDraft>(key: K, value: DocumentDraft[K]) => setDraft((current) => current ? { ...current, [key]: value } : current);
 
   async function load() {
-    setLoading(true);
+    setLoading(true); setLoadError(null);
     try {
       const result = await getReservationDocumentWorkspaceAction(reservationId);
-      if (!result.ok || !result.data) toast.error(result.error ?? "Не удалось загрузить документы");
+      if (!result.ok || !result.data) setLoadError(result.error ?? "Не удалось загрузить документы");
       else {
         setDraft(result.data.draft);
         setDocuments(result.data.documents);
         setProfileReady(Boolean(result.data.profile));
       }
+    } catch {
+      setLoadError("Не удалось загрузить документы. Повторите попытку.");
     } finally {
       setLoading(false);
     }
@@ -66,13 +69,13 @@ export function ReservationDocumentsDialog({ reservationId, open, onOpenChange }
     void getReservationDocumentWorkspaceAction(reservationId).then((result) => {
       if (!active) return;
       setStep(0);
-      if (!result.ok || !result.data) toast.error(result.error ?? "Не удалось загрузить документы");
+      if (!result.ok || !result.data) setLoadError(result.error ?? "Не удалось загрузить документы");
       else {
         setDraft(result.data.draft);
         setDocuments(result.data.documents);
         setProfileReady(Boolean(result.data.profile));
       }
-    });
+    }).catch(() => { if (active) setLoadError("Не удалось загрузить документы. Повторите попытку."); });
     return () => { active = false; };
   }, [open, reservationId]);
 
@@ -118,9 +121,12 @@ export function ReservationDocumentsDialog({ reservationId, open, onOpenChange }
       if (!result.ok || !result.data) toast.error(result.error ?? "Не удалось создать документ");
       else {
         toast.success(`${result.message} № ${result.data.documentNumber}`);
+        if (onCreated) { onCreated(); return; }
         await downloadDocument(result.data.id);
         await load();
       }
+    } catch {
+      toast.error("Не удалось создать документ. Проверьте историю перед повторной попыткой.");
     } finally {
       setCreating(false);
     }
@@ -142,7 +148,7 @@ export function ReservationDocumentsDialog({ reservationId, open, onOpenChange }
           <div className="mt-2 flex gap-1.5">{STEPS.map((label, index) => <span key={label} className={cn("h-1 flex-1 rounded-full bg-[#e3e5dd]", index <= step && "bg-primary")} />)}</div>
         </DialogHeader>
 
-        {loading || !draft ? <div className="flex min-h-40 flex-1 items-center justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div> : (
+        {loadError ? <div role="alert" className="space-y-3 p-4"><p>{loadError}</p><Button type="button" className="min-h-11" onClick={() => void load()}>Повторить загрузку</Button></div> : loading || !draft ? <div className="flex min-h-40 flex-1 items-center justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div> : (
           <form onSubmit={submitStep} className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
               {step === 0 ? <>
@@ -150,7 +156,7 @@ export function ReservationDocumentsDialog({ reservationId, open, onOpenChange }
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                     <div className="font-semibold">Сначала один раз заполните реквизиты владельца</div>
                     <p className="mt-1 text-xs">ИИН/БИН, адрес, банк и подписант сохраняются в настройках и дальше подставляются в каждый документ автоматически.</p>
-                    <Button type="button" size="sm" variant="outline" className="mt-3 bg-white" onClick={() => router.push("/dashboard/settings")}><Settings2 className="mr-2 size-4" />Заполнить реквизиты</Button>
+                    {settingsInNewTab ? <div className="mt-3 space-y-2"><Button type="button" asChild variant="outline" className="min-h-11 bg-white"><a href="/dashboard/settings?section=company" target="_blank" rel="noopener noreferrer"><Settings2 className="size-4" />Заполнить в новой вкладке</a></Button><p className="text-xs">Сообщение останется здесь. После сохранения реквизитов нажмите «Проверить реквизиты».</p><Button type="button" variant="outline" className="min-h-11 bg-white" onClick={() => void load()}>Проверить реквизиты</Button></div> : <Button type="button" size="sm" variant="outline" className="mt-3 bg-white" onClick={() => router.push("/dashboard/settings?section=company")}><Settings2 className="mr-2 size-4" />Заполнить реквизиты</Button>}
                   </div>
                 ) : <p className="text-xs text-muted-foreground">Реквизиты владельца подставим из настроек. Выберите, какой документ нужен.</p>}
                 <div className="space-y-2">
@@ -228,7 +234,7 @@ export function ReservationDocumentsDialog({ reservationId, open, onOpenChange }
             <div className="shrink-0 border-t bg-background/95 px-4 pt-3 pb-[max(env(safe-area-inset-bottom),12px)] sm:pb-4">
               <Button type="submit" className="h-12 w-full rounded-[13px] text-sm font-bold" disabled={creating || !profileReady}>
                 {creating ? <Loader2 className="mr-2 size-4 animate-spin" /> : step === STEPS.length - 1 ? <Download className="mr-2 size-4" /> : null}
-                {step === 0 ? "Начать" : step === STEPS.length - 1 ? "Создать и скачать PDF" : "Далее"}
+                {step === 0 ? "Начать" : step === STEPS.length - 1 ? (onCreated ? "Создать PDF и вернуться к сообщению" : "Создать и скачать PDF") : "Далее"}
                 {step < STEPS.length - 1 ? <ChevronRight className="ml-1 size-4" /> : null}
               </Button>
             </div>
@@ -241,4 +247,9 @@ export function ReservationDocumentsDialog({ reservationId, open, onOpenChange }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">{label}</span><span className="text-right font-bold">{value}</span></div>;
+}
+
+/** Remount private workspace on booking/open changes instead of rendering stale data. */
+export function ReservationDocumentsDialog(props: Parameters<typeof ReservationDocumentsEditor>[0]) {
+  return <ReservationDocumentsEditor key={`${props.reservationId}:${props.open}`} {...props} />;
 }

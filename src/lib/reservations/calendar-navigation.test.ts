@@ -4,6 +4,7 @@ import {
   bookingFromCalendarHref,
   calendarSelectionHref,
   initialBookingStep,
+  bookingGuestCount,
 } from "./calendar-navigation";
 
 test("apartment and timeline-date taps open Calendar, not the booking wizard", () => {
@@ -47,8 +48,21 @@ test("only Continue transfers the completed range and exact apartment", () => {
 });
 test("a completed selection skips duplicate date entry, not availability checks", () => {
   const range = { checkIn: "2026-12-31", checkOut: "2027-01-03" };
-  assert.equal(initialBookingStep(range, true, "r1"), 3);
-  assert.equal(initialBookingStep(range, true), 2);
+  assert.equal(initialBookingStep(range, true, "r1"), 2);
+  assert.equal(initialBookingStep(range, true), 1);
   assert.equal(initialBookingStep(range, false, "r1"), 1);
   assert.equal(initialBookingStep({ ...range, checkOut: "" }, true, "r1"), 1);
+});
+
+test("calendar transfers guest counts without skipping Guest", () => {
+  const range = { checkIn: "2026-12-31", checkOut: "2027-01-03" };
+  const url = new URL(bookingFromCalendarHref(range, "r1", { adults: 3, children: 1 }), "https://example.test");
+  assert.equal(url.searchParams.get("adults"), "3");
+  assert.equal(url.searchParams.get("children"), "1");
+  assert.equal(initialBookingStep(range, true, "r1"), 2);
+});
+test("URL guest seeds reject arrays, negatives, fractions and unreasonable values", () => {
+  for (const value of [undefined, ["2"], "-1", "1.5", "100", "NaN", "", "0"]) assert.equal(bookingGuestCount(value, 2, 1), 2);
+  assert.equal(bookingGuestCount("0", 2, 0), 0);
+  assert.equal(bookingGuestCount("20", 1, 1), 20);
 });
