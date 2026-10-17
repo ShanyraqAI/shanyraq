@@ -35,6 +35,7 @@ import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
 import { t, channelLabel } from "@/lib/i18n";
 import { ReservationDocumentsDialog } from "./reservation-documents-dialog";
+import { OwnerStayBlock } from "@/components/guest-stay/owner";
 import { CommunicationComposer } from "@/components/communications/composer";
 
 export interface ReservationDetailsProps {
@@ -141,6 +142,7 @@ export function ReservationDetailsDialog({
 
             {!r.guestPhone ? <Button className="min-h-11 w-full" onClick={() => setCommunicationOpen(true)}><MessageCircle className="size-4" />Сообщение гостю</Button> : null}
 
+            <OwnerStayBlock reservationId={r.id} roomId={r.roomId} checkIn={r.checkIn} checkOut={r.checkOut} />
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 max-sm:rounded-2xl max-sm:border max-sm:border-[#e2e4da] max-sm:bg-white max-sm:p-4 max-sm:shadow-[0_5px_18px_rgb(38_61_51/0.045)]">
               <Field label={t.dashboard.table.room} value={`${r.roomNumber} · ${r.roomTypeName}`} />
               <div className="hidden sm:block"><Field label={t.reservations.details.guestsLabel} value={t.reservations.details.guestsField(r.adults, r.children)} /></div>

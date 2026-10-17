@@ -254,7 +254,9 @@ export async function staffAgreement(
       await lockReservation(tx, c.reservationId, m.hotelId);
       if (c.action === "publishRules") {
         if (c.published && !publicRulesLink("configuration-check"))
-          throw new PublicError("Настройте HTTPS APP_URL перед публикацией правил.");
+          throw new PublicError(
+            "Настройте HTTPS APP_URL перед публикацией правил.",
+          );
         const r = await tx.reservation.findFirstOrThrow({
           where: { id: c.reservationId, hotelId: m.hotelId },
           select: { rentalPropertyId: true },
@@ -499,29 +501,82 @@ export async function staffAgreement(
   );
 }
 type Loaded = Awaited<ReturnType<typeof load>>;
-async function load(tx: Tx, value: string) {
+type AuthorizedStayBundle = {
+  id: string;
+  hotelId: string;
+  reservationId: string;
+  stayId: string;
+  tokenHash: string;
+};
+async function load(
+  tx: Tx,
+  value: string,
+  authorizedStay?: AuthorizedStayBundle,
+  historyOnly = false,
+) {
   const b = await tx.agreementBundle.findUnique({
-    where: { tokenHash: hash(value) },
+    where: authorizedStay
+      ? {
+          id: authorizedStay.id,
+          hotelId: authorizedStay.hotelId,
+          reservationId: authorizedStay.reservationId,
+        }
+      : { tokenHash: hash(value) },
     include: {
       items: { orderBy: { position: "asc" } },
       events: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!b) throw unavailable();
+  if (authorizedStay) {
+    const stay = await tx.guestStay.findFirst({
+      where: {
+        id: authorizedStay.stayId,
+        tokenHash: authorizedStay.tokenHash,
+        hotelId: authorizedStay.hotelId,
+        reservationId: authorizedStay.reservationId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+    });
+    if (
+      !stay ||
+      (historyOnly
+        ? ![stay.agreementBundleId, ...stay.agreementHistoryIds].includes(b.id)
+        : stay.agreementBundleId !== b.id)
+    )
+      throw unavailable();
+  }
+  // An already-accepted immutable snapshot remains readable after checkout/expiry.
+  // Only the internally authorized stay can request history; acceptance always validates live revision.
+  if (historyOnly && authorizedStay && b.guestAcceptedAt)
+    return { b, phone: null };
   const live = await current(tx, b.reservationId, b.hotelId);
   if (["REVOKED", "EXPIRED", "OUTDATED"].includes(state(b, live.revision)))
     throw unavailable();
   return { b, phone: live.phone };
 }
-async function locked(tx: Tx, value: string) {
+async function locked(
+  tx: Tx,
+  value: string,
+  authorizedStay?: AuthorizedStayBundle,
+) {
   const candidate = await tx.agreementBundle.findUnique({
-    where: { tokenHash: hash(value) },
+    where: authorizedStay
+      ? {
+          id: authorizedStay.id,
+          hotelId: authorizedStay.hotelId,
+          reservationId: authorizedStay.reservationId,
+        }
+      : { tokenHash: hash(value) },
     select: { reservationId: true, hotelId: true, id: true },
   });
   if (!candidate) throw unavailable();
   await lockReservation(tx, candidate.reservationId, candidate.hotelId);
+  if (authorizedStay)
+    await tx.$queryRaw`SELECT "id" FROM "GuestStay" WHERE "id"=${authorizedStay.stayId} FOR UPDATE`;
   await tx.$queryRaw`SELECT "id" FROM "AgreementBundle" WHERE "id"=${candidate.id} FOR UPDATE`;
-  return load(tx, value);
+  return load(tx, value, authorizedStay);
 }
 function view({ b, phone }: Loaded) {
   return {
@@ -572,6 +627,9 @@ export async function guestAgreement(
   db: PrismaClient,
   raw: z.infer<typeof guestCommand>,
   deps: {
+    // Internal server-only delegation AFTER a GuestStay capability has been checked.
+    authorizedStay?: AuthorizedStayBundle;
+    historyOnly?: boolean;
     config?: SmsConfig | null;
     send?: (
       config: SmsConfig,
@@ -582,15 +640,30 @@ export async function guestAgreement(
 ) {
   const c = guestCommand.parse(raw);
   if (c.action === "load")
-    return { kind: "json" as const, data: view(await load(db, c.token)) };
+    return {
+      kind: "json" as const,
+      data: view(
+        await load(db, c.token, deps.authorizedStay, deps.historyOnly),
+      ),
+    };
   if (c.action === "pdf") {
-    const { b } = await load(db, c.token);
+    const { b } = await load(
+      db,
+      c.token,
+      deps.authorizedStay,
+      deps.historyOnly,
+    );
     const item = b.items.find((i) => i.id === c.itemId);
     if (!item?.pdfBytes) throw unavailable();
     return { kind: "pdf" as const, bytes: item.pdfBytes };
   }
   if (c.action === "evidence") {
-    const { b } = await load(db, c.token);
+    const { b } = await load(
+      db,
+      c.token,
+      deps.authorizedStay,
+      deps.historyOnly,
+    );
     return { kind: "json" as const, data: evidence(b) };
   }
   const config = deps.config === undefined ? smsConfig() : deps.config;
@@ -601,7 +674,7 @@ export async function guestAgreement(
       );
     const code = otpCode();
     const result = await db.$transaction(async (tx) => {
-      const { b, phone } = await locked(tx, c.token);
+      const { b, phone } = await locked(tx, c.token, deps.authorizedStay);
       if (
         !b.requireOtp ||
         b.guestAcceptedAt ||
@@ -726,7 +799,7 @@ export async function guestAgreement(
     };
   }
   const result = await db.$transaction(async (tx) => {
-    const live = await locked(tx, c.token);
+    const live = await locked(tx, c.token, deps.authorizedStay);
     const { b, phone } = live;
     if (c.bundleHash !== b.bundleHash) throw unavailable();
     const ids = new Set(c.acceptedItems);
@@ -812,7 +885,7 @@ export async function guestAgreement(
         evidence: json(record),
       },
     });
-    return { data: view(await load(tx, c.token)) };
+    return { data: view(await load(tx, c.token, deps.authorizedStay)) };
   });
   if ("error" in result) throw new PublicError(result.error!);
   return { kind: "json" as const, data: result.data };
@@ -855,7 +928,10 @@ export function publicRulesLink(id: string) {
     const url = new URL(process.env.APP_URL ?? "");
     if (
       (url.protocol !== "https:" &&
-        !(url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname))) ||
+        !(
+          url.protocol === "http:" &&
+          ["localhost", "127.0.0.1"].includes(url.hostname)
+        )) ||
       Boolean(url.username || url.password)
     )
       return null;

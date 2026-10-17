@@ -47,7 +47,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         }}
       >
         {children}
-        <ClarityAnalytics />
+        {/* Avoid an already-injected SPA recorder following a capability navigation. */}
+        {process.env.GUEST_STAY_ENABLED !== "true" ? <ClarityAnalytics /> : null}
         <PwaRegistration enabled={process.env.NODE_ENV === "production"} />
         <Toaster richColors position="top-right" />
       </body>

@@ -195,6 +195,9 @@ model Membership {
 }
 
 model Hotel {
+  catalogListings CatalogListing[]
+  guestStays GuestStay[]
+  guestStayPolicies GuestStayPolicy[]
   publicPropertyRules PublicPropertyRules[]
   agreementBundles AgreementBundle[]
   guestPaymentRequests GuestPaymentRequest[]
@@ -266,6 +269,7 @@ model Hotel {
 // A customer-facing accommodation inside the legacy Hotel workspace.
 // Hotel remains the workspace boundary during the expand-and-contract rollout.
 model RentalProperty {
+  guestStayPolicy GuestStayPolicy?
   publicRules PublicPropertyRules?
   guestPaymentRequests GuestPaymentRequest[]
   kaspiPaymentMethods KaspiPaymentMethod[]
@@ -573,6 +577,8 @@ model RoomType {
 }
 
 model Room {
+  catalogListing CatalogListing?
+  guestStays GuestStay[]
   communicationProfile CommunicationProfile?
   communicationTemplates CommunicationTemplate[]
   communicationPhotos CommunicationPhoto[]
@@ -637,6 +643,7 @@ model GuestNote {
 }
 
 model Reservation {
+  guestStay GuestStay?
   agreementBundles AgreementBundle[]
   guestPaymentRequests GuestPaymentRequest[]
   documentSigningRequests DocumentSigningRequest[]
@@ -1622,4 +1629,101 @@ model PublicRuleRevision {
   createdAt DateTime @default(now())
   rule PublicPropertyRules @relation(fields: [ruleId], references: [id], onDelete: Restrict)
   @@id([ruleId, version])
+}
+
+// Opt-in publication of an existing sellable unit, never another property.
+model CatalogListing {
+  id String @id @default(cuid())
+  organizationId String
+  hotelId String
+  roomId String @unique
+  published Boolean @default(false)
+  title String @db.VarChar(160)
+  description String @default("") @db.VarChar(6000)
+  publicLocation String @default("") @db.VarChar(500)
+  amenities String @default("") @db.VarChar(2000)
+  restrictions String @default("") @db.VarChar(2000)
+  contactUrl String @default("") @db.VarChar(500)
+  ratePlanId String?
+  photoIds String[] @default([])
+  version Int @default(1)
+  updatedAt DateTime @updatedAt
+  hotel Hotel @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  room Room @relation(fields: [roomId, hotelId], references: [id, hotelId], onDelete: Cascade)
+  @@unique([roomId, hotelId])
+  @@index([hotelId, published])
+}
+
+model GuestStayPolicy {
+  parking String @default("") @db.VarChar(2000)
+  checkoutInstructions String @default("") @db.VarChar(2000)
+  entryPhotoIds String[] @default([])
+  id String @id @default(cuid())
+  organizationId String
+  hotelId String
+  rentalPropertyId String @unique
+  identityMode String @default("NONE") @db.VarChar(24)
+  requireArrival Boolean @default(false)
+  requireAgreement Boolean @default(false)
+  version Int @default(1)
+  hotel Hotel @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  rentalProperty RentalProperty @relation(fields: [rentalPropertyId, hotelId, organizationId], references: [id, hotelId, organizationId], onDelete: Cascade)
+  @@unique([rentalPropertyId, hotelId, organizationId])
+}
+
+// A non-blocking collection record, or a 1:1 extension of a canonical booking.
+model GuestStay {
+  id String @id @default(cuid())
+  organizationId String
+  hotelId String
+  roomId String
+  reservationId String? @unique
+  requestKey String @db.VarChar(36)
+  checkIn DateTime
+  checkOut DateTime
+  firstName String @default("") @db.VarChar(80)
+  lastName String @default("") @db.VarChar(80)
+  phone String @default("") @db.VarChar(40)
+  arrivalTime String @default("") @db.VarChar(5)
+  formState String @default("EMPTY") @db.VarChar(16)
+  submittedRevision String? @db.VarChar(64)
+  reviewedRevision String? @db.VarChar(64)
+  reviewedAt DateTime?
+  reviewedBy String?
+  correctionReason String @default("") @db.VarChar(1000)
+  identityMode String @default("NONE") @db.VarChar(24)
+  requireArrival Boolean @default(false)
+  requireAgreement Boolean @default(false)
+  originalCheckedAt DateTime?
+  originalCheckedBy String?
+  agreementBundleId String?
+  agreementHistoryIds String[] @default([])
+  accessGrantedAt DateTime?
+  accessGrantedBy String?
+  tokenHash String @unique @db.VarChar(64)
+  sealedToken String
+  expiresAt DateTime
+  revokedAt DateTime?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  hotel Hotel @relation(fields: [hotelId, organizationId], references: [id, orgId], onDelete: Cascade)
+  room Room @relation(fields: [roomId, hotelId], references: [id, hotelId], onDelete: Restrict)
+  reservation Reservation? @relation(fields: [reservationId, roomId, hotelId], references: [id, roomId, hotelId], onDelete: Restrict)
+  events GuestStayEvent[]
+  @@unique([hotelId, requestKey])
+  @@unique([reservationId, roomId, hotelId])
+  @@index([hotelId, createdAt])
+}
+
+model GuestStayEvent {
+  id String @id @default(cuid())
+  stayId String
+  action String @db.VarChar(40)
+  actorId String?
+  reason String @default("") @db.VarChar(1000)
+  version Int
+  createdAt DateTime @default(now())
+  stay GuestStay @relation(fields: [stayId], references: [id], onDelete: Cascade)
+  @@index([stayId, createdAt])
 }

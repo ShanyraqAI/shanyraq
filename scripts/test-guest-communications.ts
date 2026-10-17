@@ -35,7 +35,9 @@ async function main() {
     const key = crypto.randomUUID();
     const input = { action: "prepare" as const, reservationId: ids.reservation, body: "Hello Guest!", photoIds: [], templateId: template.id, requestKey: key };
     const draft = await runCommunicationCommand(member, input) as { id: string; text: string };
-    const retry = await runCommunicationCommand(member, { ...input, body: "Changed retry" }) as { id: string; text: string };
+    const retry = await runCommunicationCommand(member, input) as { id: string; text: string };
+    // Existing service rejects changed content for the same idempotency key.
+    await assert.rejects(runCommunicationCommand(member, { ...input, body: "Changed retry" }), /Повторный запрос содержит другой текст/);
     assert.equal(draft.id, retry.id); assert.equal(retry.text, "Hello Guest!");
     await runCommunicationCommand(member, { action: "saveTemplate", template: { id: template.id, version: 1, name: "Instruction", body: "New text", language: "ru", status: "ACTIVE", isDefault: true, roomId: null } });
     assert.equal((await db.guestCommunication.findUniqueOrThrow({ where: { id: draft.id } })).body, "Hello Guest!");

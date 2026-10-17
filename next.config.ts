@@ -33,7 +33,11 @@ const nextConfig: NextConfig = {
     "/api/documents/*/pdf": ["./src/assets/fonts/manrope-variable.ttf"],
   },
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }, { source: "/guest/:path*", headers: [
+    return [{ source: "/(.*)", headers: securityHeaders }, { source: "/api/guest/stay", headers: [
+      { key: "Cache-Control", value: "private, no-store" },
+      { key: "Referrer-Policy", value: "no-referrer" },
+      { key: "X-Robots-Tag", value: "noindex, nofollow" },
+    ] }, { source: "/catalog/:path*", headers: [{ key: "Cache-Control", value: "no-store" }] }, { source: "/guest/:path*", headers: [
       { key: "Cache-Control", value: "private, no-store" },
       { key: "Referrer-Policy", value: "no-referrer" },
       { key: "X-Robots-Tag", value: "noindex, nofollow" },
