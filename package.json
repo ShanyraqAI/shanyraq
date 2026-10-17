@@ -33,7 +33,8 @@
     "test:document-signing": "tsx --test src/lib/documents/signing/security.test.ts",
     "db:migrate:release": "node scripts/vercel-migrate.mjs --apply-reviewed-release",
     "test:reliability": "tsx --test src/lib/reservations/operation.test.ts src/lib/channels/channex/revision-order.test.ts src/lib/offline/outbox.test.ts scripts/release-safety.test.mjs scripts/service-worker.test.mjs src/lib/offline/dispatch.test.ts src/lib/guests/pagination.test.ts",
-    "test:reliability:db": "node --require ./scripts/test-server-preload.cjs --import tsx scripts/test-reliability.ts"
+    "test:reliability:db": "node --require ./scripts/test-server-preload.cjs --import tsx scripts/test-reliability.ts",
+    "test:instant-overview": "tsx --test src/lib/offline/read-resource.test.ts src/lib/dashboard/overview-validation.test.ts"
   },
   "engines": {
     "node": ">=20.9.0"

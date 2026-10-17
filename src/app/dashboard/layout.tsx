@@ -1,3 +1,5 @@
+import { OverviewWorkspace, OverviewOutlet } from "@/components/dashboard/overview-workspace";
+import { overviewScope, overviewParams, type OverviewContext } from "@/lib/dashboard/overview-types";
 import { SubscriptionBanner } from "@/components/subscription/subscription-banner";
 import { getOrganizationSubscription } from "@/lib/subscription/queries";
 import { BillingBanner } from "@/components/billing/billing-banner";
@@ -47,7 +49,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
   
   const hotelName = hotel.name;
-  const locale = await getRequestLocale();
+  const locale = await getRequestLocale(hotel.language);
   const userName = user.fullName;
   const permissions = resolveHotelPermissions(user);
   const [subscription, manualSubscription, hotels, productExperience, reservationCount, notificationCenter, searchableData, upcomingReservations] = await Promise.all([
@@ -85,7 +87,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ...(permissions.includes("RESERVATIONS") ? searchReservations.map((reservation) => ({ id: `reservation-${reservation.id}`, type: "reservation" as const, title: `${reservationDisplayId(reservation.sequenceNumber)} · ${reservation.guest.fullName}`, subtitle: `Номер ${reservation.room.number} · ${formatISODate(toISODate(reservation.checkIn))} — ${formatISODate(toISODate(reservation.checkOut))}`, href: `/dashboard/reservations?reservation=${reservation.id}` })) : []),
   ];
 
-  return (
+  const overviewContext: OverviewContext | null = process.env.INSTANT_OVERVIEW_ENABLED === "true" && permissions.includes("OVERVIEW") && user.organizationId && user.role ? {
+    scope: overviewScope(user.id, user.organizationId, hotel.id, user.role, permissions),
+    deviceScope: `${user.id}:${hotel.id}`, day: toISODate(todayInTimeZone(hotel.timezone)), locale, permissions,
+  } : null;
+  const shell = (
     <div data-dashboard-theme className="min-h-screen bg-background">
       <DesktopSidebar
         hotelName={hotelName}
@@ -113,7 +119,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {subscription && <BillingBanner endsAt={accessUntil(subscription).toISOString()} paid={Boolean(subscription.paidUntil)} initiallyExpired={isExpired(subscription)} />}
           <OfflineSync scope={`${user.id}:${hotel.id}`} warmUrls={offlineUrls} locale={locale} />
           <MobileContextBack locale={locale} />
-          {children}
+          <OverviewOutlet>{children}</OverviewOutlet>
         </main>
       </div>
       <PwaInstallBanner locale={locale} />
@@ -129,4 +135,5 @@ export default async function DashboardLayout({ children }: { children: React.Re
       /></div>
     </div>
   );
+  return overviewContext ? <OverviewWorkspace key={overviewContext.scope + overviewParams(overviewContext)} context={overviewContext}>{shell}</OverviewWorkspace> : shell;
 }

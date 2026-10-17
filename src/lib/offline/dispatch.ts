@@ -31,7 +31,9 @@ export async function dispatchOfflineAction(
         };
   if (isDeviceOffline()) return queue();
   try {
-    return await call(context);
+    const result = await call(context);
+    if (result.ok && typeof window !== "undefined") window.dispatchEvent(new Event("shanyraq-read-invalidate"));
+    return result;
   } catch (error) {
     if (isNetworkError(error)) return queue();
     throw error;

@@ -1,0 +1,15 @@
+{
+  "fixture": true,
+  "mockedAPI": true,
+  "physicalDevices": false,
+  "passed": true,
+  "results": [
+    "prepared Overview opens offline without document/RSC navigation",
+    "browser Back and a repeated local transition preserve retained screen input (fixture-only input checks)",
+    "503 refresh retains the useful saved screen",
+    "background recovery updates data without resetting local input (fixture)",
+    "IndexedDB restores prepared data after a fresh online document bootstrap while API reads fail",
+    "cross-tab identity change removes the previous private screen",
+    "401 stops synchronization and removes cached content from the UI"
+  ]
+}
