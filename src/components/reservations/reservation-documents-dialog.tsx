@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronLeft, ChevronRight, Download, FileCheck2, FileText, Loader2, ReceiptText, Settings2 } from "lucide-react";
 import { toast } from "sonner";
@@ -30,17 +30,22 @@ function Field({ label, value, onChange, required, type = "text", placeholder }:
   type?: string;
   placeholder?: string;
 }) {
-  return <div className="space-y-1.5"><Label>{label}{required ? " *" : ""}</Label><Input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} placeholder={placeholder} /></div>;
+  const id = useId();
+  return <div className="space-y-1.5"><Label htmlFor={id}>{label}{required ? " *" : ""}</Label><Input id={id} type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} placeholder={placeholder} /></div>;
 }
 
 function ReservationDocumentsEditor({ reservationId, open, onOpenChange, onCreated, settingsInNewTab = false }: { reservationId: string; open: boolean; onOpenChange: (open: boolean) => void; onCreated?: () => void; settingsInNewTab?: boolean }) {
   const router = useRouter();
+  const descriptionId = useId();
   const [draft, setDraft] = useState<DocumentDraft | null>(null);
   const [documents, setDocuments] = useState<GeneratedDocumentListItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [profileReady, setProfileReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const [initialDraft, setInitialDraft] = useState("");
+  const dirty = Boolean(draft && initialDraft && JSON.stringify(draft) !== initialDraft);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [step, setStep] = useState(0);
 
@@ -53,6 +58,7 @@ function ReservationDocumentsEditor({ reservationId, open, onOpenChange, onCreat
       if (!result.ok || !result.data) setLoadError(result.error ?? "Не удалось загрузить документы");
       else {
         setDraft(result.data.draft);
+        setInitialDraft(JSON.stringify(result.data.draft));
         setDocuments(result.data.documents);
         setProfileReady(Boolean(result.data.profile));
       }
@@ -72,12 +78,25 @@ function ReservationDocumentsEditor({ reservationId, open, onOpenChange, onCreat
       if (!result.ok || !result.data) setLoadError(result.error ?? "Не удалось загрузить документы");
       else {
         setDraft(result.data.draft);
+        setInitialDraft(JSON.stringify(result.data.draft));
         setDocuments(result.data.documents);
         setProfileReady(Boolean(result.data.profile));
       }
     }).catch(() => { if (active) setLoadError("Не удалось загрузить документы. Повторите попытку."); });
     return () => { active = false; };
   }, [open, reservationId]);
+
+  function handleOpenChange(next: boolean) {
+    if (!next && (creatingRef.current || (dirty && !window.confirm("Закрыть документ без сохранения изменений?")))) return;
+    onOpenChange(next);
+  }
+
+  useEffect(() => {
+    if (!open || (!dirty && !creating)) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [open, dirty, creating]);
 
   async function downloadDocument(documentId: string) {
     setDownloadingId(documentId);
@@ -109,18 +128,21 @@ function ReservationDocumentsEditor({ reservationId, open, onOpenChange, onCreat
   // Each step submits the form so the browser validates only the fields currently shown.
   async function submitStep(event: React.FormEvent) {
     event.preventDefault();
+    if (creatingRef.current) return;
     if (step < STEPS.length - 1) setStep((value) => value + 1);
     else await create();
   }
 
   async function create() {
-    if (!draft) return;
+    if (!draft || creatingRef.current) return;
+    creatingRef.current = true;
     setCreating(true);
     try {
       const result = await createReservationDocumentAction(draft);
       if (!result.ok || !result.data) toast.error(result.error ?? "Не удалось создать документ");
       else {
         toast.success(`${result.message} № ${result.data.documentNumber}`);
+        setInitialDraft(JSON.stringify(draft));
         if (onCreated) { onCreated(); return; }
         await downloadDocument(result.data.id);
         await load();
@@ -128,6 +150,7 @@ function ReservationDocumentsEditor({ reservationId, open, onOpenChange, onCreat
     } catch {
       toast.error("Не удалось создать документ. Проверьте историю перед повторной попыткой.");
     } finally {
+      creatingRef.current = false;
       setCreating(false);
     }
   }
@@ -135,11 +158,11 @@ function ReservationDocumentsEditor({ reservationId, open, onOpenChange, onCreat
   const customerLabel = draft ? (draft.customerType === "COMPANY" ? draft.companyName || "Компания" : draft.guestFullName || "Гость") : "";
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:bg-[#f8f8f4] max-sm:ring-0">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl [&_[data-slot=dialog-close]]:min-h-11 [&_[data-slot=dialog-close]]:min-w-11 max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:bg-[#f8f8f4] max-sm:ring-0">
         <DialogHeader className="shrink-0 gap-1 border-b px-4 pt-[max(env(safe-area-inset-top),16px)] pb-3 text-left sm:pt-4">
           <div className="flex items-center gap-3 pr-8">
-            {step > 0 ? <button type="button" onClick={() => setStep((value) => value - 1)} className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-[#536059] ring-1 ring-[#e6e8df]" aria-label="Назад"><ChevronLeft className="size-5" /></button> : null}
+            {step > 0 ? <button type="button" disabled={creating} onClick={() => setStep((value) => value - 1)} className="grid size-11 shrink-0 place-items-center rounded-full bg-white text-[#536059] ring-1 ring-[#e6e8df]" aria-label="Назад"><ChevronLeft className="size-5" /></button> : null}
             <div className="min-w-0">
               <DialogTitle className="text-lg">Документы по брони</DialogTitle>
               <DialogDescription className="text-xs">Шаг {step + 1} из {STEPS.length} · {STEPS[step]}</DialogDescription>
@@ -150,7 +173,7 @@ function ReservationDocumentsEditor({ reservationId, open, onOpenChange, onCreat
 
         {loadError ? <div role="alert" className="space-y-3 p-4"><p>{loadError}</p><Button type="button" className="min-h-11" onClick={() => void load()}>Повторить загрузку</Button></div> : loading || !draft ? <div className="flex min-h-40 flex-1 items-center justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div> : (
           <form onSubmit={submitStep} className="flex min-h-0 flex-1 flex-col">
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+            <fieldset disabled={creating} className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
               {step === 0 ? <>
                 {!profileReady ? (
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
@@ -221,7 +244,7 @@ function ReservationDocumentsEditor({ reservationId, open, onOpenChange, onCreat
                   <SummaryRow label="Сумма" value={formatMoney(draft.totalAmount)} />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5 sm:col-span-2"><Label>Описание услуги *</Label><Textarea value={draft.serviceDescription} onChange={(event) => set("serviceDescription", event.target.value)} required rows={3} /></div>
+                  <div className="space-y-1.5 sm:col-span-2"><Label htmlFor={descriptionId}>Описание услуги *</Label><Textarea id={descriptionId} value={draft.serviceDescription} onChange={(event) => set("serviceDescription", event.target.value)} required rows={3} /></div>
                   <Field label="Условия оплаты" value={draft.paymentTerms} onChange={(value) => set("paymentTerms", value)} required />
                   <Field label="Основание / номер договора" value={draft.contractReference} onChange={(value) => set("contractReference", value)} placeholder="Необязательно" />
                   <Field label="Подписант заказчика" value={draft.customerSignerName} onChange={(value) => set("customerSignerName", value)} />
@@ -229,10 +252,10 @@ function ReservationDocumentsEditor({ reservationId, open, onOpenChange, onCreat
                 </div>
                 {draft.type === "INVOICE" ? <p className="rounded-xl bg-secondary p-3 text-xs text-muted-foreground">PDF создаётся для скачивания и обмена. Shanyraq AI не отправляет его в ИС ЭСФ и не присваивает государственный регистрационный номер.</p> : null}
               </> : null}
-            </div>
+            </fieldset>
 
             <div className="shrink-0 border-t bg-background/95 px-4 pt-3 pb-[max(env(safe-area-inset-bottom),12px)] sm:pb-4">
-              <Button type="submit" className="h-12 w-full rounded-[13px] text-sm font-bold" disabled={creating || !profileReady}>
+              <Button type="submit" className="h-auto min-h-12 w-full whitespace-normal hover:bg-primary hover:text-primary-foreground rounded-[13px] px-3 py-3 text-sm leading-5 font-bold" disabled={creating || !profileReady}>
                 {creating ? <Loader2 className="mr-2 size-4 animate-spin" /> : step === STEPS.length - 1 ? <Download className="mr-2 size-4" /> : null}
                 {step === 0 ? "Начать" : step === STEPS.length - 1 ? (onCreated ? "Создать PDF и вернуться к сообщению" : "Создать и скачать PDF") : "Далее"}
                 {step < STEPS.length - 1 ? <ChevronRight className="ml-1 size-4" /> : null}
