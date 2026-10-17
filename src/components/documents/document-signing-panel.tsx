@@ -1,4 +1,5 @@
 "use client";
+import { AgreementPanel } from "@/components/agreements/staff";
 import { useEffect, useState } from "react";
 import { Link2, Loader2 } from "lucide-react";
 import { ReservationDocumentsDialog } from "@/components/reservations/reservation-documents-dialog";
@@ -54,6 +55,7 @@ export function DocumentSigningPanel({ reservationId, scope, onLinkCreated, inli
     </> : data ? <div className="space-y-3"><p className={SECONDARY_TEXT}>У этой брони ещё нет PDF. Создайте его здесь — текст сообщения останется на месте.</p><Button className="min-h-12 w-full" disabled={busy} onClick={() => { setCreatingDocument(true); onBusyChange?.(true); }}>Создать документ</Button></div> : null}
     {link ? <div className="space-y-2 rounded-xl border bg-accent/40 p-3"><p className="text-sm">Ссылка подготовлена для сообщения. Действует до {new Date(link.expiresAt).toLocaleString("ru-RU")}.</p><p className="break-all text-sm">{link.url}</p><p className={SECONDARY_TEXT}>Не публикуйте и не пересылайте посторонним: доступ получает любой обладатель ссылки.</p></div> : null}
     {data?.requests.map((r) => <article key={r.id} className="space-y-2 border-t pt-3"><h3 className="font-semibold">{r.title}</h3><p className={SECONDARY_TEXT}>{labels[r.state]}{r.signedAt ? ` · ${r.signerName} · ${new Date(r.signedAt).toLocaleString("ru-RU")}` : ` · до ${new Date(r.expiresAt).toLocaleString("ru-RU")}`}</p>{r.state === "PENDING" ? <Button variant="outline" className="min-h-11 w-full" disabled={busy} onClick={() => { if (window.confirm("Отозвать ссылку? Она перестанет открываться у гостя.")) void revoke(r.id); }}>Отозвать ссылку</Button> : null}{r.signedAt ? <Button variant="outline" className="min-h-11 w-full" disabled={busy} onClick={() => receipt(r.id)}>Скачать подтверждение</Button> : null}</article>)}
+    <AgreementPanel key={`${reservationId}:${scope}`} reservationId={reservationId} scope={scope} onLinkCreated={onLinkCreated} onBusyChange={onBusyChange} onLinkCleared={onLinkCleared} />
     <ReservationDocumentsDialog reservationId={reservationId} settingsInNewTab onCreated={() => { setCreatingDocument(false); onBusyChange?.(false); void reload().catch((e: unknown) => setError(e instanceof Error ? e.message : "Не удалось обновить документы")); }} open={creatingDocument} onOpenChange={(open) => { setCreatingDocument(open); onBusyChange?.(open); if (!open) void reload().catch((e: unknown) => setError(e instanceof Error ? e.message : "Не удалось обновить документы")); }} />
   </div></Container>;
 }

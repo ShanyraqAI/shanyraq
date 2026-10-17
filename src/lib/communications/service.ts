@@ -113,6 +113,12 @@ export async function runCommunicationCommand(m: CurrentMembership, command: z.i
       const signing = await db.documentSigningRequest.findFirst({ where: { id: command.signingRequestId, ...t, reservationId: r.id, revokedAt: null, expiresAt: { gt: new Date() } }, select: { signedAt: true, reservationVersion: true } });
       if (!signing || (!signing.signedAt && signing.reservationVersion.getTime() !== r.updatedAt.getTime())) throw new PublicError("Ссылка на документ устарела. Создайте новую и проверьте текст.");
     }
+    if (command.agreementBundleId) {
+      if (process.env.GUEST_DOCUMENT_BUNDLES_ENABLED !== "true") throw new PublicError("Пакеты документов ещё не включены.");
+      if (command.signingRequestId) throw new PublicError("Выберите один документ или один пакет.");
+      const { validateAgreementAttachment } = await import("@/lib/agreements/service");
+      await validateAgreementAttachment(db, m, r.id, command.agreementBundleId, command.body);
+    }
     const phone = optionalRecipientPhone(r.guest.phone);
     const ids = [...new Set(command.photoIds)];
     const photos = await db.communicationPhoto.findMany({ where: { ...t, roomId: r.roomId, archivedAt: null, id: { in: ids } }, select: { id: true, name: true } });

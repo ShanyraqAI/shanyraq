@@ -14,6 +14,9 @@ if (process.env.GUEST_PAYMENT_LINKS_ENABLED === "true") {
   names.add("KaspiPaymentMethod");
   names.add("GuestPaymentRequest");
 }
+if (process.env.GUEST_DOCUMENT_BUNDLES_ENABLED === "true") {
+  for (const name of ["AgreementBundle", "AgreementItem", "AgreementEvent", "AgreementOtp"]) names.add(name);
+}
 const models = Prisma.dmmf.datamodel.models.filter((model) => names.has(model.name));
 const db = new PrismaClient();
 try {
