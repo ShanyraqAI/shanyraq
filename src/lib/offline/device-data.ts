@@ -1,3 +1,4 @@
+import { clearReadSnapshots } from "./read-snapshots";
 import { clearComposerMemory } from "@/lib/communications/composer-memory";
 import {
   ACTIVE_SCOPE_KEY,
@@ -20,11 +21,13 @@ export async function clearSavedPages() {
   navigator.serviceWorker?.controller?.postMessage({ type: "clear-pages" });
 }
 export async function clearDeviceData() {
+  const clearReads = clearReadSnapshots().catch(() => undefined);
   clearComposerMemory();
   clearScopedOutbox();
   setOutboxScope("");
   window.localStorage.removeItem(ACTIVE_SCOPE_KEY);
   await clearSavedPages();
+  await clearReads;
 }
 /** Private HTML is no longer saved; retain the caller contract while purging legacy snapshots. */
 export async function warmOfflinePages(_urls: string[]) {

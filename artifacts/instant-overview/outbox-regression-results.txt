@@ -1,0 +1,16 @@
+✔ response lost AFTER successful server write queues the exact original key (3.663615ms)
+✔ changing hotel during a lost response cannot enqueue into a new context (0.320375ms)
+✔ offline initial request queues once without calling server (0.198361ms)
+✔ business failure is not silently queued for replay (0.177866ms)
+✔ preallocated operation ID remains unchanged in persistent queue (2.658062ms)
+✔ switching account/hotel cannot enqueue under captured old scope (0.171921ms)
+✔ queues for different hotel/users do not replay together (0.934699ms)
+✔ malformed persisted entries are not trusted (0.131551ms)
+✔ corrupt legacy JSON does not hide independent v2 entries (0.221168ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0

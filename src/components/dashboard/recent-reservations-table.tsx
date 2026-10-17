@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -19,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ReservationStatusBadge, ChannelLabel } from "@/components/shared/status-badge";
-import { ReservationDetailsDialog } from "@/components/reservations/reservation-details-dialog";
+const ReservationDetailsDialog = lazy(() => import("@/components/reservations/reservation-details-dialog").then((module) => ({ default: module.ReservationDetailsDialog })));
 import type { GuestVM, RatePlanVM, ReservationVM, RoomVM } from "@/lib/types";
 import type { ReservationStatus } from "@/lib/constants";
 import { formatMoney } from "@/lib/utils";
@@ -27,15 +27,23 @@ import { t, channelLabel } from "@/lib/i18n";
 import { formatISOCompactDate } from "@/lib/dates";
 import { reservationDisplayId } from "@/lib/types";
 
-interface Props {
+interface LegacyProps {
   reservations: ReservationVM[];
   rooms: RoomVM[];
   ratePlans: RatePlanVM[];
   guests: GuestVM[];
   hotelCurrency: string;
+  navigateOnSelect?: false;
 }
 
-export function RecentReservationsTable({ reservations, rooms, ratePlans, guests, hotelCurrency }: Props) {
+interface SnapshotProps {
+  navigateOnSelect: true;
+  reservations: import("@/lib/dashboard/overview-types").OverviewRecentRow[];
+}
+type Props = LegacyProps | SnapshotProps;
+
+export function RecentReservationsTable(props: Props) {
+  const { reservations } = props;
   const router = useRouter();
   const [channelFilter, setChannelFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -108,7 +116,7 @@ export function RecentReservationsTable({ reservations, rooms, ratePlans, guests
               <TableRow
                 key={r.id}
                 className="cursor-pointer"
-                onClick={() => setSelected(r)}
+                onClick={() => { if (props.navigateOnSelect) router.push(`/dashboard/reservations/${encodeURIComponent(r.id)}`); else setSelected(r as ReservationVM); }}
               >
                 <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
                   {reservationDisplayId(r.sequenceNumber)}
@@ -140,18 +148,18 @@ export function RecentReservationsTable({ reservations, rooms, ratePlans, guests
         </Table>
       </div>
 
-      {selected && (
-        <ReservationDetailsDialog
+      {!props.navigateOnSelect && selected && (
+        <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Открываем бронь…</p>}><ReservationDetailsDialog
           reservation={selected}
-          rooms={rooms}
-          ratePlans={ratePlans}
-          guests={guests}
-          hotelCurrency={hotelCurrency}
+          rooms={props.rooms}
+          ratePlans={props.ratePlans}
+          guests={props.guests}
+          hotelCurrency={props.hotelCurrency}
           open={Boolean(selected)}
           onOpenChange={(o) => {
             if (!o) setSelected(null);
           }}
-        />
+        /></Suspense>
       )}
       {/* refresh hook keeps table in sync after dialog actions */}
       <span className="hidden" aria-hidden onClick={() => router.refresh()} />

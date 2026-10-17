@@ -1,0 +1,20 @@
+{
+  "scope": "stage-1 opt-in Overview; isolated production Next.js fixture, NOT full application acceptance",
+  "next": "16.3.3",
+  "react": "19.2.8",
+  "new_unit_tests_passed": 19,
+  "existing_outbox_regression_tests_passed": 9,
+  "real_chromium_indexeddb_checks_passed": 10,
+  "fixture_browser_scenarios_passed": 7,
+  "changed_source_eslint": "passed",
+  "fixture_production_build": "passed",
+  "full_project_typecheck": false,
+  "full_project_build": false,
+  "live_database_authorization_checks": false,
+  "physical_Android_iOS_PWA": false,
+  "phone_p95_measured": false,
+  "production_changed": false,
+  "application_dependencies_added": false,
+  "feature_enabled_by_default": false,
+  "cold_closed_PWA_offline_bootstrap_implemented": false
+}

@@ -28,6 +28,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   await requireSectionAccess("OVERVIEW");
+  if (process.env.INSTANT_OVERVIEW_ENABLED === "true") return null;
   const hotelId = await getCurrentHotelId();
   const hotel = await db.hotel.findUniqueOrThrow({ where: { id: hotelId } });
   const locale = await getRequestLocale(hotel.language);
