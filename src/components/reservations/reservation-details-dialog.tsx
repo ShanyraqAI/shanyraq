@@ -35,7 +35,7 @@ import { formatMoney } from "@/lib/utils";
 import { formatMediumDate } from "@/lib/dates";
 import { t, channelLabel } from "@/lib/i18n";
 import { ReservationDocumentsDialog } from "./reservation-documents-dialog";
-import { whatsappHref } from "@/lib/whatsapp";
+import { CommunicationComposer } from "@/components/communications/composer";
 
 export interface ReservationDetailsProps {
   reservation: ReservationVM;
@@ -71,9 +71,9 @@ export function ReservationDetailsDialog({
   const router = useRouter();
   const [editing, setEditing] = useState<"edit" | "move" | null>(null);
   const [documentsOpen, setDocumentsOpen] = useState(false);
+  const [communicationOpen, setCommunicationOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const callNumber = r.guestPhone?.replace(/[^+\d]/g, "") ?? "";
-  const whatsappUrl = whatsappHref(r.guestPhone, `Здравствуйте, ${r.guestName}!`);
 
   async function changeStatus(status: string) {
     setBusy(status);
@@ -137,7 +137,9 @@ export function ReservationDetailsDialog({
               </div>
             </div>
 
-            {r.guestPhone ? <div className="grid grid-cols-2 gap-2"><Button asChild variant="outline" className={`h-11 ${MOBILE_ACTION}`}><a href={`tel:${callNumber}`}><Phone className="size-4" />Позвонить</a></Button>{whatsappUrl ? <Button asChild className="h-11 bg-[#25D366] text-white hover:bg-[#1fb75a] max-sm:rounded-xl max-sm:font-bold"><a href={whatsappUrl} target="_blank" rel="noopener noreferrer"><MessageCircle className="size-4" />WhatsApp</a></Button> : null}</div> : null}
+            {r.guestPhone ? <div className="grid grid-cols-2 gap-2"><Button asChild variant="outline" className={`h-11 ${MOBILE_ACTION}`}><a href={`tel:${callNumber}`}><Phone className="size-4" />Позвонить</a></Button><Button className="h-11 max-sm:rounded-xl max-sm:font-bold" onClick={() => setCommunicationOpen(true)}><MessageCircle className="size-4" />Сообщение гостю</Button></div> : null}
+
+            {!r.guestPhone ? <Button className="min-h-11 w-full" onClick={() => setCommunicationOpen(true)}><MessageCircle className="size-4" />Сообщение гостю</Button> : null}
 
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 max-sm:rounded-2xl max-sm:border max-sm:border-[#e2e4da] max-sm:bg-white max-sm:p-4 max-sm:shadow-[0_5px_18px_rgb(38_61_51/0.045)]">
               <Field label={t.dashboard.table.room} value={`${r.roomNumber} · ${r.roomTypeName}`} />
@@ -267,6 +269,7 @@ export function ReservationDetailsDialog({
           }}
         />
       )}
+      <CommunicationComposer reservationId={r.id} open={communicationOpen} onOpenChange={setCommunicationOpen} />
       <ReservationDocumentsDialog reservationId={r.id} open={documentsOpen} onOpenChange={setDocumentsOpen} />
     </>
   );

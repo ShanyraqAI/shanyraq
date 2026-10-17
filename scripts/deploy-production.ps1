@@ -15,7 +15,8 @@ function Assert-Success([string]$Step) {
   }
 }
 
-Write-Host "`n[1/7] Checking repository..." -ForegroundColor Cyan
+Write-Host "This legacy command now performs preflight only. It never migrates, commits or pushes." -ForegroundColor Yellow
+Write-Host "`n[1/4] Checking repository..." -ForegroundColor Cyan
 if (-not (Test-Path -LiteralPath ".git")) {
   throw "Run this command from the Shanyraq Git repository."
 }
@@ -35,52 +36,25 @@ if ($conflicts.Count -gt 0) {
   throw "Resolve merge conflicts before deploying: $($conflicts -join ', ')"
 }
 
-Write-Host "`n[2/7] Checking Vercel login..." -ForegroundColor Cyan
+$dirty = @(git status --porcelain)
+Assert-Success "Checking working tree"
+if ($dirty.Count -gt 0) { throw "Preflight requires a clean, reviewed commit. Commit changes separately first." }
+
+Write-Host "`n[2/4] Checking Vercel login..." -ForegroundColor Cyan
 npx --yes vercel whoami
 Assert-Success "Vercel authentication"
 
-Write-Host "`n[3/7] Running lint..." -ForegroundColor Cyan
+Write-Host "`n[3/4] Running lint..." -ForegroundColor Cyan
 npm run lint
 Assert-Success "Lint"
 
-Write-Host "`n[4/7] Building the production application..." -ForegroundColor Cyan
+Write-Host "`n[4/4] Building the production application..." -ForegroundColor Cyan
 npm run build
 Assert-Success "Production build"
 
-Write-Host "`n[5/7] Creating a Git commit..." -ForegroundColor Cyan
-git add -A
-Assert-Success "Staging changes"
-
-$forbiddenFiles = @(git diff --cached --name-only | Where-Object {
-  $_ -match '(^|/)\.env($|\.)' -or $_ -match '(^|/)output/'
-})
-Assert-Success "Checking staged files"
-if ($forbiddenFiles.Count -gt 0) {
-  throw "Secret or generated files are staged and the deploy was stopped: $($forbiddenFiles -join ', ')"
-}
-
-$stagedFiles = @(git diff --cached --name-only)
-Assert-Success "Reading staged changes"
-if ($stagedFiles.Count -gt 0) {
-  if ([string]::IsNullOrWhiteSpace($Message)) {
-    $Message = "deploy: production update $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
-  }
-  git commit -m $Message
-  Assert-Success "Creating the Git commit"
-} else {
-  Write-Host "No new local changes; using the current commit." -ForegroundColor DarkGray
-}
-
-Write-Host "`n[6/7] Applying pending migrations to the production database..." -ForegroundColor Cyan
-npx --yes vercel env run -e production -- npx prisma migrate deploy
-Assert-Success "Production database migration"
-
-Write-Host "`n[7/7] Pushing main to GitHub..." -ForegroundColor Cyan
-git push origin main
-Assert-Success "Git push"
-
-$commit = (git rev-parse --short HEAD).Trim()
-Assert-Success "Reading the deployed commit"
-Write-Host "`nDone. Commit $commit was pushed to main." -ForegroundColor Green
-Write-Host "Vercel will now build and publish the production deployment from GitHub." -ForegroundColor Green
-Write-Host "Open the project's Deployments page in Vercel and wait for the Ready status."
+$commit = (git rev-parse HEAD).Trim()
+Assert-Success "Reading the reviewed commit"
+Write-Host "`nPreflight passed for commit $commit. No migration, push or deployment was performed." -ForegroundColor Green
+Write-Host "Before production: build a Ready immutable deployment of this exact commit against staging, verify migrations on a disposable PostgreSQL database and confirm a tested backup."
+Write-Host "Then use the explicit db:migrate:release command in the protected release environment and promote the already-built deployment without rebuilding."
+Write-Host "See docs/reliability-and-release.md. Do not use git push as a migration/deploy orchestrator."

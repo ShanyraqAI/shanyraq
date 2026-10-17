@@ -47,6 +47,7 @@ export interface CurrentHotel {
   country: string | null;
   timezone: string;
   currency: string;
+  language?: string;
   createdAt: Date;
 }
 
@@ -85,7 +86,7 @@ export const getCurrentHotel = cache(async (): Promise<CurrentHotel | null> => {
   if (!membership || !membership.hotelId) return null;
   const hotel = await db.hotel.findFirst({
     where: { id: membership.hotelId, orgId: membership.organizationId },
-    select: { id: true, orgId: true, slug: true, name: true, propertyType: true, address: true, city: true, country: true, timezone: true, currency: true, createdAt: true },
+    select: { id: true, orgId: true, slug: true, name: true, propertyType: true, address: true, city: true, country: true, timezone: true, currency: true, language: true, createdAt: true },
   });
   return hotel;
 });

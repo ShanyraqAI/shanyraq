@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "realIndexedDB": true,
+  "mockedApp": true,
+  "physicalDevices": false,
+  "results": [
+    "IndexedDB persists and restores a scoped read copy",
+    "wrong identity is never returned",
+    "wrong date/filter is never returned",
+    "an older tab/request cannot overwrite a newer persisted snapshot",
+    "expired copies are not hydrated",
+    "the read cache stays within its record count limit",
+    "aggregate read storage stays within 4 MiB",
+    "scope clearing leaves other identities untouched",
+    "read cache clearing does not erase an outbox/draft store",
+    "logout-style clearing removes all read snapshots"
+  ]
+}

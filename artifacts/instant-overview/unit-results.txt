@@ -1,0 +1,27 @@
+✔ cache identity includes organization, hotel, role and normalized permissions (0.848489ms)
+✔ empty supplemental results are valid, malformed data is not (1.886249ms)
+✔ cached attention links cannot navigate to external origins (0.38907ms)
+✔ selection keys isolate users, organizations, permissions, dates and filters (1.006899ms)
+✔ local data appears while a network response is still pending (19.673294ms)
+✔ identical simultaneous requests are deduplicated (0.49795ms)
+✔ failed refresh preserves visible data (0.366853ms)
+✔ successful empty data replaces old rows rather than behaving as an error (0.430317ms)
+✔ late hydration cannot overwrite newer server data (0.448425ms)
+✔ scope change discards a late network result (0.376663ms)
+✔ scope change discards a late local load (1.33486ms)
+✔ 401 stops reads and clears visible data (0.406381ms)
+✔ 403 stops reads and clears visible data (0.257455ms)
+✔ 409 stops reads and clears visible data (0.242461ms)
+✔ a different response scope is rejected (0.499567ms)
+✔ 304 updates freshness without replacing data (0.266962ms)
+✔ quota/storage failures retain the useful in-memory copy with an explicit warning (0.492462ms)
+✔ failed requests respect backoff instead of restarting on every render/event (0.200772ms)
+✔ oversized snapshots are rejected before opening IndexedDB (1.340222ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 319.98179

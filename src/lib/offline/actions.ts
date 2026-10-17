@@ -1,3 +1,4 @@
+import type { MutationContext } from "./mutation-context";
 import type { ActionResult } from "@/server/types";
 import {
   cancelReservationAction,
@@ -10,7 +11,8 @@ import {
 } from "@/server/actions/reservations";
 import { setRoomStatusAction } from "@/server/actions/rooms";
 import { addGuestNoteAction, upsertGuestAction } from "@/server/actions/guests";
-import { enqueueOutbox, isDeviceOffline, isNetworkError } from "@/lib/offline/outbox";
+import { dispatchOfflineAction } from "./dispatch";
+export { QUEUED_MESSAGE } from "./dispatch";
 
 // Server actions that may be queued offline and replayed later with the same arguments.
 const OFFLINE_ACTIONS = {
@@ -28,20 +30,29 @@ const OFFLINE_ACTIONS = {
 
 export type OfflineActionKind = keyof typeof OFFLINE_ACTIONS;
 type ActionOf<K extends OfflineActionKind> = (typeof OFFLINE_ACTIONS)[K];
-type DataOf<K extends OfflineActionKind> = Awaited<ReturnType<ActionOf<K>>> extends ActionResult<infer T> ? T : never;
+type DataOf<K extends OfflineActionKind> =
+  Awaited<ReturnType<ActionOf<K>>> extends ActionResult<infer T> ? T : never;
 
 export type OfflineActionResult<T> = ActionResult<T> & { queued?: boolean };
 
-export const QUEUED_MESSAGE = "Сохранено на устройстве. Отправим, когда появится интернет.";
-
 export function isOfflineActionKind(kind: string): kind is OfflineActionKind {
-  return kind in OFFLINE_ACTIONS;
+  return Object.hasOwn(OFFLINE_ACTIONS, kind);
 }
 
 /** Calls an action directly; used by the replay loop. Network failures are rethrown. */
-export function callOfflineAction(kind: OfflineActionKind, args: unknown[]): Promise<ActionResult<unknown>> {
-  const action = OFFLINE_ACTIONS[kind] as unknown as (...input: unknown[]) => Promise<ActionResult<unknown>>;
-  return action(...args);
+export function callOfflineAction(
+  kind: OfflineActionKind,
+  args: unknown[],
+  context: MutationContext,
+): Promise<ActionResult<unknown>> {
+  const action = OFFLINE_ACTIONS[kind] as unknown as (
+    ...input: unknown[]
+  ) => Promise<ActionResult<unknown>>;
+  const arity = kind === "reservation.move" ? 4 : 1;
+  if (args.length > arity)
+    throw new Error("Некорректные аргументы офлайн-операции.");
+  const original = Array.from({ length: arity }, (_, i) => args[i]);
+  return action(...original, context);
 }
 
 /**
@@ -53,15 +64,7 @@ export async function runOfflineAction<K extends OfflineActionKind>(
   label: string,
   ...args: Parameters<ActionOf<K>>
 ): Promise<OfflineActionResult<DataOf<K>>> {
-  const queue = (): OfflineActionResult<DataOf<K>> => {
-    if (!enqueueOutbox({ kind, label, args })) return { ok: false, error: "Нет подключения к интернету. Попробуйте ещё раз." };
-    return { ok: true, queued: true, message: QUEUED_MESSAGE };
-  };
-  if (isDeviceOffline()) return queue();
-  try {
-    return (await callOfflineAction(kind, args)) as OfflineActionResult<DataOf<K>>;
-  } catch (error) {
-    if (isNetworkError(error)) return queue();
-    throw error;
-  }
+  return (await dispatchOfflineAction(kind, label, args, (context) =>
+    callOfflineAction(kind, args, context),
+  )) as OfflineActionResult<DataOf<K>>;
 }
