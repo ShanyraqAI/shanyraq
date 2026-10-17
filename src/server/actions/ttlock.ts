@@ -72,6 +72,7 @@ export async function saveTTLockConnectionAction(formData: FormData) {
   const connectionCredentials: Credentials = { ...persistedValues, accessToken: token.access_token, refreshToken: token.refresh_token, tokenExpiresAt };
   await db.tTLockConnection.upsert({ where: { hotelId }, create: { hotelId, credentials: encryptSecret(connectionCredentials) }, update: { credentials: encryptSecret(connectionCredentials) } });
   revalidatePath("/dashboard/locks");
+  revalidatePath("/dashboard/rooms/[roomId]", "page");
 }
 
 export async function syncTTLockLocksAction() {
@@ -86,6 +87,7 @@ export async function syncTTLockLocksAction() {
     await db.tTLockLock.update({ where: { id: lock.id }, data: { lockName: device.lockName, lockAlias: device.lockAlias ?? null, batteryPercent: device.electricQuantity ?? null, keyboardPwdVersion: device.keyboardPwdVersion ?? null, hasGateway: device.hasGateway === undefined ? null : device.hasGateway === 1, lastSyncedAt: new Date() } });
   }));
   revalidatePath("/dashboard/locks");
+  revalidatePath("/dashboard/rooms/[roomId]", "page");
   return devices;
 }
 
@@ -109,6 +111,7 @@ export async function getTTLockOperationsDataAction(lockRecordId: string) {
     return db.tTLockPasscode.upsert({ where: { lockId_keyboardPwdId: { lockId: lock.id, keyboardPwdId: String(item.keyboardPwdId) } }, create: { hotelId, lockId: lock.id, keyboardPwdId: String(item.keyboardPwdId), code: item.keyboardPwd, name: item.keyboardPwdName ?? "Код TTLock", startsAt: new Date(item.startDate), endsAt: new Date(item.endDate), status }, update: { code: item.keyboardPwd, name: item.keyboardPwdName ?? "Код TTLock", startsAt: new Date(item.startDate), endsAt: new Date(item.endDate), status } });
   }));
   revalidatePath("/dashboard/locks");
+  revalidatePath("/dashboard/rooms/[roomId]", "page");
   return {
     state: lockState,
     batteryPercent: details.electricQuantity ?? lock.batteryPercent,
@@ -126,6 +129,7 @@ export async function controlTTLockAction(lockRecordId: string, command: "lock" 
   await ttlock(command === "lock" ? "/v3/lock/lock" : "/v3/lock/unlock", { clientId: stored.clientId, accessToken: token.access_token, lockId: lock.lockId, date: Date.now() });
   await db.tTLockLock.update({ where: { id: lock.id }, data: { lockState: command === "lock" ? "LOCKED" : "UNLOCKED", lastSyncedAt: new Date() } });
   revalidatePath("/dashboard/locks");
+  revalidatePath("/dashboard/rooms/[roomId]", "page");
   return command;
 }
 
@@ -137,6 +141,7 @@ export async function revokeTTLockPasscodeAction(passcodeRecordId: string) {
   await ttlock("/v3/keyboardPwd/delete", { clientId: stored.clientId, accessToken: token.access_token, lockId: passcode.lock.lockId, keyboardPwdId: passcode.keyboardPwdId, deleteType: 2, date: Date.now() });
   await db.tTLockPasscode.update({ where: { id: passcode.id }, data: { status: "REVOKED" } });
   revalidatePath("/dashboard/locks");
+  revalidatePath("/dashboard/rooms/[roomId]", "page");
   if (passcode.reservationId) revalidatePath(`/dashboard/reservations/${passcode.reservationId}`);
 }
 
@@ -151,6 +156,7 @@ export async function assignTTLockAction(formData: FormData) {
   if (!room || !verified) throw new Error("Выберите замок из вашего подключённого аккаунта TTLock");
   await db.tTLockLock.upsert({ where: { roomId }, create: { hotelId, roomId, lockId, lockName: verified.lockName, lockAlias: verified.lockAlias ?? null }, update: { lockId, lockName: verified.lockName, lockAlias: verified.lockAlias ?? null } });
   revalidatePath("/dashboard/locks");
+  revalidatePath("/dashboard/rooms/[roomId]", "page");
 }
 
 export async function issueReservationPasscodeAction(formData: FormData): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -173,6 +179,7 @@ export async function issueReservationPasscodeAction(formData: FormData): Promis
     const added = await ttlock<{ keyboardPwdId: number }>("/v3/keyboardPwd/add", { clientId: stored.clientId, accessToken: token.access_token, lockId: reservation.room.ttlockLock.lockId, keyboardPwd: generated.keyboardPwd, keyboardPwdName: name, startDate, endDate, addType: 2, date: Date.now() });
     await db.tTLockPasscode.create({ data: { hotelId, lockId: reservation.room.ttlockLock.id, reservationId, keyboardPwdId: String(added.keyboardPwdId), code: generated.keyboardPwd, name, startsAt: new Date(startDate), endsAt: new Date(endDate) } });
     revalidatePath("/dashboard/locks");
+    revalidatePath("/dashboard/rooms/[roomId]", "page");
     revalidatePath(`/dashboard/reservations/${reservationId}`);
     return { ok: true };
   } catch (error) {

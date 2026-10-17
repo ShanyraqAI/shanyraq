@@ -22,7 +22,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/page-header";
 import { RoomStatusBadge } from "@/components/shared/status-badge";
@@ -60,24 +59,33 @@ export function RoomsGrid({
   addButtonOnly = false,
   locale = "ru",
   highlightRoomId,
+  typeDetails = [],
+  editRoom,
 }: {
   rooms: RoomVM[];
   roomTypes: string[];
   addButtonOnly?: boolean;
   locale?: AppLocale;
   highlightRoomId?: string;
+  typeDetails?: Array<{ name: string; capacity: number; basePrice: number }>;
+  editRoom?: RoomVM;
 }) {
   const [draft, setDraft] = useState<RoomDraft | null>(null);
+  const [initialDraft, setInitialDraft] = useState<RoomDraft | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [deleteRoom, setDeleteRoom] = useState<RoomVM | null>(null);
   const [pending, setPending] = useState(false);
   const router = useRouter();
 
   function openCreate() {
-    setDraft({ ...EMPTY_ROOM, roomTypeName: roomTypes[0] ?? EMPTY_ROOM.roomTypeName });
+    const type = typeDetails[0];
+    const next = { ...EMPTY_ROOM, roomTypeName: type?.name ?? roomTypes[0] ?? EMPTY_ROOM.roomTypeName,
+      capacity: String(type?.capacity ?? EMPTY_ROOM.capacity), basePrice: String(type?.basePrice ?? EMPTY_ROOM.basePrice) };
+    setDraft(next); setInitialDraft(next); setFormError(null);
   }
 
   function openEdit(room: RoomVM) {
-    setDraft({
+    const next: RoomDraft = {
       id: room.id,
       number: room.number,
       floor: String(room.floor),
@@ -85,8 +93,23 @@ export function RoomsGrid({
       capacity: String(room.capacity ?? 1),
       basePrice: String(room.basePrice ?? 0),
       status: room.status,
-    });
+    };
+    setDraft(next); setInitialDraft(next); setFormError(null);
   }
+
+  const dirty = Boolean(draft && JSON.stringify(draft) !== JSON.stringify(initialDraft));
+  const inherited = Boolean(draft && roomTypes.includes(draft.roomTypeName));
+  function closeDraft() {
+    if (pending) return;
+    if (dirty && !window.confirm(locale === "kk" ? "Сақталмаған өзгерістерден бас тартасыз ба?" : "Отменить несохранённые изменения?")) return;
+    setDraft(null); setFormError(null);
+  }
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   useEffect(() => {
     if (!highlightRoomId) return;
@@ -95,13 +118,14 @@ export function RoomsGrid({
 
   async function saveRoom() {
     if (!draft) return;
-    setPending(true);
-    const result = await upsertRoomAction(draft);
-    setPending(false);
-    if (!result.ok) return toast.error(result.error);
-    toast.success(result.message);
-    setDraft(null);
-    router.refresh();
+    if (!draft.number.trim()) { setFormError(locale === "kk" ? "Пәтердің атауын көрсетіңіз" : "Укажите номер или название квартиры"); return; }
+    setPending(true); setFormError(null);
+    try {
+      const result = await upsertRoomAction(draft);
+      if (!result.ok) { setFormError(result.error); return; }
+      toast.success(result.message); setDraft(null); router.refresh();
+    } catch { setFormError(locale === "kk" ? "Сақтау сәтсіз аяқталды. Қайталап көріңіз." : "Не удалось сохранить. Повторите попытку."); }
+    finally { setPending(false); }
   }
 
   async function changeStatus(room: RoomVM, status: RoomStatus) {
@@ -124,9 +148,8 @@ export function RoomsGrid({
   }
 
   const addButton = (
-    <Button onClick={openCreate}>
-      <Plus /> {locale === "kk" ? "Пәтер қосу" : "Добавить квартиру"}
-    </Button>
+    editRoom ? <Button variant="outline" className="size-11 shrink-0" aria-label={locale === "kk" ? "Пәтерді өзгерту" : "Редактировать квартиру"} onClick={() => openEdit(editRoom)}><Pencil className="size-4" /></Button>
+      : <Button className="min-h-11" onClick={openCreate}><Plus /> {locale === "kk" ? "Пәтер қосу" : "Добавить квартиру"}</Button>
   );
 
   return (
@@ -149,7 +172,7 @@ export function RoomsGrid({
                     <BedDouble className="size-4" />
                   </div>
                   <div className="min-w-0 leading-tight">
-                    <Link href={`/dashboard/rooms/${encodeURIComponent(room.id)}/calendar`} className="flex min-h-11 items-center text-base font-semibold text-[#07866b]" title={room.number}><span className="truncate">{room.number}</span></Link>
+                    <Link href={`/dashboard/rooms/${encodeURIComponent(room.id)}`} className="flex min-h-11 items-center text-base font-semibold text-[#07866b]" title={room.number}><span className="truncate">{room.number}</span></Link>
                     <div className="truncate text-xs text-muted-foreground">{room.roomTypeName}</div>
                   </div>
                 </div>
@@ -183,23 +206,26 @@ export function RoomsGrid({
         </div>
       )}
 
-      <Dialog open={Boolean(draft)} onOpenChange={(open) => !open && setDraft(null)}>
-        <DialogContent className="max-h-[90dvh] w-[calc(100%-1rem)] overflow-y-auto rounded-3xl border-0 bg-[#f8faf7] p-5 sm:max-w-lg sm:rounded-xl sm:border sm:bg-background sm:p-6">
+      <Dialog open={Boolean(draft)} onOpenChange={(open) => !open && closeDraft()}>
+        <DialogContent className="flex max-h-[90dvh] flex-col overflow-hidden bg-background p-4 max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:pt-[max(env(safe-area-inset-top),16px)] max-sm:[&>button]:size-11 sm:max-w-lg sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-xl font-extrabold tracking-tight">{draft?.id ? `Квартира ${draft.number}` : "Новая квартира"}</DialogTitle>
             <DialogDescription>{draft?.id ? "Измените основные параметры и сохраните обновления." : "Добавьте квартиру, чтобы открыть её в календаре и бронированиях."}</DialogDescription>
           </DialogHeader>
           {draft ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Номер квартиры"><Input value={draft.number} onChange={(e) => setDraft({ ...draft, number: e.target.value })} placeholder="Например, 101" className="h-11 rounded-xl bg-white" /></Field>
-              <Field label="Этаж"><Input type="number" value={draft.floor} onChange={(e) => setDraft({ ...draft, floor: e.target.value })} /></Field>
+            <fieldset disabled={pending} className="grid min-h-0 gap-4 overflow-y-auto pb-4 sm:grid-cols-2">
+              <Field label={locale === "kk" ? "Пәтердің нөмірі немесе атауы" : "Номер или название квартиры"}><Input value={draft.number} onChange={(e) => setDraft({ ...draft, number: e.target.value })} placeholder="Например, 101" className="h-11 rounded-xl bg-white" /></Field>
+              <Field label="Этаж"><Input type="number" inputMode="numeric" value={draft.floor} onChange={(e) => setDraft({ ...draft, floor: e.target.value })} /></Field>
               <Field label="Тип квартиры">
-                <Input list="room-type-options" value={draft.roomTypeName} onChange={(e) => setDraft({ ...draft, roomTypeName: e.target.value })} placeholder="Стандарт" className="h-11 rounded-xl bg-white" />
+                <Input list="room-type-options" value={draft.roomTypeName} onChange={(e) => {
+                  const type = typeDetails.find((item) => item.name === e.target.value);
+                  setDraft({ ...draft, roomTypeName: e.target.value, ...(type ? { capacity: String(type.capacity), basePrice: String(type.basePrice) } : {}) });
+                }} placeholder="Стандарт" className="h-11 rounded-xl bg-white" />
                 <datalist id="room-type-options">{roomTypes.map((name) => <option key={name} value={name} />)}</datalist>
               </Field>
-              <Field label="Вместимость"><Input type="number" min="1" value={draft.capacity} onChange={(e) => setDraft({ ...draft, capacity: e.target.value })} /></Field>
+              <Field label="Вместимость"><Input type="number" inputMode="numeric" min="1" disabled={inherited} value={draft.capacity} onChange={(e) => setDraft({ ...draft, capacity: e.target.value })} /></Field>
               <Field label="Цена за ночь, KZT">
-                <Input type="number" min={MIN_NIGHTLY_PRICE} max={MAX_NIGHTLY_PRICE} step="500" value={draft.basePrice} onChange={(e) => setDraft({ ...draft, basePrice: e.target.value })} />
+                <Input type="number" inputMode="decimal" disabled={inherited} min={MIN_NIGHTLY_PRICE} max={MAX_NIGHTLY_PRICE} step="500" value={draft.basePrice} onChange={(e) => setDraft({ ...draft, basePrice: e.target.value })} />
                 <p className="text-xs text-muted-foreground">От 1 000 до 999 000 ₸</p>
               </Field>
               <Field label="Статус">
@@ -208,10 +234,13 @@ export function RoomsGrid({
                   <SelectContent>{ROOM_STATUSES.map((status) => <SelectItem key={status} value={status}>{t.statuses.room[status]}</SelectItem>)}</SelectContent>
                 </Select>
               </Field>
-            </div>
+              {inherited ? <p className="text-sm text-muted-foreground sm:col-span-2">{locale === "kk" ? "Баға мен сыйымдылық пәтер түрінен алынады. Бұл нысанда олар өзгермейді." : "Цена и вместимость наследуются от типа квартиры и здесь не меняются."} <Link className="inline-flex min-h-11 items-center font-semibold underline" href="/dashboard/rates">{locale === "kk" ? "Бағаларды ашу" : "Открыть цены"}</Link></p> : null}
+              {formError ? <p role="alert" className="text-sm text-destructive sm:col-span-2">{formError}</p> : null}
+            </fieldset>
           ) : null}
-          <DialogFooter showCloseButton className="sticky bottom-0 -mx-5 -mb-5 mt-2 bg-[#f8faf7] p-4 sm:static sm:mx-0 sm:mb-0 sm:bg-transparent sm:p-0">
-            <Button className="h-11 w-full rounded-xl sm:w-auto" onClick={() => void saveRoom()} disabled={pending}>{pending ? "Сохраняем…" : "Сохранить изменения"}</Button>
+          <DialogFooter className="shrink-0 -mx-4 -mb-4 mt-0 bg-background pb-[max(env(safe-area-inset-bottom),16px)] sm:mx-0 sm:mb-0 sm:bg-transparent sm:p-0">
+            <Button variant="ghost" className="min-h-11" onClick={closeDraft} disabled={pending}>{locale === "kk" ? "Бас тарту" : "Отмена"}</Button>
+            <Button className="min-h-12 w-full rounded-xl sm:w-auto" onClick={() => void saveRoom()} disabled={pending}>{pending ? (locale === "kk" ? "Сақталуда…" : "Сохраняем…") : draft?.id ? (locale === "kk" ? "Сақтау" : "Сохранить") : (locale === "kk" ? "Пәтер жасау" : "Создать квартиру")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -232,5 +261,5 @@ export function RoomsGrid({
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="space-y-1.5"><Label>{label}</Label>{children}</div>;
+  return <label className="block space-y-1.5"><span className="block text-sm font-semibold">{label}</span>{children}</label>;
 }

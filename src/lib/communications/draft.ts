@@ -24,5 +24,5 @@ export function resolveDraftTemplate(id: string, templates: TemplateVM[], values
 }
 export function withDocumentLink(text: string, url?: string): string {
   if (!url || text.includes(url)) return text;
-  return `${text.trim()}\n\nОзнакомиться и подписать документ: ${url}`;
+  return `${text.trim()}\n\nОткрыть документ и подтвердить ознакомление: ${url}`;
 }
