@@ -50,7 +50,7 @@ export async function getReservationCommunicationWorkspace(m: CurrentMembership,
   templates.sort((a, b) => Number(b.roomId === r.roomId && b.isDefault) - Number(a.roomId === r.roomId && a.isDefault) || Number(b.language === r.hotel.language) - Number(a.language === r.hotel.language));
   const p = r.room.communicationProfile;
   const date = (value: Date) => value.toISOString().slice(0, 10).split("-").reverse().join(".");
-  return { reservationId: r.id, guestName: r.guest.fullName, phone: optionalRecipientPhone(r.guest.phone), roomName: `${r.room.number} · ${r.room.rentalProperty.publicName}`, scope: scopeOf(m), templates, photos,
+  return { reservationId: r.id, guestName: r.guest.fullName, phone: optionalRecipientPhone(r.guest.phone), roomName: `${r.room.number} · ${r.room.rentalProperty.publicName}`, scope: scopeOf(m), draftScope: `${m.userId}:${scopeOf(m)}:${r.id}`, templates, photos,
     values: {
       guest_name: r.guest.fullName, guest_phone: r.guest.phone ?? "", reservation_number: r.sequenceNumber?.toString() ?? r.id,
       checkin_date: date(r.checkIn), checkin_time: r.checkInTime, checkout_date: date(r.checkOut), checkout_time: r.checkOutTime,

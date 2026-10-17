@@ -1,3 +1,4 @@
+import { clearComposerMemory } from "@/lib/communications/composer-memory";
 import {
   ACTIVE_SCOPE_KEY,
   clearScopedOutbox,
@@ -19,6 +20,7 @@ export async function clearSavedPages() {
   navigator.serviceWorker?.controller?.postMessage({ type: "clear-pages" });
 }
 export async function clearDeviceData() {
+  clearComposerMemory();
   clearScopedOutbox();
   setOutboxScope("");
   window.localStorage.removeItem(ACTIVE_SCOPE_KEY);
