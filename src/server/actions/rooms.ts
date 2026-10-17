@@ -22,6 +22,7 @@ import { enqueueHotelChannelSyncs } from "@/lib/channels/sync-outbox";
 import { wakeChannelSyncWorker } from "@/server/channel-sync";
 import { recordCurrentUserEvent } from "@/lib/analytics/service";
 import { z } from "zod";
+import { inheritedTypeError } from "@/lib/rooms/type-policy";
 
 export async function saveRoomOrderAction(
   input: unknown,
@@ -149,14 +150,17 @@ export async function upsertRoomAction(
 
         const existingType = await tx.roomType.findUnique({
           where: { hotelId_name: { hotelId, name: data.roomTypeName } },
-          select: { id: true, rentalPropertyId: true },
+          select: { id: true, rentalPropertyId: true, capacity: true, basePrice: true },
         });
+        if (existingType) {
+          const error = inheritedTypeError(
+            { capacity: existingType.capacity, basePrice: Number(existingType.basePrice) },
+            data,
+          );
+          if (error) throw new PublicError(error);
+        }
         const roomType = existingType
-          ? await tx.roomType.update({
-              where: { id: existingType.id },
-              data: { capacity: data.capacity, basePrice: data.basePrice },
-              select: { id: true, rentalPropertyId: true },
-            })
+          ? existingType
           : await (async () => {
               const rentalProperty = await tx.rentalProperty.findFirst({
                 where: { hotelId },
