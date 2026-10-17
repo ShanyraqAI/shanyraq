@@ -31,7 +31,7 @@ export function DocumentSigningPanel({ reservationId, scope, onLinkCreated, inli
   }
   async function revoke(id: string) {
     updateBusy(true); setError(null);
-    try { await command({ action: "revoke", requestId: id }); if (link?.id === id) { setLink(null); onLinkCleared?.(); } await reload(); }
+    try { await command({ action: "revoke", requestId: id }); setLink(null); onLinkCleared?.(); await reload(); }
     catch (e) { setError(e instanceof Error ? e.message : "Не удалось отозвать ссылку"); }
     finally { updateBusy(false); }
   }
@@ -47,7 +47,7 @@ export function DocumentSigningPanel({ reservationId, scope, onLinkCreated, inli
     <ErrorNotice message={error} />
     {error ? <Button variant="outline" className="min-h-11 w-full" disabled={busy} onClick={async () => { updateBusy(true); try { await reload(); } catch (e) { setError(e instanceof Error ? e.message : "Не удалось загрузить документы"); } finally { updateBusy(false); } }}>Повторить загрузку документов</Button> : null}
     {!data && !error ? <p role="status">Загружаем документы…</p> : data?.documents.length ? <>
-      <Field label="Документ"><select className={INPUT} value={documentId || data.documents[0].id} disabled={busy} onChange={(e) => setDocumentId(e.target.value)}>{data.documents.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</select></Field>
+      <Field label="Документ"><select className={INPUT} value={documentId || data.documents[0].id} disabled={busy} onChange={(e) => { setDocumentId(e.target.value); setLink(null); onLinkCleared?.(); }}>{data.documents.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}</select></Field>
       <Field label="Срок ссылки"><select className={INPUT} value={days} disabled={busy} onChange={(e) => setDays(Number(e.target.value))}>{[1, 3, 7, 14].map((n) => <option key={n} value={n}>{n} дн.</option>)}</select></Field>
       <p className={SECONDARY_TEXT}>Новая ссылка отменит прежние неподписанные ссылки этого документа. Подписанные подтверждения сохранятся.</p>
       <Button className="min-h-12 w-full rounded-xl" disabled={busy} onClick={create}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}Добавить ссылку</Button>

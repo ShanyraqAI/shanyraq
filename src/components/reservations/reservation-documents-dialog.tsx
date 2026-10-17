@@ -33,7 +33,7 @@ function Field({ label, value, onChange, required, type = "text", placeholder }:
   return <div className="space-y-1.5"><Label>{label}{required ? " *" : ""}</Label><Input type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} placeholder={placeholder} /></div>;
 }
 
-export function ReservationDocumentsDialog({ reservationId, open, onOpenChange, onCreated, settingsInNewTab = false }: { reservationId: string; open: boolean; onOpenChange: (open: boolean) => void; onCreated?: () => void; settingsInNewTab?: boolean }) {
+function ReservationDocumentsEditor({ reservationId, open, onOpenChange, onCreated, settingsInNewTab = false }: { reservationId: string; open: boolean; onOpenChange: (open: boolean) => void; onCreated?: () => void; settingsInNewTab?: boolean }) {
   const router = useRouter();
   const [draft, setDraft] = useState<DocumentDraft | null>(null);
   const [documents, setDocuments] = useState<GeneratedDocumentListItem[]>([]);
@@ -66,7 +66,6 @@ export function ReservationDocumentsDialog({ reservationId, open, onOpenChange, 
   useEffect(() => {
     if (!open) return;
     let active = true;
-    setLoadError(null);
     void getReservationDocumentWorkspaceAction(reservationId).then((result) => {
       if (!active) return;
       setStep(0);
@@ -126,6 +125,8 @@ export function ReservationDocumentsDialog({ reservationId, open, onOpenChange, 
         await downloadDocument(result.data.id);
         await load();
       }
+    } catch {
+      toast.error("Не удалось создать документ. Проверьте историю перед повторной попыткой.");
     } finally {
       setCreating(false);
     }
@@ -155,7 +156,7 @@ export function ReservationDocumentsDialog({ reservationId, open, onOpenChange, 
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                     <div className="font-semibold">Сначала один раз заполните реквизиты владельца</div>
                     <p className="mt-1 text-xs">ИИН/БИН, адрес, банк и подписант сохраняются в настройках и дальше подставляются в каждый документ автоматически.</p>
-                    {settingsInNewTab ? <div className="mt-3 space-y-2"><Button type="button" asChild variant="outline" className="min-h-11 bg-white"><a href="/dashboard/settings" target="_blank" rel="noopener noreferrer"><Settings2 className="size-4" />Заполнить в новой вкладке</a></Button><p className="text-xs">Сообщение останется здесь. После сохранения реквизитов нажмите «Проверить реквизиты».</p><Button type="button" variant="outline" className="min-h-11 bg-white" onClick={() => void load()}>Проверить реквизиты</Button></div> : <Button type="button" size="sm" variant="outline" className="mt-3 bg-white" onClick={() => router.push("/dashboard/settings")}><Settings2 className="mr-2 size-4" />Заполнить реквизиты</Button>}
+                    {settingsInNewTab ? <div className="mt-3 space-y-2"><Button type="button" asChild variant="outline" className="min-h-11 bg-white"><a href="/dashboard/settings?section=company" target="_blank" rel="noopener noreferrer"><Settings2 className="size-4" />Заполнить в новой вкладке</a></Button><p className="text-xs">Сообщение останется здесь. После сохранения реквизитов нажмите «Проверить реквизиты».</p><Button type="button" variant="outline" className="min-h-11 bg-white" onClick={() => void load()}>Проверить реквизиты</Button></div> : <Button type="button" size="sm" variant="outline" className="mt-3 bg-white" onClick={() => router.push("/dashboard/settings?section=company")}><Settings2 className="mr-2 size-4" />Заполнить реквизиты</Button>}
                   </div>
                 ) : <p className="text-xs text-muted-foreground">Реквизиты владельца подставим из настроек. Выберите, какой документ нужен.</p>}
                 <div className="space-y-2">
@@ -246,4 +247,9 @@ export function ReservationDocumentsDialog({ reservationId, open, onOpenChange, 
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">{label}</span><span className="text-right font-bold">{value}</span></div>;
+}
+
+/** Remount private workspace on booking/open changes instead of rendering stale data. */
+export function ReservationDocumentsDialog(props: Parameters<typeof ReservationDocumentsEditor>[0]) {
+  return <ReservationDocumentsEditor key={`${props.reservationId}:${props.open}`} {...props} />;
 }
