@@ -42,7 +42,8 @@ test("PostgreSQL: concurrent creates/moves, boundaries, statuses and tenant isol
     });
     await t.test("database blocks writers that bypass the service and returns a safe conflict", async () => {
       const saved = await db.reservation.findFirstOrThrow({ where: { hotelId: id, roomId: rooms[2].id } });
-      const { id: ignored, financialServices: ignoredFinancialServices, ...copy } = saved;
+      const { id: ignored, sequenceNumber: ignoredSequenceNumber, financialServices: ignoredFinancialServices, ...copy } = saved;
+      assert.ok(ignoredSequenceNumber); // A copied fixture must not reuse the source booking number.
       assert.ok(ignored);
       assert.equal(ignoredFinancialServices, null);
       await assert.rejects(db.reservation.create({ data: copy }), error => {

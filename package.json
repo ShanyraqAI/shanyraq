@@ -34,7 +34,12 @@
     "db:migrate:release": "node scripts/vercel-migrate.mjs --apply-reviewed-release",
     "test:reliability": "tsx --test src/lib/reservations/operation.test.ts src/lib/channels/channex/revision-order.test.ts src/lib/offline/outbox.test.ts scripts/release-safety.test.mjs scripts/service-worker.test.mjs src/lib/offline/dispatch.test.ts src/lib/guests/pagination.test.ts",
     "test:reliability:db": "node --require ./scripts/test-server-preload.cjs --import tsx scripts/test-reliability.ts",
-    "test:instant-overview": "tsx --test src/lib/offline/read-resource.test.ts src/lib/dashboard/overview-validation.test.ts"
+    "test:instant-overview": "tsx --test src/lib/offline/read-resource.test.ts src/lib/dashboard/overview-validation.test.ts",
+    "typecheck": "tsc --noEmit",
+    "test:guest-stay": "node --require ./scripts/test-server-preload.cjs --import tsx --test src/lib/guest-stay/policy.test.ts",
+    "test:guest-stay:db": "node --env-file=.env --require ./scripts/test-server-preload.cjs --import tsx scripts/test-guest-stay.ts",
+    "test:guest-stay:migrations": "node --env-file=.env --require ./scripts/test-server-preload.cjs --import tsx scripts/test-guest-stay-migrations.ts",
+    "test:guest-stay:browser": "node scripts/test-guest-stay-browser.mjs"
   },
   "engines": {
     "node": ">=20.9.0"
@@ -74,6 +79,7 @@
     "@types/web-push": "^3.6.4",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.3",
+    "playwright": "1.63.0",
     "prisma": "6.12.0",
     "shadcn": "^4.21.0",
     "tailwindcss": "^4.1.13",

@@ -17,6 +17,14 @@ if (process.env.GUEST_PAYMENT_LINKS_ENABLED === "true") {
 if (process.env.GUEST_DOCUMENT_BUNDLES_ENABLED === "true") {
   for (const name of ["AgreementBundle", "AgreementItem", "AgreementEvent", "AgreementOtp", "PublicPropertyRules", "PublicRuleRevision"]) names.add(name);
 }
+if (process.env.PUBLIC_CATALOG_ENABLED === "true") names.add("CatalogListing");
+if (process.env.GUEST_STAY_ENABLED === "true") {
+  for (const name of ["GuestStay", "GuestStayEvent", "GuestStayPolicy"]) names.add(name);
+  if (!/^[a-f0-9]{64}$/.test(process.env.GUEST_STAY_SECRET ?? "")) {
+    console.error("Guest stay requires a server-only 32-byte hex GUEST_STAY_SECRET.");
+    process.exit(1);
+  }
+}
 const models = Prisma.dmmf.datamodel.models.filter((model) => names.has(model.name));
 const db = new PrismaClient();
 try {

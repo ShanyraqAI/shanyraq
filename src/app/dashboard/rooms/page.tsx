@@ -1,3 +1,5 @@
+import { CatalogShareButton } from "@/components/guest-stay/catalog-share";
+import { getCurrentMembership } from "@/lib/tenant";
 import { BedDouble, Users } from "lucide-react";
 import { db, getCurrentHotelId } from "@/lib/db";
 import { formatISOCompactDate, today, toISODate } from "@/lib/dates";
@@ -18,6 +20,8 @@ export default async function RoomsPage({ searchParams }: { searchParams: Promis
   await requireSectionAccess("ROOMS");
   const hotelId = await getCurrentHotelId();
   const locale = await getRequestLocale();
+  const catalogOwner = process.env.PUBLIC_CATALOG_ENABLED === "true" ? await getCurrentMembership() : null;
+  const catalogHotel = catalogOwner?.role === "OWNER" ? await db.hotel.findFirst({ where: { id: hotelId, orgId: catalogOwner.organizationId }, select: { slug: true } }) : null;
   const query = await searchParams;
   const highlightRoomId = typeof query.room === "string" ? query.room : undefined;
   const day = today();
@@ -73,6 +77,7 @@ export default async function RoomsPage({ searchParams }: { searchParams: Promis
       </PageHeader></div>
       <div className="space-y-3 sm:hidden"><header className="flex items-start justify-between gap-3"><div><h1 className="sh-mobile-title">{locale === "kk" ? "Пәтерлер" : "Квартиры"}</h1><p className="sh-mobile-eyebrow">{rooms.length} {locale === "kk" ? "пәтер" : "квартир"} · {readyRooms} {locale === "kk" ? "дайын" : "готовы"}</p></div><RoomsGrid rooms={[]} roomTypes={roomTypes.map((type) => type.name)} typeDetails={roomTypes.map((type) => ({ name: type.name, capacity: type.capacity, basePrice: Number(type.basePrice) }))} addButtonOnly locale={locale} /></header><div className="sh-mobile-card p-4"><div className="flex items-center justify-between"><div><p className="text-[10px] font-semibold text-[#929991]">{locale === "kk" ? "Бүгінгі дайындық" : "Готовность сегодня"}</p><p className="mt-1 text-2xl font-extrabold tracking-tight text-[#25322c]">{readyRooms} / {rooms.length}</p></div><b className="text-sm text-[#07866b]">{readiness}%</b></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-[#e8ebe4]"><div className="h-full rounded-full bg-[#07866b]" style={{ width: `${Math.max(4, readiness)}%` }} /></div></div><div className="flex gap-1.5 overflow-x-auto pb-1"><span className="sh-mobile-chip bg-[#07866b] text-white">{locale === "kk" ? "Барлығы" : "Все"} {rooms.length}</span><span className="sh-mobile-chip">{locale === "kk" ? "Дайын" : "Готовы"} {readyRooms}</span><span className="sh-mobile-chip">{locale === "kk" ? "Жинау" : "Уборка"} {rooms.filter((room) => room.status === "CLEANING").length}</span><span className="sh-mobile-chip">{locale === "kk" ? "Жөндеу" : "Ремонт"} {rooms.filter((room) => ["MAINTENANCE", "OUT_OF_ORDER"].includes(room.status)).length}</span></div></div>
 
+      {catalogHotel ? <CatalogShareButton path={`/catalog/${catalogHotel.slug}`} /> : null}
       {/* Room type summary cards */}
       <div className="hidden grid-cols-1 gap-4 sm:grid md:grid-cols-3">
         {populatedRoomTypes.map((type) => {

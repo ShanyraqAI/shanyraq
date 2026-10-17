@@ -1,3 +1,4 @@
+import { GuestStayFeatures } from "@/components/guest-stay/context";
 import { OverviewWorkspace, OverviewOutlet } from "@/components/dashboard/overview-workspace";
 import { overviewScope, overviewParams, type OverviewContext } from "@/lib/dashboard/overview-types";
 import { SubscriptionBanner } from "@/components/subscription/subscription-banner";
@@ -135,5 +136,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
       /></div>
     </div>
   );
-  return overviewContext ? <OverviewWorkspace key={overviewContext.scope + overviewParams(overviewContext)} context={overviewContext}>{shell}</OverviewWorkspace> : shell;
+  const content = overviewContext ? <OverviewWorkspace key={overviewContext.scope + overviewParams(overviewContext)} context={overviewContext}>{shell}</OverviewWorkspace> : shell;
+  return <GuestStayFeatures value={{ stay: user.role === "OWNER" && process.env.GUEST_STAY_ENABLED === "true", catalog: user.role === "OWNER" && process.env.PUBLIC_CATALOG_ENABLED === "true" }}>{content}</GuestStayFeatures>;
 }

@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element -- private authenticated photos must not enter the shared optimizer */
+import { OwnerStayBlock } from "@/components/guest-stay/owner";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CalendarDays, Pencil } from "lucide-react";
@@ -49,6 +50,7 @@ export default async function ApartmentProfilePage({ params }: { params: Promise
       <p className="text-xl font-semibold">{price} <span className="text-base font-normal text-muted-foreground">/ {kk ? "түн" : "ночь"}</span></p><p className="text-sm text-muted-foreground">{kk ? "Базалық баға мен сыйымдылық пәтер түрінен алынады" : "Базовая цена и вместимость наследуются от типа"}: {room.roomType.name}. {kk ? "Нақты құны күндер мен тарифке байланысты." : "Итоговая стоимость зависит от дат и тарифа."}</p>
     </section>
     {room.roomType.description ? <details className="border-y py-4"><summary className="min-h-11 cursor-pointer text-base font-semibold">{kk ? "Пәтер түрінің сипаттамасы" : "Описание типа квартиры"}</summary><p className="mt-2 whitespace-pre-wrap break-words text-base leading-relaxed">{room.roomType.description}</p></details> : null}
+    {member.role === "OWNER" ? <OwnerStayBlock roomId={room.id} /> : null}
     <WorkflowSection title={kk ? "Басқару" : "Управление"}>
       <WorkflowRow href={`${base}/access`} title={kk ? "Кіру және құлып" : "Доступ и замок"} detail={room.ttlockLock ? `${kk ? "Байланыстырылған" : "Привязан"} · ${room.ttlockLock.lockName}${room.ttlockLock.batteryPercent !== null ? ` · ${room.ttlockLock.batteryPercent}%` : ""}` : (kk ? "Байланыстырылмаған" : "Не подключён")} />
       {member.role === "OWNER" ? <WorkflowRow href={`${base}/edit`} title={kk ? "Суреттер мен қонаққа нұсқаулар" : "Фотографии и инструкции гостю"} detail={kk ? "Құпия деректер таныстырылымға қосылмайды" : "Приватные данные не входят в презентацию"} /> : null}

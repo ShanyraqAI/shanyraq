@@ -21,7 +21,11 @@ export async function countSellableRooms(
   client: AvailabilityDb = db,
 ): Promise<number> {
   return client.room.count({
-    where: { hotelId, roomTypeId, status: { notIn: ["OUT_OF_ORDER", "MAINTENANCE"] } },
+    where: {
+      hotelId,
+      roomTypeId,
+      status: { notIn: ["OUT_OF_ORDER", "MAINTENANCE"] },
+    },
   });
 }
 
@@ -39,7 +43,13 @@ export async function ensureAvailabilityRows(
     ops.push(
       db.availability.upsert({
         where: { hotelId_roomTypeId_date: { hotelId, roomTypeId, date } },
-        create: { hotelId, roomTypeId, date, totalRooms, availableRooms: totalRooms },
+        create: {
+          hotelId,
+          roomTypeId,
+          date,
+          totalRooms,
+          availableRooms: totalRooms,
+        },
         update: {},
       }),
     );
@@ -75,22 +85,39 @@ export async function recomputeAvailability(
     }),
   ]);
 
-  const existingByDate = new Map(existingRows.map((row) => [row.date.getTime(), row]));
+  const existingByDate = new Map(
+    existingRows.map((row) => [row.date.getTime(), row]),
+  );
   const operations: Promise<unknown>[] = [];
   for (let i = 0; i < nights; i++) {
     const date = addDays(from, i);
-    const reserved = reservations.filter((r) => r.checkIn <= date && r.checkOut > date).length;
+    const reserved = reservations.filter(
+      (r) => r.checkIn <= date && r.checkOut > date,
+    ).length;
     const available = Math.max(0, totalRooms - reserved);
     const existing = existingByDate.get(date.getTime());
     if (!existing) {
-      operations.push(client.availability.create({
-        data: { hotelId, roomTypeId, date, totalRooms, availableRooms: available },
-      }));
-    } else if (existing.availableRooms !== available || existing.totalRooms !== totalRooms) {
-      operations.push(client.availability.update({
-        where: { id: existing.id },
-        data: { totalRooms, availableRooms: available },
-      }));
+      operations.push(
+        client.availability.create({
+          data: {
+            hotelId,
+            roomTypeId,
+            date,
+            totalRooms,
+            availableRooms: available,
+          },
+        }),
+      );
+    } else if (
+      existing.availableRooms !== available ||
+      existing.totalRooms !== totalRooms
+    ) {
+      operations.push(
+        client.availability.update({
+          where: { id: existing.id },
+          data: { totalRooms, availableRooms: available },
+        }),
+      );
     }
   }
   await Promise.all(operations);
@@ -127,15 +154,18 @@ export async function remainingUnitsOnDate(
   hotelId: string,
   roomTypeId: string,
   date: Date,
+  client: AvailabilityDb = db,
+  verifyLive = false,
 ): Promise<number> {
-  const row = await db.availability.findUnique({
+  const row = await client.availability.findUnique({
     where: { hotelId_roomTypeId_date: { hotelId, roomTypeId, date } },
   });
-  if (row) return row.closed ? 0 : row.availableRooms;
-  // No row yet → derive on the fly.
+  if (row && (!verifyLive || row.closed || row.availableRooms <= 0))
+    return row.closed ? 0 : row.availableRooms;
+  // Missing row, or conservative live validation requested by a public reader.
   const [totalRooms, reserved] = await Promise.all([
-    countSellableRooms(hotelId, roomTypeId),
-    db.reservation.count({
+    countSellableRooms(hotelId, roomTypeId, client),
+    client.reservation.count({
       where: {
         hotelId,
         roomTypeId,
@@ -145,5 +175,126 @@ export async function remainingUnitsOnDate(
       },
     }),
   ]);
-  return Math.max(0, totalRooms - reserved);
+  return Math.max(
+    0,
+    Math.min(row?.availableRooms ?? Infinity, totalRooms - reserved),
+  );
+}
+
+/** Read-only per-unit availability. Reuses the booking engine's date/conflict and
+ * sellable/type policy, without materializing calendar rows on public reads. */
+export async function publicUnitAvailability(
+  hotelId: string,
+  roomId: string,
+  checkIn: Date,
+  checkOut: Date,
+  guests: number,
+  ratePlanId: string | null,
+  client: AvailabilityDb = db,
+): Promise<"AVAILABLE" | "UNAVAILABLE" | "UNKNOWN"> {
+  const { staysConflict } = await import("@/lib/reservations/date-range");
+  const { eachDay, toISODate, todayInTimeZone } = await import("@/lib/dates");
+  const room = await client.room.findFirst({
+    where: { id: roomId, hotelId },
+    include: { roomType: true, rentalProperty: true, hotel: true },
+  });
+  if (!room || room.rentalProperty.status !== "ACTIVE") return "UNKNOWN";
+  if (
+    checkIn < todayInTimeZone(room.rentalProperty.timezone) ||
+    guests > room.roomType.capacity ||
+    ["MAINTENANCE", "OUT_OF_ORDER"].includes(room.status)
+  )
+    return "UNAVAILABLE";
+  const nights = diffDays(checkIn, checkOut);
+  if (nights < 1 || nights > 90) return "UNKNOWN";
+  const [stays, rows, rates] = await Promise.all([
+    client.reservation.findMany({
+      where: {
+        hotelId,
+        roomId,
+        status: { in: [...ACTIVE_RESERVATION_STATUSES] },
+        checkIn: { lte: checkOut },
+        checkOut: { gte: checkIn },
+      },
+      select: {
+        checkIn: true,
+        checkOut: true,
+        checkInTime: true,
+        checkOutTime: true,
+      },
+    }),
+    client.availability.findMany({
+      where: {
+        hotelId,
+        roomTypeId: room.roomTypeId,
+        date: { gte: checkIn, lte: checkOut },
+      },
+    }),
+    ratePlanId
+      ? client.rate.findMany({
+          where: {
+            ratePlanId,
+            ratePlan: { hotelId, roomTypeId: room.roomTypeId },
+            date: { gte: checkIn, lte: checkOut },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+  const requested = {
+    checkIn: toISODate(checkIn),
+    checkOut: toISODate(checkOut),
+    checkInTime: room.hotel.defaultCheckInTime,
+    checkOutTime: room.hotel.defaultCheckOutTime,
+  };
+  if (
+    stays.some((s) =>
+      staysConflict(requested, {
+        ...s,
+        checkIn: toISODate(s.checkIn),
+        checkOut: toISODate(s.checkOut),
+      }),
+    )
+  )
+    return "UNAVAILABLE";
+  for (const day of eachDay(checkIn, checkOut)) {
+    const row = rows.find((r) => r.date.getTime() === day.getTime());
+    // Existing materialized closures and manual limits are authoritative.
+    if (
+      row &&
+      (row.closed ||
+        row.availableRooms < 1 ||
+        nights < row.minStay ||
+        (row.maxStay != null && nights > row.maxStay))
+    )
+      return "UNAVAILABLE";
+    const rate = rates.find((r) => r.date.getTime() === day.getTime());
+    if (
+      rate &&
+      (rate.stopSell ||
+        ((rate.minStayType === "THROUGH" ||
+          day.getTime() === checkIn.getTime()) &&
+          nights < rate.minStay) ||
+        (rate.maxStay != null && nights > rate.maxStay) ||
+        (day.getTime() === checkIn.getTime() && rate.closedToArrival))
+    )
+      return "UNAVAILABLE";
+    // Use the existing source for absent materialized days too, not a second calculation.
+    if (
+      (await remainingUnitsOnDate(
+        hotelId,
+        room.roomTypeId,
+        day,
+        client,
+        true,
+      )) < 1
+    )
+      return "UNAVAILABLE";
+  }
+  if (
+    rates.some(
+      (r) => r.date.getTime() === checkOut.getTime() && r.closedToDeparture,
+    )
+  )
+    return "UNAVAILABLE";
+  return "AVAILABLE";
 }
