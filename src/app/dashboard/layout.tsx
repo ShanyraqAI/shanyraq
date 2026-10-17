@@ -1,3 +1,5 @@
+import { OverviewWorkspace, OverviewOutlet } from "@/components/dashboard/overview-workspace";
+import { overviewScope, overviewParams, type OverviewContext } from "@/lib/dashboard/overview-types";
 import { SubscriptionBanner } from "@/components/subscription/subscription-banner";
 import { getOrganizationSubscription } from "@/lib/subscription/queries";
 import { BillingBanner } from "@/components/billing/billing-banner";
@@ -26,7 +28,6 @@ import { getRequestLocale } from "@/lib/locale-server";
 import { OfflineSync } from "@/components/pwa/offline-sync";
 import { PwaInstallBanner } from "@/components/pwa/pwa-install-banner";
 import type { HotelPermission } from "@/lib/access";
-import { NAV_MAIN, NAV_SECONDARY } from "@/components/layout/nav-config";
 
 // Workspace pages saved on the device for offline use, by required permission.
 const OFFLINE_SECTIONS: Array<[string, HotelPermission | null]> = [
@@ -48,7 +49,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
   
   const hotelName = hotel.name;
-  const locale = await getRequestLocale();
+  const locale = await getRequestLocale(hotel.language);
   const userName = user.fullName;
   const permissions = resolveHotelPermissions(user);
   const [subscription, manualSubscription, hotels, productExperience, reservationCount, notificationCenter, searchableData, upcomingReservations] = await Promise.all([
@@ -75,16 +76,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
       : Promise.resolve([]),
   ]);
   const hotelOptions = hotels.map((item) => item.hotel);
-  const canOpen = (permission: HotelPermission | "FULL" | HotelPermission[]) =>
-    Array.isArray(permission) ? permission.some((item) => permissions.includes(item)) : permission === "FULL" ? (user.accessLevel ?? "FULL") === "FULL" : permissions.includes(permission);
-  const navUrls = [...NAV_MAIN, ...NAV_SECONDARY]
-    .filter((item) => canOpen(item.permission) && (!item.ownerOnly || user.role === "OWNER"))
-    .map((item) => item.href.split("#")[0]);
-  const offlineUrls = [...new Set([
+  const offlineUrls = [
     ...OFFLINE_SECTIONS.filter(([, permission]) => !permission || permissions.includes(permission)).map(([href]) => href),
-    ...navUrls,
     ...upcomingReservations.map((reservation) => `/dashboard/reservations/${reservation.id}`),
-  ])];
+  ];
   const [searchGuests, searchRooms, searchReservations] = searchableData;
   const searchItems: GlobalSearchItem[] = [
     ...(permissions.includes("GUESTS") ? searchGuests.map((guest) => ({ id: `guest-${guest.id}`, type: "guest" as const, title: guest.fullName, subtitle: `${guestDisplayId(guest.sequenceNumber)} · ${guest.email ?? guest.phone ?? "карточка гостя"}`, href: `/dashboard/guests?guest=${guest.id}` })) : []),
@@ -92,7 +87,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     ...(permissions.includes("RESERVATIONS") ? searchReservations.map((reservation) => ({ id: `reservation-${reservation.id}`, type: "reservation" as const, title: `${reservationDisplayId(reservation.sequenceNumber)} · ${reservation.guest.fullName}`, subtitle: `Номер ${reservation.room.number} · ${formatISODate(toISODate(reservation.checkIn))} — ${formatISODate(toISODate(reservation.checkOut))}`, href: `/dashboard/reservations?reservation=${reservation.id}` })) : []),
   ];
 
-  return (
+  const overviewContext: OverviewContext | null = process.env.INSTANT_OVERVIEW_ENABLED === "true" && permissions.includes("OVERVIEW") && user.organizationId && user.role ? {
+    scope: overviewScope(user.id, user.organizationId, hotel.id, user.role, permissions),
+    deviceScope: `${user.id}:${hotel.id}`, day: toISODate(todayInTimeZone(hotel.timezone)), locale, permissions,
+  } : null;
+  const shell = (
     <div data-dashboard-theme className="min-h-screen bg-background">
       <DesktopSidebar
         hotelName={hotelName}
@@ -120,7 +119,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {subscription && <BillingBanner endsAt={accessUntil(subscription).toISOString()} paid={Boolean(subscription.paidUntil)} initiallyExpired={isExpired(subscription)} />}
           <OfflineSync scope={`${user.id}:${hotel.id}`} warmUrls={offlineUrls} locale={locale} />
           <MobileContextBack locale={locale} />
-          {children}
+          <OverviewOutlet>{children}</OverviewOutlet>
         </main>
       </div>
       <PwaInstallBanner locale={locale} />
@@ -136,4 +135,5 @@ export default async function DashboardLayout({ children }: { children: React.Re
       /></div>
     </div>
   );
+  return overviewContext ? <OverviewWorkspace key={overviewContext.scope + overviewParams(overviewContext)} context={overviewContext}>{shell}</OverviewWorkspace> : shell;
 }
