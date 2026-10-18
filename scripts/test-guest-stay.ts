@@ -217,6 +217,15 @@ async function main() {
     where: { roomId: a.room.id },
   });
   await check(
+    "unpublished photo preview requires this tenant's live OWNER",
+    async () => {
+      assert.equal(await catalogPhoto(db, l.id, 0), null);
+      assert(await catalogPhoto(db, l.id, 0, a.m));
+      assert.equal(await catalogPhoto(db, l.id, 0, b.m), null);
+      await assert.rejects(catalogPhoto(db, l.id, 0, { ...a.m, id: "forged" }));
+    },
+  );
+  await check(
     "only owner of this tenant can publish; photo ownership validated",
     async () => {
       await assert.rejects(

@@ -6,6 +6,8 @@ Draft for review, not a production-readiness claim. Based on `main` commit `4526
 
 The implementation uses real Prisma persistence and existing booking/availability/pricing/communication/document services, not mock business endpoints. Synthetic data is confined to disposable loopback PostgreSQL tests.
 
+For the photo-first catalog and simplified phone editor follow-up, see [catalog design](./catalog-design.md).
+
 ## Working paths
 
 - Owner explicitly publishes public fields and selected photos from the unit profile. Existing units remain private. Units list has catalog copy/open actions; profile has catalog/unit links and owner preview.
@@ -51,9 +53,9 @@ All tests below ran against this checkout on Linux/Node 24 and local PostgreSQL 
 | Full production build | PASS | `npm run build`: Prisma generation, complete Next compilation, whole-project TypeScript and route generation |
 | Whole-project typecheck | PASS | `npm run typecheck` / `tsc --noEmit` |
 | Whole-project ESLint | PASS | `npm run lint` |
-| Full unit suite (including release/SW tests) | PASS / SKIP | 253 passed, zero failed, 4 opt-in legacy PostgreSQL cases skipped in that run; do not count skips as passed |
-| New policy unit tests | PASS | 7, included in full suite |
-| New real PostgreSQL scenarios | PASS | 33: tenant/role, public whitelist/photos, full-range availability, boundaries/capacity/restrictions, retries/concurrency, drafts/corrections, independent consent/review/original/grant, private instructions/photos, revoke/rotate/expiry/cancel/checkout and accepted evidence |
+| Full unit suite (including release/SW tests) | PASS / SKIP | 255 passed, zero failed, 4 opt-in legacy PostgreSQL cases skipped in that run; do not count skips as passed |
+| New policy unit tests | PASS | 7 policy + 2 presentation, included in full suite |
+| New real PostgreSQL scenarios | PASS | 34: protected unpublished-photo preview, tenant/role, public whitelist/photos, full-range availability, boundaries/capacity/restrictions, retries/concurrency, drafts/corrections, independent consent/review/original/grant, private instructions/photos, revoke/rotate/expiry/cancel/checkout and accepted evidence |
 | Clean + additive upgrade and disabled-schema checks | PASS | 6: all baseline migrations, legacy behavior with no new tables, gates off/on, preservation through upgrade, no autopublication |
 | Existing agreement PostgreSQL suite | PASS | 21 checks; no real SMS |
 | Existing communications/signing suite | PASS | Real PostgreSQL; identical replay retained, changed-content replay rejected. Fixed an old test expectation that contradicted the unchanged main service |

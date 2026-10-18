@@ -36,10 +36,11 @@
     "test:reliability:db": "node --require ./scripts/test-server-preload.cjs --import tsx scripts/test-reliability.ts",
     "test:instant-overview": "tsx --test src/lib/offline/read-resource.test.ts src/lib/dashboard/overview-validation.test.ts",
     "typecheck": "tsc --noEmit",
-    "test:guest-stay": "node --require ./scripts/test-server-preload.cjs --import tsx --test src/lib/guest-stay/policy.test.ts",
+    "test:guest-stay": "node --require ./scripts/test-server-preload.cjs --import tsx --test src/lib/guest-stay/policy.test.ts src/lib/guest-stay/presentation.test.ts",
     "test:guest-stay:db": "node --env-file=.env --require ./scripts/test-server-preload.cjs --import tsx scripts/test-guest-stay.ts",
     "test:guest-stay:migrations": "node --env-file=.env --require ./scripts/test-server-preload.cjs --import tsx scripts/test-guest-stay-migrations.ts",
-    "test:guest-stay:browser": "node scripts/test-guest-stay-browser.mjs"
+    "test:guest-stay:browser": "node scripts/test-guest-stay-browser.mjs",
+    "test:catalog:browser": "node scripts/test-catalog-browser.mjs"
   },
   "engines": {
     "node": ">=20.9.0"

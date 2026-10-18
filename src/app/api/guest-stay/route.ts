@@ -11,6 +11,7 @@ import { assertBillingWriteAccess } from "@/lib/billing/service";
 import { PublicError } from "@/server/errors";
 import { id, staffCommand, disabled } from "@/lib/guest-stay/policy";
 import { staffStay, stayWorkspace } from "@/lib/guest-stay/service";
+import { scopeOf } from "@/lib/communications/service";
 import { scope, tenant, ownedRoom } from "@/lib/guest-stay/catalog";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,6 +75,7 @@ export async function GET(request: Request) {
     return privateJson({
       ...stays,
       scope: scope(m),
+      photoScope: scopeOf(m),
       listing: listing
         ? {
             id: listing.id,

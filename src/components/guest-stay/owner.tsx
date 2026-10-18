@@ -1,4 +1,5 @@
 "use client";
+import { Publication } from "./publication";
 import { copyText } from "./copy";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readApi } from "@/components/communications/api";
@@ -27,7 +28,8 @@ type Policy = {
   checkoutInstructions?: string;
   entryPhotoIds?: string[];
 };
-type Workspace = StayWorkspace & {
+export type Workspace = StayWorkspace & {
+  photoScope: string;
   catalogPath: string;
   roomLabel: string;
   listing: Listing | null;
@@ -43,6 +45,7 @@ export function OwnerStayBlock(props: {
   checkIn?: string;
   checkOut?: string;
   stayId?: string;
+  catalogOnly?: boolean;
 }) {
   const features = useGuestStayFeatures();
   if (!features.stay && !features.catalog) return null;
@@ -54,12 +57,14 @@ function OwnerPanel({
   checkIn = "",
   checkOut = "",
   stayId,
+  catalogOnly = false,
 }: {
   reservationId?: string;
   roomId: string;
   checkIn?: string;
   checkOut?: string;
   stayId?: string;
+  catalogOnly?: boolean;
 }) {
   const [data, setData] = useState<Workspace | null>(null),
     [error, setError] = useState(""),
@@ -156,6 +161,33 @@ function OwnerPanel({
         ),
     );
   }
+  if (catalogOnly)
+    return (
+      <section className="min-w-0 space-y-5" aria-label="Настройка каталога">
+        {error ? (
+          <p role="alert" className="rounded-xl border p-3">
+            {error}
+          </p>
+        ) : null}
+        {notice ? (
+          <p role="status" className="rounded-xl border p-3 text-sm">
+            {notice}
+          </p>
+        ) : null}
+        {!data && !error ? <p>Загружаем карточку…</p> : null}
+        {data?.catalogEnabled ? (
+          <Publication
+            key={`listing-${data.listing?.version ?? 0}`}
+            roomId={roomId}
+            data={data}
+            busy={busy}
+            run={run}
+            command={command}
+            onSaved={setNotice}
+          />
+        ) : null}
+      </section>
+    );
   const stays = reservationId ? data?.stays.slice(0, 1) : data?.stays;
   return (
     <section
@@ -178,14 +210,12 @@ function OwnerPanel({
       {data ? (
         <>
           {!reservationId && data.catalogEnabled ? (
-            <Publication
-              key={`listing-${data.listing?.version ?? 0}`}
-              roomId={roomId}
-              data={data}
-              busy={busy}
-              run={run}
-              command={command}
-            />
+            <a
+              className={`${secondaryClass} inline-flex items-center`}
+              href={`/dashboard/rooms/${encodeURIComponent(roomId)}/catalog`}
+            >
+              Настроить страницу квартиры
+            </a>
           ) : null}
           {!reservationId && data.stayEnabled ? (
             <PolicySettings
@@ -369,7 +399,7 @@ function OwnerPanel({
     </section>
   );
 }
-type Operations = {
+export type Operations = {
   busy: boolean;
   run: (work: () => Promise<void>) => Promise<void>;
   command: (body: object) => Promise<unknown>;
@@ -539,198 +569,6 @@ function Decision({
         Применить решение
       </button>
     </form>
-  );
-}
-function Publication({
-  data,
-  roomId,
-  busy,
-  run,
-  command,
-}: Operations & { data: Workspace; roomId: string }) {
-  const [listing, setListing] = useState<Listing>(
-    data.listing ?? {
-      title: "",
-      description: "",
-      publicLocation: "",
-      amenities: "",
-      restrictions: "",
-      contactUrl: "",
-      photoIds: [],
-      ratePlanId: null,
-      published: false,
-    },
-  );
-  const [confirmed, setConfirmed] = useState(false),
-    [notice, setNotice] = useState("");
-  const catalog =
-    typeof location !== "undefined"
-      ? `${location.origin}${data.catalogPath}`
-      : data.catalogPath;
-  const property = data.listing?.id ? `${catalog}/${data.listing.id}` : "";
-  function copy(value: string) {
-    void copyText(value).then(
-      () => setNotice("Ссылка скопирована, отправка не подтверждена."),
-      () => setNotice("Не удалось скопировать ссылку."),
-    );
-  }
-  return (
-    <details>
-      <summary className="min-h-11 cursor-pointer py-2 font-semibold">
-        Публичный каталог и квартира
-      </summary>
-      <div className="space-y-3">
-        <div className="flex flex-wrap gap-2">
-          <button className={secondaryClass} onClick={() => copy(catalog)}>
-            Поделиться каталогом
-          </button>
-          <button
-            className={secondaryClass}
-            disabled={!data.listing?.published}
-            onClick={() => copy(property)}
-          >
-            Поделиться квартирой
-          </button>
-          {property ? (
-            <a
-              className={`${secondaryClass} inline-flex items-center`}
-              href={`${data.catalogPath}/${data.listing!.id}?preview=true`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Предпросмотр глазами гостя
-            </a>
-          ) : null}
-        </div>
-        {notice ? <p role="status">{notice}</p> : null}
-        <form
-          className="space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void run(async () => {
-              const {
-                id: ignoredId,
-                version: ignoredVersion,
-                ...fields
-              } = listing;
-              void ignoredId;
-              void ignoredVersion;
-              await command({
-                action: "saveListing",
-                roomId,
-                version: data.listing?.version ?? 0,
-                listing: { ...fields, publicContentConfirmed: confirmed },
-              });
-            });
-          }}
-        >
-          <p className="text-sm">
-            Только явно выбранные публичные данные. Не вставляйте сюда секретные
-            инструкции, коды, Wi-Fi-пароли или персональные данные. Публичное
-            расположение может быть районом либо точным адресом — только по
-            вашему явному выбору.
-          </p>
-          {(
-            [
-              ["title", "Публичное название", 160],
-              ["description", "Описание", 6000],
-              [
-                "publicLocation",
-                "Публичное расположение (адрес показывается только если вписать его сюда)",
-                500,
-              ],
-              ["amenities", "Удобства", 2000],
-              ["restrictions", "Основные ограничения", 2000],
-              ["contactUrl", "HTTPS-ссылка для связи", 500],
-            ] as const
-          ).map(([k, label, max]) => (
-            <label key={k} className="block">
-              {label}
-              <textarea
-                rows={k === "description" ? 4 : 2}
-                required={k === "title"}
-                maxLength={max}
-                className={inputClass}
-                value={listing[k]}
-                onChange={(e) =>
-                  setListing((v) => ({ ...v, [k]: e.target.value }))
-                }
-              />
-            </label>
-          ))}
-          <label className="block">
-            Тариф для достоверной стоимости
-            <select
-              className={inputClass}
-              value={listing.ratePlanId ?? ""}
-              onChange={(e) =>
-                setListing((v) => ({
-                  ...v,
-                  ratePlanId: e.target.value || null,
-                }))
-              }
-            >
-              <option value="">Стоимость уточнить у хозяина</option>
-              {data.ratePlans.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <fieldset>
-            <legend>Явно разрешённые публичные фотографии</legend>
-            {data.photos.map((p) => (
-              <label key={p.id} className="flex min-h-11 items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={listing.photoIds.includes(p.id)}
-                  onChange={(e) =>
-                    setListing((v) => ({
-                      ...v,
-                      photoIds: e.target.checked
-                        ? [...v.photoIds, p.id]
-                        : v.photoIds.filter((id) => id !== p.id),
-                    }))
-                  }
-                />
-                {p.name}{" "}
-                {listing.photoIds.includes(p.id)
-                  ? `· порядок ${listing.photoIds.indexOf(p.id) + 1}`
-                  : ""}
-              </label>
-            ))}
-            <p className="text-sm">
-              Порядок — порядок выбора. Снимите и выберите снова для
-              перестановки.
-            </p>
-          </fieldset>
-          <label className="flex min-h-11 items-center gap-3">
-            <input
-              type="checkbox"
-              checked={listing.published}
-              onChange={(e) =>
-                setListing((v) => ({ ...v, published: e.target.checked }))
-              }
-            />
-            Опубликовать
-          </label>
-          <label className="flex min-h-11 gap-3">
-            <input
-              required
-              type="checkbox"
-              className="mt-1 size-5 shrink-0"
-              checked={confirmed}
-              onChange={(e) => setConfirmed(e.target.checked)}
-            />
-            Проверено: эти данные и фотографии разрешено показывать всем
-          </label>
-          <button className={secondaryClass} disabled={busy || !confirmed}>
-            Сохранить публикацию
-          </button>
-        </form>
-      </div>
-    </details>
   );
 }
 function PolicySettings({

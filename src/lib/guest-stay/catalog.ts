@@ -204,12 +204,14 @@ export async function catalogPhoto(
   db: PrismaClient,
   listingId: string,
   position: number,
+  preview?: CurrentMembership,
 ) {
   disabled("PUBLIC_CATALOG_ENABLED");
+  if (preview) await owner(db, preview);
   const listing = await db.catalogListing.findFirst({
     where: {
       id: id.parse(listingId),
-      published: true,
+      ...(!preview ? { published: true } : tenant(preview)),
       room: { rentalProperty: { status: "ACTIVE" } },
     },
   });
