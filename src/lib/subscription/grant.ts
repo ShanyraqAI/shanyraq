@@ -5,8 +5,8 @@ import { db } from "@/lib/db";
 import { lockBillingOrganization } from "@/lib/billing/service";
 import { grantPeriod } from "./access";
 
-export async function grantSubscription(input: { organizationId: string; planId: string; months: number; note?: string | null; grantedById?: string | null }) {
-  return db.$transaction(async (tx: Prisma.TransactionClient) => {
+export async function grantSubscription(input: { organizationId: string; planId: string; months: number; note?: string | null; grantedById?: string | null }, client?: Prisma.TransactionClient) {
+  const work = async (tx: Prisma.TransactionClient) => {
     const organization = await tx.organization.findUnique({ where: { id: input.organizationId }, select: { id: true } });
     if (!organization) throw new Error("Организация не найдена");
     await lockBillingOrganization(tx, input.organizationId);
@@ -16,13 +16,15 @@ export async function grantSubscription(input: { organizationId: string; planId:
       data: { organizationId: input.organizationId, planId: input.planId, months: input.months, startsAt, endsAt, note: input.note ?? null, grantedById: input.grantedById ?? null },
     });
     return { endsAt };
-  });
+  };
+  return client ? work(client) : db.$transaction(work);
 }
 
-export async function endSubscription(organizationId: string) {
+export async function endSubscription(organizationId: string, client?: Prisma.TransactionClient) {
   const now = new Date();
-  await db.$transaction(async (tx: Prisma.TransactionClient) => {
+  const work = async (tx: Prisma.TransactionClient) => {
     await lockBillingOrganization(tx, organizationId);
     await tx.subscriptionGrant.updateMany({ where: { organizationId, endsAt: { gt: now } }, data: { endsAt: now } });
-  });
+  };
+  return client ? work(client) : db.$transaction(work);
 }

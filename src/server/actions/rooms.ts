@@ -22,6 +22,7 @@ import { enqueueHotelChannelSyncs } from "@/lib/channels/sync-outbox";
 import { wakeChannelSyncWorker } from "@/server/channel-sync";
 import { recordCurrentUserEvent } from "@/lib/analytics/service";
 import { z } from "zod";
+import { onboardingNumbers } from "@/lib/rooms/onboarding-numbers";
 import { inheritedTypeError } from "@/lib/rooms/type-policy";
 
 export async function saveRoomOrderAction(
@@ -126,182 +127,188 @@ export async function upsertRoomAction(
 
     const room = await db.$transaction(
       async (tx) => {
-        if (!data.id) await assertRoomCapacity(tx, hotelId);
-        if (data.id) {
-          const owned = await tx.room.findFirst({
-            where: { id: data.id, hotelId },
-            select: { id: true, roomTypeId: true },
-          });
-          if (!owned) throw new Error(t.rooms.errors.roomNotFound);
-        }
+        const work = async () => {
+          if (!data.id) await assertRoomCapacity(tx, hotelId);
+          if (data.id) {
+            const owned = await tx.room.findFirst({
+              where: { id: data.id, hotelId },
+              select: { id: true, roomTypeId: true },
+            });
+            if (!owned) throw new Error(t.rooms.errors.roomNotFound);
+          }
 
-        const duplicate = await tx.room.findFirst({
-          where: {
-            hotelId,
-            number: data.number,
-            ...(data.id ? { id: { not: data.id } } : {}),
-          },
-          select: { id: true },
-        });
-        if (duplicate)
-          throw new Error(
-            "Номер с таким названием уже существует в этом отеле",
-          );
-
-        const existingType = await tx.roomType.findUnique({
-          where: { hotelId_name: { hotelId, name: data.roomTypeName } },
-          select: { id: true, rentalPropertyId: true, capacity: true, basePrice: true },
-        });
-        if (existingType) {
-          const error = inheritedTypeError(
-            { capacity: existingType.capacity, basePrice: Number(existingType.basePrice) },
-            data,
-          );
-          if (error) throw new PublicError(error);
-        }
-        const roomType = existingType
-          ? existingType
-          : await (async () => {
-              const rentalProperty = await tx.rentalProperty.findFirst({
-                where: { hotelId },
-                orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-                select: { id: true },
-              });
-              if (!rentalProperty)
-                throw new Error(
-                  "Объект размещения для текущего workspace не найден",
-                );
-              return tx.roomType.create({
-                data: {
-                  hotelId,
-                  rentalPropertyId: rentalProperty.id,
-                  name: data.roomTypeName,
-                  capacity: data.capacity,
-                  basePrice: data.basePrice,
-                },
-                select: { id: true, rentalPropertyId: true },
-              });
-            })();
-
-        if (data.id) {
-          await lockBusinessKeys(tx, [`room:${data.id}`]);
-          const previous = await tx.room.findFirstOrThrow({
-            where: { id: data.id, hotelId },
-            select: {
-              roomTypeId: true,
-              number: true,
-              floor: true,
-              status: true,
-              roomType: { select: { name: true } },
+          const duplicate = await tx.room.findFirst({
+            where: {
+              hotelId,
+              number: data.number,
+              ...(data.id ? { id: { not: data.id } } : {}),
             },
+            select: { id: true },
           });
-          if (previous.roomTypeId !== roomType.id) {
-            // Active stays keep their room type for availability; moving the unit would desync inventory.
-            const activeStays = await tx.reservation.count({
-              where: {
-                hotelId,
-                roomId: data.id,
-                status: { in: [...ACTIVE_RESERVATION_STATUSES] },
+          if (duplicate)
+            throw new Error(
+              "Номер с таким названием уже существует в этом отеле",
+            );
+
+          const existingType = await tx.roomType.findUnique({
+            where: { hotelId_name: { hotelId, name: data.roomTypeName } },
+            select: { id: true, rentalPropertyId: true, capacity: true, basePrice: true },
+          });
+          if (existingType) {
+            const error = inheritedTypeError(
+              { capacity: existingType.capacity, basePrice: Number(existingType.basePrice) },
+              data,
+            );
+            if (error) throw new PublicError(error);
+          }
+          const roomType = existingType
+            ? existingType
+            : await (async () => {
+                const rentalProperty = await tx.rentalProperty.findFirst({
+                  where: { hotelId },
+                  orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+                  select: { id: true },
+                });
+                if (!rentalProperty)
+                  throw new Error(
+                    "Объект размещения для текущего workspace не найден",
+                  );
+                return tx.roomType.create({
+                  data: {
+                    hotelId,
+                    rentalPropertyId: rentalProperty.id,
+                    name: data.roomTypeName,
+                    capacity: data.capacity,
+                    basePrice: data.basePrice,
+                  },
+                  select: { id: true, rentalPropertyId: true },
+                });
+              })();
+
+          if (data.id) {
+            await lockBusinessKeys(tx, [`room:${data.id}`]);
+            const previous = await tx.room.findFirstOrThrow({
+              where: { id: data.id, hotelId },
+              select: {
+                roomTypeId: true,
+                number: true,
+                floor: true,
+                status: true,
+                roomType: { select: { name: true } },
               },
             });
-            if (activeStays > 0) {
-              throw new PublicError(
-                "Нельзя сменить категорию номера с активными бронированиями. Перенесите или завершите брони и повторите.",
-              );
+            if (previous.roomTypeId !== roomType.id) {
+              // Active stays keep their room type for availability; moving the unit would desync inventory.
+              const activeStays = await tx.reservation.count({
+                where: {
+                  hotelId,
+                  roomId: data.id,
+                  status: { in: [...ACTIVE_RESERVATION_STATUSES] },
+                },
+              });
+              if (activeStays > 0) {
+                throw new PublicError(
+                  "Нельзя сменить категорию номера с активными бронированиями. Перенесите или завершите брони и повторите.",
+                );
+              }
             }
+            const nextOrder =
+              previous.roomTypeId === roomType.id
+                ? undefined
+                : ((
+                    await tx.room.aggregate({
+                      where: { hotelId, roomTypeId: roomType.id },
+                      _max: { sortOrder: true },
+                    })
+                  )._max.sortOrder ?? -1);
+            const result = await tx.room.updateMany({
+              where: { id: data.id, hotelId },
+              data: {
+                number: data.number,
+                floor: data.floor,
+                status: data.status,
+                roomTypeId: roomType.id,
+                rentalPropertyId: roomType.rentalPropertyId,
+                ...(nextOrder === undefined ? {} : { sortOrder: nextOrder + 1 }),
+              },
+            });
+            if (result.count !== 1) throw new Error(t.rooms.errors.roomNotFound);
+            await recomputeExistingAvailability(
+              hotelId,
+              [previous.roomTypeId, roomType.id],
+              tx,
+            );
+            await enqueueHotelChannelSyncs(tx, hotelId);
+            return {
+              id: data.id,
+              number: data.number,
+              action: "room.updated",
+              oldValue: {
+                number: previous.number,
+                floor: previous.floor,
+                status: previous.status,
+                roomType: previous.roomType.name,
+              },
+              newValue: {
+                number: data.number,
+                floor: data.floor,
+                status: data.status,
+                roomType: data.roomTypeName,
+              },
+            };
           }
-          const nextOrder =
-            previous.roomTypeId === roomType.id
-              ? undefined
-              : ((
-                  await tx.room.aggregate({
-                    where: { hotelId, roomTypeId: roomType.id },
-                    _max: { sortOrder: true },
-                  })
-                )._max.sortOrder ?? -1);
-          const result = await tx.room.updateMany({
-            where: { id: data.id, hotelId },
+
+          const maxOrder =
+            (
+              await tx.room.aggregate({
+                where: { hotelId, roomTypeId: roomType.id },
+                _max: { sortOrder: true },
+              })
+            )._max.sortOrder ?? -1;
+          const created = await tx.room.create({
             data: {
+              hotelId,
+              rentalPropertyId: roomType.rentalPropertyId,
+              roomTypeId: roomType.id,
               number: data.number,
               floor: data.floor,
               status: data.status,
-              roomTypeId: roomType.id,
-              rentalPropertyId: roomType.rentalPropertyId,
-              ...(nextOrder === undefined ? {} : { sortOrder: nextOrder + 1 }),
+              sortOrder: maxOrder + 1,
             },
+            select: { id: true },
           });
-          if (result.count !== 1) throw new Error(t.rooms.errors.roomNotFound);
-          await recomputeExistingAvailability(
-            hotelId,
-            [previous.roomTypeId, roomType.id],
-            tx,
-          );
+          await recomputeExistingAvailability(hotelId, [roomType.id], tx);
           await enqueueHotelChannelSyncs(tx, hotelId);
           return {
-            id: data.id,
+            id: created.id,
             number: data.number,
-            action: "room.updated",
-            oldValue: {
-              number: previous.number,
-              floor: previous.floor,
-              status: previous.status,
-              roomType: previous.roomType.name,
-            },
+            action: "room.created",
+            oldValue: undefined,
             newValue: {
               number: data.number,
               floor: data.floor,
               status: data.status,
               roomType: data.roomTypeName,
             },
-          };
-        }
-
-        const maxOrder =
-          (
-            await tx.room.aggregate({
-              where: { hotelId, roomTypeId: roomType.id },
-              _max: { sortOrder: true },
-            })
-          )._max.sortOrder ?? -1;
-        const created = await tx.room.create({
-          data: {
-            hotelId,
-            rentalPropertyId: roomType.rentalPropertyId,
-            roomTypeId: roomType.id,
-            number: data.number,
-            floor: data.floor,
-            status: data.status,
-            sortOrder: maxOrder + 1,
-          },
-          select: { id: true },
-        });
-        await recomputeExistingAvailability(hotelId, [roomType.id], tx);
-        await enqueueHotelChannelSyncs(tx, hotelId);
-        return {
-          id: created.id,
-          number: data.number,
-          action: "room.created",
-          oldValue: undefined,
-          newValue: {
-            number: data.number,
-            floor: data.floor,
-            status: data.status,
-            roomType: data.roomTypeName,
-          },
         };
+
+        };
+        const room = await work();
+        await writeAudit(
+          hotelId,
+          room.action,
+          "Room",
+          room.id,
+          { number: room.number },
+          room.oldValue,
+          room.newValue,
+          tx,
+        );
+        return room;
       },
       { timeout: 30_000 },
     );
 
-    await writeAudit(
-      hotelId,
-      room.action,
-      "Room",
-      room.id,
-      { number: room.number },
-      room.oldValue,
-      room.newValue,
-    );
     await recordCurrentUserEvent(data.id ? "room_updated" : "room_created", {
       type: "Room",
       id: room.id,
@@ -331,111 +338,96 @@ export async function createOnboardingApartmentsAction(
     const data = parsed.data;
     const created = await db.$transaction(
       async (tx) => {
-        const hotel = await tx.hotel.findUniqueOrThrow({
-          where: { id: hotelId },
-          select: { name: true },
-        });
-        const rentalProperty = await tx.rentalProperty.findFirst({
-          where: { hotelId },
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          select: { id: true },
-        });
-        if (!rentalProperty)
-          throw new Error(
-            "Для квартирного профиля не найдено рабочее пространство.",
-          );
+        const work = async () => {
+          const hotel = await tx.hotel.findUniqueOrThrow({
+            where: { id: hotelId },
+            select: { name: true },
+          });
+          const rentalProperty = await tx.rentalProperty.findFirst({
+            where: { hotelId },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: { id: true },
+          });
+          if (!rentalProperty)
+            throw new Error(
+              "Для квартирного профиля не найдено рабочее пространство.",
+            );
 
-        const roomTypeName = "Апартаменты";
-        const roomType = await tx.roomType.upsert({
-          where: { hotelId_name: { hotelId, name: roomTypeName } },
-          create: {
-            hotelId,
-            rentalPropertyId: rentalProperty.id,
-            name: roomTypeName,
-            capacity: data.capacity,
-            basePrice: data.basePrice,
-          },
-          update: { capacity: data.capacity, basePrice: data.basePrice },
-          select: { id: true, rentalPropertyId: true },
-        });
-        await tx.ratePlan.upsert({
-          where: { hotelId_name: { hotelId, name: `${hotel.name} · базовый` } },
-          create: {
-            hotelId,
-            rentalPropertyId: roomType.rentalPropertyId,
-            roomTypeId: roomType.id,
-            name: `${hotel.name} · базовый`,
-            basePrice: data.basePrice,
-            currency: "KZT",
-          },
-          update: {
-            roomTypeId: roomType.id,
-            rentalPropertyId: roomType.rentalPropertyId,
-            basePrice: data.basePrice,
-            currency: "KZT",
-          },
-        });
-        const existing = new Set(
-          (
-            await tx.room.findMany({
-              where: { hotelId },
-              select: { number: true },
-            })
-          ).map((room) => room.number.toLocaleLowerCase("ru-RU")),
-        );
-        const suffix = data.firstNumber.match(/^(.*?)(\d+)$/);
-        const prefix = suffix?.[1] ?? `${data.firstNumber} `;
-        let nextNumber = suffix ? Number(suffix[2]) : 1;
-        const numbers: string[] = [];
-        while (numbers.length < data.count) {
-          const candidate = suffix
-            ? `${prefix}${nextNumber}`
-            : data.count === 1
-              ? data.firstNumber
-              : `${prefix}${nextNumber}`;
-          nextNumber += 1;
-          const normalized = candidate.toLocaleLowerCase("ru-RU");
-          if (existing.has(normalized)) continue;
-          existing.add(normalized);
-          numbers.push(candidate);
-        }
-        for (let index = 0; index < data.count; index++)
-          await assertRoomCapacity(tx, hotelId);
-        await tx.room.createMany({
-          data: numbers.map((number, index) => ({
-            hotelId,
-            rentalPropertyId: roomType.rentalPropertyId,
-            roomTypeId: roomType.id,
-            number,
-            floor: data.floor,
-            status: "AVAILABLE",
-            sortOrder: index,
-          })),
-        });
-        await recomputeExistingAvailability(hotelId, [roomType.id], tx);
-        await enqueueHotelChannelSyncs(tx, hotelId);
-        const firstRoom = await tx.room.findFirstOrThrow({
-          where: { hotelId, number: numbers[0] },
-          select: { id: true },
-        });
-        return {
-          count: numbers.length,
-          firstNumber: numbers[0],
-          firstRoomId: firstRoom.id,
-          hotelName: hotel.name,
+          const roomTypeName = "Апартаменты";
+          const roomType = await tx.roomType.upsert({
+            where: { hotelId_name: { hotelId, name: roomTypeName } },
+            create: {
+              hotelId,
+              rentalPropertyId: rentalProperty.id,
+              name: roomTypeName,
+              capacity: data.capacity,
+              basePrice: data.basePrice,
+            },
+            update: { capacity: data.capacity, basePrice: data.basePrice },
+            select: { id: true, rentalPropertyId: true },
+          });
+          await tx.ratePlan.upsert({
+            where: { hotelId_name: { hotelId, name: `${hotel.name} · базовый` } },
+            create: {
+              hotelId,
+              rentalPropertyId: roomType.rentalPropertyId,
+              roomTypeId: roomType.id,
+              name: `${hotel.name} · базовый`,
+              basePrice: data.basePrice,
+              currency: "KZT",
+            },
+            update: {
+              roomTypeId: roomType.id,
+              rentalPropertyId: roomType.rentalPropertyId,
+              basePrice: data.basePrice,
+              currency: "KZT",
+            },
+          });
+          // Capacity must include the entire batch while the organization lock is held.
+          await assertRoomCapacity(tx, hotelId, data.count);
+          const existing = await tx.room.findMany({ where: { hotelId }, select: { number: true } });
+          const numbers = onboardingNumbers(data.firstNumber, data.count, existing.map((room) => room.number));
+          await tx.room.createMany({
+            data: numbers.map((number, index) => ({
+              hotelId,
+              rentalPropertyId: roomType.rentalPropertyId,
+              roomTypeId: roomType.id,
+              number,
+              floor: data.floor,
+              status: "AVAILABLE",
+              sortOrder: index,
+            })),
+          });
+          await recomputeExistingAvailability(hotelId, [roomType.id], tx);
+          await enqueueHotelChannelSyncs(tx, hotelId);
+          const firstRoom = await tx.room.findFirstOrThrow({
+            where: { hotelId, number: numbers[0] },
+            select: { id: true },
+          });
+          return {
+            count: numbers.length,
+            firstNumber: numbers[0],
+            firstRoomId: firstRoom.id,
+            hotelName: hotel.name,
         };
+
+        };
+        const created = await work();
+        await writeAudit(
+          hotelId,
+          "room.created",
+          "Room",
+          created.firstRoomId,
+          { number: created.firstNumber },
+          undefined,
+          { count: created.count, source: "onboarding" },
+          tx,
+        );
+        return created;
       },
       { timeout: 30_000 },
     );
-    await writeAudit(
-      hotelId,
-      "room.created",
-      "Room",
-      created.firstRoomId,
-      { number: created.firstNumber },
-      undefined,
-      { count: created.count, source: "onboarding" },
-    );
+
     wakeChannelSyncWorker();
     revalidateRoomConsumers();
     return ok(
@@ -454,48 +446,55 @@ export async function deleteRoomAction(input: unknown): Promise<ActionResult> {
     const hotelId = await requireSessionHotelId({ permission: "ROOMS" });
     const room = await db.$transaction(
       async (tx) => {
-        const owned = await tx.room.findFirst({
-          where: { id: parsed.data.roomId, hotelId },
-          select: {
-            id: true,
-            number: true,
-            floor: true,
-            status: true,
-            roomTypeId: true,
-            roomType: { select: { name: true } },
-            _count: { select: { reservations: true } },
+        const work = async () => {
+          const owned = await tx.room.findFirst({
+            where: { id: parsed.data.roomId, hotelId },
+            select: {
+              id: true,
+              number: true,
+              floor: true,
+              status: true,
+              roomTypeId: true,
+              roomType: { select: { name: true } },
+              _count: { select: { reservations: true } },
+            },
+          });
+          if (!owned) throw new Error(t.rooms.errors.roomNotFound);
+          if (owned._count.reservations > 0) {
+            throw new Error(
+              "Нельзя удалить номер с бронированиями. Измените его статус на «Не используется».",
+            );
+          }
+          const deleted = await tx.room.deleteMany({
+            where: { id: owned.id, hotelId },
+          });
+          if (deleted.count !== 1) throw new Error(t.rooms.errors.roomNotFound);
+          await recomputeExistingAvailability(hotelId, [owned.roomTypeId], tx);
+          await enqueueHotelChannelSyncs(tx, hotelId);
+          return owned;
+
+        };
+        const room = await work();
+        await writeAudit(
+          hotelId,
+          "room.deleted",
+          "Room",
+          room.id,
+          { number: room.number },
+          {
+            number: room.number,
+            floor: room.floor,
+            status: room.status,
+            roomType: room.roomType.name,
           },
-        });
-        if (!owned) throw new Error(t.rooms.errors.roomNotFound);
-        if (owned._count.reservations > 0) {
-          throw new Error(
-            "Нельзя удалить номер с бронированиями. Измените его статус на «Не используется».",
-          );
-        }
-        const deleted = await tx.room.deleteMany({
-          where: { id: owned.id, hotelId },
-        });
-        if (deleted.count !== 1) throw new Error(t.rooms.errors.roomNotFound);
-        await recomputeExistingAvailability(hotelId, [owned.roomTypeId], tx);
-        await enqueueHotelChannelSyncs(tx, hotelId);
-        return owned;
+          {},
+          tx,
+        );
+        return room;
       },
       { timeout: 30_000 },
     );
-    await writeAudit(
-      hotelId,
-      "room.deleted",
-      "Room",
-      room.id,
-      { number: room.number },
-      {
-        number: room.number,
-        floor: room.floor,
-        status: room.status,
-        roomType: room.roomType.name,
-      },
-      {},
-    );
+
     revalidateRoomConsumers();
     return ok(undefined, `Номер ${room.number} удален`);
   } catch (error) {

@@ -34,7 +34,8 @@
     "db:migrate:release": "node scripts/vercel-migrate.mjs --apply-reviewed-release",
     "test:reliability": "tsx --test src/lib/reservations/operation.test.ts src/lib/channels/channex/revision-order.test.ts src/lib/offline/outbox.test.ts scripts/release-safety.test.mjs scripts/service-worker.test.mjs src/lib/offline/dispatch.test.ts src/lib/guests/pagination.test.ts",
     "test:reliability:db": "node --require ./scripts/test-server-preload.cjs --import tsx scripts/test-reliability.ts",
-    "test:instant-overview": "tsx --test src/lib/offline/read-resource.test.ts src/lib/dashboard/overview-validation.test.ts"
+    "test:instant-overview": "tsx --test src/lib/offline/read-resource.test.ts src/lib/dashboard/overview-validation.test.ts",
+    "test:security-audit": "node --test scripts/security-audit-regressions.test.cjs"
   },
   "engines": {
     "node": ">=20.9.0"
@@ -51,14 +52,14 @@
     "clsx": "^2.1.1",
     "exceljs": "4.4.0",
     "lucide-react": "^0.544.0",
-    "next": "16.3.3",
+    "next": "16.4.2",
     "next-themes": "^0.4.6",
     "pdfkit": "^0.17.2",
     "radix-ui": "^1.6.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "0.0.1",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.3.1",
     "web-push": "^3.6.7",
@@ -73,7 +74,7 @@
     "@types/react-dom": "19.2.5",
     "@types/web-push": "^3.6.4",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.3.3",
+    "eslint-config-next": "16.4.2",
     "prisma": "6.12.0",
     "shadcn": "^4.21.0",
     "tailwindcss": "^4.1.13",

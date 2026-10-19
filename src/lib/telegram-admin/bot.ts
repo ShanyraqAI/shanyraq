@@ -1,4 +1,5 @@
 import "server-only";
+import type { Prisma } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { BILLING_PLANS, billingPlan } from "@/lib/billing/policy";
@@ -85,7 +86,7 @@ async function resolveOne(orgs: Org[], query: string): Promise<Org | string> {
   return found[0];
 }
 
-export async function handleCommand(text: string, actor: string): Promise<string> {
+export async function handleCommand(text: string, actor: string, tx?: Prisma.TransactionClient): Promise<string> {
   const [rawCommand = "", ...args] = text.trim().split(/\s+/);
   const command = rawCommand.split("@")[0].toLowerCase();
   switch (command) {
@@ -116,7 +117,7 @@ export async function handleCommand(text: string, actor: string): Promise<string
       if (!query || !planId || !billingPlan(planId) || !(GRANT_MONTHS as readonly number[]).includes(months)) return "Формат: /grant <id|email> <start|pro|business> <1|3|6|12>";
       const org = await resolveOne(await listSubscriptionOrganizations(), query);
       if (typeof org === "string") return org;
-      const { endsAt } = await grantSubscription({ organizationId: org.id, planId, months, note: `Telegram: ${actor}` });
+      const { endsAt } = await grantSubscription({ organizationId: org.id, planId, months, note: `Telegram: ${actor}` }, tx);
       return `✅ ${esc(org.owner?.fullName ?? org.name)}: ${billingPlan(planId)!.name}, +${months} мес. Действует до ${dateFormat.format(endsAt)}.`;
     }
     case "/end": {
@@ -124,7 +125,7 @@ export async function handleCommand(text: string, actor: string): Promise<string
       const org = await resolveOne(await listSubscriptionOrganizations(), args[0]);
       if (typeof org === "string") return org;
       if (subscriptionStatus(org.endsAt) === "EXPIRED" || !org.endsAt) return "У аккаунта нет действующей подписки.";
-      await endSubscription(org.id);
+      await endSubscription(org.id, tx);
       return `⛔ Подписка ${esc(org.owner?.fullName ?? org.name)} завершена.`;
     }
     default:

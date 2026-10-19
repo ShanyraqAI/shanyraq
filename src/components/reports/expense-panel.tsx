@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ const input = "h-11 w-full rounded-xl border border-[#e5e8df] bg-white px-3 text
 
 export function ExpensePanel({ currency, today, rooms, expenses, categories, total, filteredBySource }: Props) {
   const router = useRouter();
+  const operationKey = useRef<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [date, setDate] = useState(today);
   const [amount, setAmount] = useState("");
@@ -38,9 +39,11 @@ export function ExpensePanel({ currency, today, rooms, expenses, categories, tot
   function submit(event: React.FormEvent) {
     event.preventDefault();
     startTransition(async () => {
-      const result = await createExpenseAction({ date, amount: Number(amount), category: category === "__custom" ? custom : category, comment, roomIds: selected });
+      operationKey.current ??= crypto.randomUUID();
+      const result = await createExpenseAction({ key: operationKey.current, date, amount, category: category === "__custom" ? custom : category, comment, roomIds: selected });
       if (!result.ok) return void toast.error(result.error ?? "Не удалось сохранить расход");
       toast.success(result.message ?? "Расход добавлен");
+      operationKey.current = null;
       setAmount("");
       setComment("");
       router.refresh();

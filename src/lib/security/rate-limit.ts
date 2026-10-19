@@ -17,9 +17,11 @@ export async function enforceRateLimit(
   identifier: string,
   limit: number,
   windowMs: number,
+  options: { identity?: "ip-and-identifier" | "identifier" } = {},
 ): Promise<void> {
-  const ip = await requestAddress();
-  const key = `${scope}:${digest(`${ip}:${identifier.trim().toLowerCase()}`)}`;
+  const normalized = identifier.trim().toLowerCase();
+  const identity = options.identity === "identifier" ? normalized : `${await requestAddress()}:${normalized}`;
+  const key = `${scope}:${digest(identity)}`;
   const now = new Date();
   const resetAt = new Date(now.getTime() + windowMs);
 

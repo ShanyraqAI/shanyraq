@@ -25,7 +25,8 @@ export async function lockBillingOrganization(tx: Prisma.TransactionClient, orga
   await tx.$queryRaw`SELECT "id" FROM "Organization" WHERE "id" = ${organizationId} FOR UPDATE`;
 }
 
-export async function assertRoomCapacity(tx: Prisma.TransactionClient, hotelId: string) {
+export async function assertRoomCapacity(tx: Prisma.TransactionClient, hotelId: string, requestedCount = 1) {
+  if (!Number.isSafeInteger(requestedCount) || requestedCount < 1) throw new BillingError("Некорректное количество номеров");
   if (!billingLaunch()) return;
   const hotel = await tx.hotel.findUniqueOrThrow({ where: { id: hotelId }, select: { orgId: true } });
   if (!hotel.orgId) throw new BillingError("Организация не найдена");
@@ -34,7 +35,7 @@ export async function assertRoomCapacity(tx: Prisma.TransactionClient, hotelId: 
   const plan = subscription?.planId ? billingPlan(subscription.planId) : null;
   if (!plan) return;
   const count = await tx.room.count({ where: { hotel: { orgId: hotel.orgId } } });
-  if (count >= plan.rooms) throw new BillingError(`Тариф ${plan.name}: не более ${plan.rooms} номеров в организации. Удалите лишние номера или измените тариф после окончания оплаченного периода.`);
+  if (count + requestedCount > plan.rooms) throw new BillingError(`Тариф ${plan.name}: не более ${plan.rooms} номеров в организации. Удалите лишние номера или измените тариф после окончания оплаченного периода.`);
 }
 
 export function matchesPayment(order: { id: string; providerPaymentId: string | null; amountMinor: number; currency: string; testMode: boolean }, fields: PaymentFields) {

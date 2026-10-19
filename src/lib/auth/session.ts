@@ -16,6 +16,7 @@ export const ACTIVE_HOTEL_COOKIE = "shanyraq_active_hotel";
 const SESSION_TTL_MS = 30 * 86_400_000; // 30 days
 
 function shouldUseSecureSessionCookie(): boolean {
+  if (process.env.NODE_ENV === "production") return true;
   const origin = process.env.APP_URL;
   if (origin) {
     try {
