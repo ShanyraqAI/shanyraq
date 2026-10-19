@@ -1,5 +1,6 @@
 "use client";
 
+import { ApartmentCover } from "./apartment-cover";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -29,7 +30,6 @@ import { deleteRoomAction, upsertRoomAction } from "@/server/actions/rooms";
 import { runOfflineAction } from "@/lib/offline/actions";
 import { ROOM_STATUSES, type RoomStatus } from "@/lib/constants";
 import type { RoomVM } from "@/lib/types";
-import { formatMoney } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { MAX_NIGHTLY_PRICE, MIN_NIGHTLY_PRICE } from "@/lib/pricing";
 import type { AppLocale } from "@/lib/locale";
@@ -76,6 +76,8 @@ export function RoomsGrid({
   const [deleteRoom, setDeleteRoom] = useState<RoomVM | null>(null);
   const [pending, setPending] = useState(false);
   const router = useRouter();
+  const [search, setSearch] = useState("");
+  const visibleRooms = rooms.filter((room) => `${room.number} ${room.roomTypeName}`.toLocaleLowerCase(locale).includes(search.trim().toLocaleLowerCase(locale)));
 
   function openCreate() {
     const type = typeDetails[0];
@@ -157,28 +159,32 @@ export function RoomsGrid({
       {addButtonOnly ? addButton : rooms.length === 0 ? (
         <EmptyState
           icon={BedDouble}
-          title="У вас пока нет номеров"
-          description="Добавьте первый номер или квартиру. Он появится в календаре и бронированиях."
-          action={<Button onClick={openCreate}><Plus /> Добавить первый номер</Button>}
+          title={locale === "kk" ? "Пәтерлер әлі жоқ" : "У вас пока нет квартир"}
+          description={locale === "kk" ? "Күнтізбеде жұмыс істеу үшін бірінші пәтерді қосыңыз." : "Добавьте первую квартиру. Она появится в календаре и бронированиях."}
+          action={<Button onClick={openCreate}><Plus /> Добавить первую квартиру</Button>}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4">
-          {rooms.map((room) => (
-            <div id={`room-${room.id}`} key={room.id} className={`sh-mobile-card group relative flex flex-col overflow-hidden p-3 transition-shadow sm:min-h-48 sm:rounded-xl sm:border-primary/10 sm:bg-gradient-to-br sm:from-card sm:via-card sm:to-primary/[0.035] sm:p-4 sm:transition-[border-color,box-shadow,transform] sm:duration-200 sm:hover:-translate-y-0.5 sm:hover:border-primary/25 sm:hover:shadow-md ${highlightRoomId === room.id ? "ring-2 ring-[#07866b] shadow-lg shadow-emerald-900/10" : ""}`}>
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-primary/65 via-chart-2/35 to-transparent" />
+        <div className="space-y-4">
+          <label className="block text-sm font-semibold">{locale === "kk" ? "Пәтерді іздеу" : "Поиск квартиры"}<Input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={locale === "kk" ? "Атауы немесе түрі" : "Название или тип"} className="mt-2 min-h-11 max-w-lg text-base" /></label>
+          <p role="status" className="text-sm text-muted-foreground">{locale === "kk" ? `Табылды: ${visibleRooms.length}` : `Найдено: ${visibleRooms.length}`}</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {visibleRooms.map((room) => (
+            <div id={`room-${room.id}`} key={room.id} className={`sh-mobile-card group relative flex flex-col overflow-hidden ${highlightRoomId === room.id ? "ring-2 ring-primary" : ""}`}>
+              <Link href={`/dashboard/rooms/${encodeURIComponent(room.id)}`} aria-label={locale === "kk" ? `${room.number} пәтерін ашу` : `Открыть квартиру ${room.number}`} className="block focus-visible:outline-2 focus-visible:outline-primary"><ApartmentCover photoId={room.photoId} name={room.number} restricted={room.photosRestricted} kk={locale === "kk"} /></Link>
+              <div className="flex flex-1 flex-col p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <div className={`flex size-9 shrink-0 items-center justify-center rounded-xl ring-1 ${room.status === "CLEANING" ? "bg-[#fff0d8] text-[#c6892c] ring-[#f3dfbd]" : room.status === "MAINTENANCE" || room.status === "OUT_OF_ORDER" ? "bg-[#fee7e4] text-[#df655d] ring-[#f3d1cd]" : room.guestTonight ? "bg-[#e5edfb] text-[#5087d7] ring-[#d5e1f6]" : "bg-[#ddf2ea] text-[#14836a] ring-[#cbe7dd]"}`}>
                     <BedDouble className="size-4" />
                   </div>
                   <div className="min-w-0 leading-tight">
-                    <Link href={`/dashboard/rooms/${encodeURIComponent(room.id)}`} className="flex min-h-11 items-center text-base font-semibold text-[#07866b]" title={room.number}><span className="truncate">{room.number}</span></Link>
+                    <Link href={`/dashboard/rooms/${encodeURIComponent(room.id)}`} className="flex min-h-11 items-center text-base font-semibold text-[#07866b]" title={room.number}><span className="break-words">{room.number}</span></Link>
                     <div className="truncate text-xs text-muted-foreground">{room.roomTypeName}</div>
                   </div>
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-sm" aria-label={`Действия для номера ${room.number}`}><MoreVertical /></Button>
+                    <Button variant="ghost" size="icon" className="size-11" aria-label={locale === "kk" ? `${room.number} әрекеттері` : `Действия для квартиры ${room.number}`}><MoreVertical /></Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem onSelect={() => openEdit(room)}><Pencil /> Редактировать</DropdownMenuItem>
@@ -193,16 +199,18 @@ export function RoomsGrid({
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              <div className="mt-1 flex items-center justify-between gap-2 pl-[46px] sm:hidden"><span className={`rounded-full px-2.5 py-1 text-[9px] font-bold ${room.status === "CLEANING" ? "bg-[#fff0d8] text-[#c6892c]" : room.status === "MAINTENANCE" || room.status === "OUT_OF_ORDER" ? "bg-[#fee7e4] text-[#df655d]" : room.status === "OCCUPIED" ? "bg-[#e5edfb] text-[#5087d7]" : "bg-[#ddf2ea] text-[#14836a]"}`}>{t.statuses.room[room.status]}</span>{room.guestTonight ? <span className="truncate text-[10px] text-muted-foreground">{room.guestTonight}</span> : <span className="truncate text-[10px] text-muted-foreground">{room.floor} {locale === "kk" ? "қабат" : "этаж"}</span>}</div>
-              <div className="mt-4 hidden grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 text-sm sm:grid">
-                <span className="text-muted-foreground">Этаж</span><span className="min-w-12 text-right tabular-nums">{room.floor}</span>
-                <span className="text-muted-foreground">Вместимость</span><span className="min-w-12 text-right tabular-nums">{room.capacity ?? 1}</span>
-                <span className="text-muted-foreground">Цена</span><span className="whitespace-nowrap text-right font-medium tabular-nums">{formatMoney(room.basePrice ?? 0)}</span>
-                <span className="text-muted-foreground">Статус</span><span className="justify-self-end"><RoomStatusBadge status={room.status} /></span>
+              <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 text-sm">
+                <span className="text-muted-foreground">{locale === "kk" ? "Қабат" : "Этаж"}</span><span className="min-w-12 text-right tabular-nums">{room.floor}</span>
+                <span className="text-muted-foreground">{locale === "kk" ? "Сыйымдылық" : "Вместимость"}</span><span className="min-w-12 text-right tabular-nums">{room.capacity ?? 1}</span>
+                <span className="text-muted-foreground">{locale === "kk" ? "Базалық баға / түн" : "Базовая цена / ночь"}</span><span className="whitespace-nowrap text-right font-medium tabular-nums">{new Intl.NumberFormat(locale === "kk" ? "kk-KZ" : "ru-RU", { style: "currency", currency: room.currency ?? "KZT", maximumFractionDigits: 2 }).format(room.basePrice ?? 0)}</span>
+                <span className="text-muted-foreground">{locale === "kk" ? "Күйі" : "Статус"}</span><span className="justify-self-end"><RoomStatusBadge status={room.status} /></span>
               </div>
-              {room.guestTonight ? <p className="mt-auto hidden truncate rounded-md bg-secondary/60 px-2 py-1 text-xs sm:block">{t.rooms.tonight(room.guestTonight)}</p> : null}
+              {room.guestTonight ? <p className="mt-3 truncate rounded-md bg-secondary/60 px-2 py-2 text-sm">{t.rooms.tonight(room.guestTonight)}</p> : null}
+              </div>
             </div>
           ))}
+          </div>
+          {!visibleRooms.length ? <p className="rounded-xl border border-dashed p-5 text-sm">{locale === "kk" ? "Ештеңе табылмады. Іздеуді өзгертіңіз." : "Ничего не найдено. Измените поисковый запрос."}</p> : null}
         </div>
       )}
 

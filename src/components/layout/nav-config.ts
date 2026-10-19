@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard,
+  House,
   CalendarDays,
   ClipboardList,
   BedDouble,
@@ -28,7 +28,7 @@ export interface NavItem {
 }
 
 const ALL_NAV_MAIN: (NavItem & { visible: boolean })[] = [
-  { title: t.nav.overview, href: "/dashboard", icon: LayoutDashboard, tourId: "overview", permission: "OVERVIEW", visible: true },
+  { title: t.nav.overview, href: "/dashboard", icon: House, tourId: "overview", permission: "OVERVIEW", visible: true },
   { title: t.nav.calendar, href: "/dashboard/calendar", icon: CalendarDays, tourId: "calendar", permission: "CALENDAR", visible: true },
   { title: t.nav.reservations, href: "/dashboard/reservations", icon: ClipboardList, tourId: "reservations", permission: "RESERVATIONS", visible: true },
   { title: t.nav.rooms, href: "/dashboard/rooms", icon: BedDouble, tourId: "rooms", permission: "ROOMS", visible: true },
@@ -43,10 +43,24 @@ const ALL_NAV_SECONDARY: (NavItem & { visible: boolean })[] = [
   { title: "Коммуникации", href: "/dashboard/communications", icon: MessageCircle, permission: "RESERVATIONS", visible: true },
   { title: "Подписка и оплата", href: "/dashboard/billing", icon: CreditCard, permission: "FULL", visible: PRODUCT_AVAILABILITY.billing },
   { title: t.nav.reports, href: "/dashboard/reports", icon: BarChart3, permission: "REPORTS", visible: true },
-  { title: t.nav.payments, href: "/dashboard/reports#payments", icon: CreditCard, permission: "REPORTS", visible: true },
+  { title: t.nav.payments, href: "/dashboard/reports?tab=payments", icon: CreditCard, permission: "REPORTS", visible: true },
   { title: t.nav.exports, href: "/dashboard/exports", icon: FileDown, permission: ["REPORTS", "CALENDAR", "RESERVATIONS", "GUESTS"], visible: true },
   { title: t.nav.settings, href: "/dashboard/settings", icon: Settings, permission: "FULL", visible: true },
   { title: "Журнал действий", href: "/dashboard/activity", icon: History, permission: "FULL", ownerOnly: true, visible: true },
 ];
 
 export const NAV_SECONDARY: NavItem[] = ALL_NAV_SECONDARY.filter((item) => item.visible);
+
+export function navigationForLocale(locale: "ru" | "kk") {
+  const ru: Record<string, string> = { "/dashboard/rooms": "Квартиры", "/dashboard/reservations": "Брони" };
+  const kk: Record<string, string> = {
+    "/dashboard": "Шолу", "/dashboard/calendar": "Күнтізбе", "/dashboard/reservations": "Броньдар",
+    "/dashboard/rooms": "Пәтерлер", "/dashboard/guests": "Қонақтар", "/dashboard/rates": "Бағалар мен тарифтер",
+    "/dashboard/channels": "Брондау арналары", "/dashboard/communications": "Қонақпен байланыс",
+    "/dashboard/billing": "Жазылым және төлем", "/dashboard/reports": "Есептер",
+    "/dashboard/reports?tab=payments": "Төлемдер", "/dashboard/exports": "Деректерді экспорттау",
+    "/dashboard/settings": "Баптаулар", "/dashboard/activity": "Әрекеттер журналы",
+  };
+  const localize = (item: NavItem): NavItem => ({ ...item, title: (locale === "kk" ? kk : ru)[item.href] ?? item.title });
+  return { main: NAV_MAIN.map(localize), secondary: NAV_SECONDARY.map(localize) };
+}

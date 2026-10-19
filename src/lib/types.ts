@@ -35,6 +35,9 @@ export interface RoomVM {
   capacity?: number;
   basePrice?: number;
   guestTonight: string | null;
+  photoId?: string | null;
+  photosRestricted?: boolean;
+  currency?: string;
 }
 
 export interface RatePlanVM {

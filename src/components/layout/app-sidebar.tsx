@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { BrandLogo } from "@/components/shared/brand-logo";
 import { ChangeEvent, useRef, useState, useTransition } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronDown, ImagePlus, Hotel, LogOut, Plus, Settings2, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
@@ -16,30 +16,28 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NAV_MAIN, NAV_SECONDARY } from "./nav-config";
+import { navigationForLocale } from "./nav-config";
+import { canOpenNavigation, isNavigationActive } from "@/lib/navigation";
+import type { AppLocale } from "@/lib/locale";
 import { SupportDialog } from "@/components/support/support-dialog";
 import type { HotelPermission } from "@/lib/access";
 
-function NavLinks({ onNavigate, mobile = false, accessLevel = "FULL", permissions = [], isOwner = false }: { onNavigate?: () => void; mobile?: boolean; accessLevel?: string; permissions?: HotelPermission[]; isOwner?: boolean }) {
+function NavLinks({ onNavigate, mobile = false, accessLevel = "FULL", permissions = [], isOwner = false, locale = "ru" }: { onNavigate?: () => void; mobile?: boolean; accessLevel?: string; permissions?: HotelPermission[]; isOwner?: boolean; locale?: AppLocale }) {
   const pathname = usePathname();
-  const isActive = (href: string) =>
-    href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
-  const canOpen = (permission: HotelPermission | "FULL" | HotelPermission[]) =>
-    Array.isArray(permission)
-      ? permission.some((item) => permissions.includes(item))
-      : permission === "FULL"
-        ? accessLevel === "FULL"
-        : permissions.includes(permission);
-  const mainItems = NAV_MAIN.filter((item) => canOpen(item.permission) && (!item.ownerOnly || isOwner));
-  const secondaryItems = NAV_SECONDARY.filter((item) => canOpen(item.permission) && (!item.ownerOnly || isOwner));
+  const searchParams = useSearchParams();
+  const isActive = (href: string) => isNavigationActive(pathname, href, searchParams.get("tab"));
+  const access = { accessLevel, permissions, isOwner };
+  const navigation = navigationForLocale(locale);
+  const mainItems = navigation.main.filter((item) => canOpenNavigation(access, item.permission, item.ownerOnly));
+  const secondaryItems = navigation.secondary.filter((item) => canOpenNavigation(access, item.permission, item.ownerOnly));
   const groups = mobile ? [
-    ["Основное", mainItems.filter((item) => ["/dashboard", "/dashboard/calendar", "/dashboard/reservations"].includes(item.href))],
-    ["Объект", mainItems.filter((item) => !["/dashboard", "/dashboard/calendar", "/dashboard/reservations"].includes(item.href))],
-    ["Аналитика", secondaryItems.filter((item) => ["/dashboard/reports", "/dashboard/exports"].includes(item.href))],
-    ["Система", secondaryItems.filter((item) => !["/dashboard/reports", "/dashboard/exports"].includes(item.href))],
+    [locale === "kk" ? "Негізгі" : "Основное", mainItems.filter((item) => ["/dashboard", "/dashboard/calendar", "/dashboard/reservations"].includes(item.href))],
+    [locale === "kk" ? "Нысан" : "Объект", mainItems.filter((item) => !["/dashboard", "/dashboard/calendar", "/dashboard/reservations"].includes(item.href))],
+    [locale === "kk" ? "Аналитика" : "Аналитика", secondaryItems.filter((item) => ["/dashboard/reports", "/dashboard/exports"].includes(item.href))],
+    [locale === "kk" ? "Жүйе" : "Система", secondaryItems.filter((item) => !["/dashboard/reports", "/dashboard/exports"].includes(item.href))],
   ] as const : [];
 
-  const navLink = (item: (typeof mainItems)[number]) => <Link key={item.href} href={item.href} data-tour-id={item.tourId} onClick={onNavigate} className={cn("flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors", isActive(item.href) ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground")}><item.icon className={cn("size-4 shrink-0", isActive(item.href) && "text-primary")} />{item.title}</Link>;
+  const navLink = (item: (typeof mainItems)[number]) => <Link key={item.href} href={item.href} aria-current={isActive(item.href) ? "page" : undefined} data-tour-id={item.tourId} onClick={onNavigate} className={cn("flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors", isActive(item.href) ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground")}><item.icon className={cn("size-4 shrink-0", isActive(item.href) && "text-primary")} />{item.title}</Link>;
 
   return (
     <nav className="flex flex-col gap-1 px-3">
@@ -47,7 +45,7 @@ function NavLinks({ onNavigate, mobile = false, accessLevel = "FULL", permission
       {mainItems.map((item) => (
         <Link
           key={item.href}
-          href={item.href}
+          href={item.href} aria-current={isActive(item.href) ? "page" : undefined}
           data-tour-id={item.tourId}
           onClick={onNavigate}
           className={cn(
@@ -62,12 +60,12 @@ function NavLinks({ onNavigate, mobile = false, accessLevel = "FULL", permission
         </Link>
       ))}
       {secondaryItems.length ? <div className="mt-4 px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-        {t.sidebar.manage}
+        {locale === "kk" ? "Басқару" : t.sidebar.manage}
       </div> : null}
       {secondaryItems.map((item) => (
         <Link
           key={item.href}
-          href={item.href}
+          href={item.href} aria-current={isActive(item.href) ? "page" : undefined}
           onClick={onNavigate}
           className={cn(
             "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
@@ -94,6 +92,7 @@ export function SidebarContent({
   accessLevel,
   permissions,
   canManageHotels,
+  locale = "ru",
   mobile = false,
   onNavigate,
 }: {
@@ -105,6 +104,7 @@ export function SidebarContent({
   accessLevel?: string;
   permissions?: HotelPermission[];
   canManageHotels: boolean;
+  locale?: AppLocale;
   mobile?: boolean;
   onNavigate?: () => void;
 }) {
@@ -184,14 +184,14 @@ export function SidebarContent({
         <DropdownMenuTrigger asChild>
           <button className="mx-3 mt-4 flex items-center rounded-lg border bg-secondary/50 px-3 py-2.5 text-left transition-colors hover:bg-secondary">
             <span className="min-w-0 flex-1">
-              <span className="block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{t.sidebar.property}</span>
+              <span className="block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{locale === "kk" ? "Нысан" : "Объект"}</span>
               <span className="block truncate text-sm font-semibold" title={hotelName}>{hotelName}</span>
             </span>
             <ChevronDown className="size-4 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-60" align="start">
-          <DropdownMenuLabel>Ваши отели</DropdownMenuLabel>
+          <DropdownMenuLabel>{locale === "kk" ? "Нысандарыңыз" : "Ваши объекты"}</DropdownMenuLabel>
           {hotels.map((hotel) => (
             <DropdownMenuItem key={hotel.id} onSelect={() => selectHotel(hotel.id)} className="py-2" disabled={pending}>
               <Hotel className="size-4" />
@@ -202,19 +202,19 @@ export function SidebarContent({
           {canManageHotels ? <>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => setHotelDialogOpen(true)} className="py-2 text-primary">
-              <Plus className="size-4" /> Добавить отель
+              <Plus className="size-4" /> {locale === "kk" ? "Нысан қосу" : "Добавить объект"}
             </DropdownMenuItem>
           </> : null}
         </DropdownMenuContent>
       </DropdownMenu>
 
       <div className="mt-4 flex-1 overflow-y-auto">
-        <NavLinks mobile={mobile} onNavigate={onNavigate} accessLevel={accessLevel} permissions={permissions} isOwner={canManageHotels} />
+        <NavLinks mobile={mobile} onNavigate={onNavigate} accessLevel={accessLevel} permissions={permissions} isOwner={canManageHotels} locale={locale} />
       </div>
 
       {/* Footer */}
       <div className="border-t p-3">
-        <SupportDialog />
+        <SupportDialog locale={locale} />
         <button type="button" onClick={() => setProfileOpen(true)} className="flex w-full items-center gap-3 rounded-lg border bg-card px-3 py-2.5 text-left shadow-sm transition-colors hover:bg-secondary/60">
           <Avatar className="size-8 shrink-0">
             {avatarSrc ? <AvatarImage src={avatarSrc} alt={userName} /> : null}
@@ -229,7 +229,7 @@ export function SidebarContent({
           </Avatar>
           <div className="min-w-0 flex-1 leading-tight">
             <div className="truncate text-sm font-medium">{userName}</div>
-            <div className="text-[11px] text-muted-foreground">{t.sidebar.role}</div>
+            <div className="text-[11px] text-muted-foreground">{locale === "kk" ? (canManageHotels ? "Иесі" : "Қызметкер") : (canManageHotels ? "Владелец" : "Сотрудник")}</div>
           </div>
           <Settings2 className="size-4 text-muted-foreground" />
         </button>
@@ -238,16 +238,16 @@ export function SidebarContent({
       <Dialog open={hotelDialogOpen} onOpenChange={setHotelDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Добавить отель</DialogTitle>
-            <DialogDescription>Создайте ещё один объект и переключайтесь между отелями из бокового меню.</DialogDescription>
+            <DialogTitle>{locale === "kk" ? "Нысан қосу" : "Добавить объект"}</DialogTitle>
+            <DialogDescription>{locale === "kk" ? "Басқа нысанды қосып, бүйірлік мәзірден ауыстырыңыз." : "Добавьте ещё один объект и переключайтесь между ними из бокового меню."}</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="new-hotel-name">Название отеля</Label>
+            <Label htmlFor="new-hotel-name">{locale === "kk" ? "Нысан атауы" : "Название объекта"}</Label>
             <Input id="new-hotel-name" value={newHotelName} onChange={(event) => setNewHotelName(event.target.value)} placeholder="Например, Almaty City Hotel" autoFocus />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setHotelDialogOpen(false)}>Отмена</Button>
-            <Button onClick={addHotel} disabled={!newHotelName.trim() || pending}><Plus className="size-4" /> Добавить</Button>
+            <Button variant="outline" onClick={() => setHotelDialogOpen(false)}>{locale === "kk" ? "Бас тарту" : "Отмена"}</Button>
+            <Button onClick={addHotel} disabled={!newHotelName.trim() || pending}><Plus className="size-4" /> {locale === "kk" ? "Қосу" : "Добавить"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -255,8 +255,8 @@ export function SidebarContent({
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Персонализация</DialogTitle>
-            <DialogDescription>Настройте фото профиля и управление аккаунтом.</DialogDescription>
+            <DialogTitle>{locale === "kk" ? "Жеке профиль" : "Мой профиль"}</DialogTitle>
+            <DialogDescription>{locale === "kk" ? "Профиль суреті және аккаунтты басқару." : "Фото профиля и управление аккаунтом."}</DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-4 rounded-lg border bg-secondary/30 p-4">
             <Avatar className="size-14">
@@ -265,16 +265,16 @@ export function SidebarContent({
             </Avatar>
             <div className="min-w-0">
               <p className="truncate font-medium">{userName}</p>
-              <p className="text-xs text-muted-foreground">PNG, JPG или WebP · до 1 МБ</p>
+              <p className="text-xs text-muted-foreground">{locale === "kk" ? "PNG, JPG немесе WebP · 1 МБ дейін" : "PNG, JPG или WebP · до 1 МБ"}</p>
               <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseAvatar} className="sr-only" />
               <Button type="button" variant="outline" size="sm" className="mt-2" disabled={pending} onClick={() => fileInputRef.current?.click()}>
-                <ImagePlus className="size-4" /> Выбрать фото
+                <ImagePlus className="size-4" /> {locale === "kk" ? "Суретті таңдау" : "Выбрать фото"}
               </Button>
             </div>
           </div>
           <DialogFooter className="sm:justify-between">
-            {accessLevel === "FULL" ? <Button asChild variant="outline"><Link href="/dashboard/settings" onClick={() => setProfileOpen(false)}>Настройки профиля</Link></Button> : <span />}
-            <form action={signOutAction}><Button type="submit" variant="ghost"><LogOut className="size-4" /> {t.account.signOut}</Button></form>
+            <Button asChild variant="outline"><Link href="/dashboard/profile" onClick={() => setProfileOpen(false)}>{locale === "kk" ? "Жеке профиль" : "Мой профиль"}</Link></Button>
+            <form action={signOutAction}><Button type="submit" variant="ghost"><LogOut className="size-4" /> {locale === "kk" ? "Шығу" : t.account.signOut}</Button></form>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -291,6 +291,7 @@ export function DesktopSidebar({
   accessLevel,
   permissions,
   canManageHotels,
+  locale = "ru",
 }: {
   hotelName: string;
   userName: string;
@@ -300,10 +301,11 @@ export function DesktopSidebar({
   accessLevel?: string;
   permissions?: HotelPermission[];
   canManageHotels: boolean;
+  locale?: AppLocale;
 }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r bg-sidebar lg:block">
-      <SidebarContent hotelName={hotelName} userName={userName} userAvatarUrl={userAvatarUrl} hotels={hotels} activeHotelId={activeHotelId} accessLevel={accessLevel} permissions={permissions} canManageHotels={canManageHotels} />
+      <SidebarContent hotelName={hotelName} userName={userName} userAvatarUrl={userAvatarUrl} hotels={hotels} activeHotelId={activeHotelId} accessLevel={accessLevel} permissions={permissions} canManageHotels={canManageHotels} locale={locale} />
     </aside>
   );
 }
