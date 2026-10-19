@@ -64,7 +64,7 @@ export function AccountForm({ initial, locale = "ru" }: { initial: AccountValues
           <div className="relative flex items-center gap-4">
             <div className="relative">
               <Avatar className="size-20 border-4 border-white/25 bg-white/15 shadow-lg"><AvatarImage src={values.avatarUrl} alt={`${values.firstName} ${values.lastName}`} /><AvatarFallback className="bg-white/15 text-xl font-extrabold text-white">{initials}</AvatarFallback></Avatar>
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="absolute -bottom-1 -right-1 grid size-8 place-items-center rounded-full bg-white text-[#087a64] shadow-md" aria-label={kk ? "Фотоны өзгерту" : "Изменить фото"}>{uploading ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}</button>
+              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="absolute -bottom-1 -right-1 grid size-11 place-items-center rounded-full bg-white text-[#087a64] shadow-md" aria-label={kk ? "Фотоны өзгерту" : "Изменить фото"}>{uploading ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}</button>
               <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseAvatar} className="sr-only" />
             </div>
             <div className="min-w-0"><p className="text-lg font-extrabold">{values.firstName} {values.lastName}</p><p className="mt-1 text-xs text-white/70">{kk ? "Жеке профиль · сурет 1 МБ дейін" : "Личный профиль · фото до 1 МБ"}</p></div>
@@ -86,7 +86,7 @@ export function AccountForm({ initial, locale = "ru" }: { initial: AccountValues
         </div>
       </form>
 
-      <div className="flex items-center justify-between gap-4 rounded-2xl border bg-card p-4 shadow-sm"><div className="flex min-w-0 items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-muted-foreground"><UserRound className="size-5" /></span><div><p className="text-sm font-semibold">{kk ? "Аккаунт қауіпсіздігі" : "Безопасность аккаунта"}</p><p className="text-xs text-muted-foreground">{kk ? "Осы құрылғыдағы сессияны аяқтау" : "Завершить текущую сессию на этом устройстве"}</p></div></div><form action={signOutAction}><Button type="submit" variant="outline" className="text-destructive"><LogOut className="size-4" /><span className="hidden sm:inline">{kk ? "Шығу" : "Выйти"}</span></Button></form></div>
+      <div className="flex items-center justify-between gap-4 rounded-2xl border bg-card p-4 shadow-sm"><div className="flex min-w-0 items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-muted-foreground"><UserRound className="size-5" /></span><div><p className="text-sm font-semibold">{kk ? "Аккаунт қауіпсіздігі" : "Безопасность аккаунта"}</p><p className="text-xs text-muted-foreground">{kk ? "Осы құрылғыдағы сессияны аяқтау" : "Завершить текущую сессию на этом устройстве"}</p></div></div><form action={signOutAction}><Button type="submit" variant="outline" className="text-destructive"><LogOut className="size-4" /><span >{kk ? "Шығу" : "Выйти"}</span></Button></form></div>
     </div>
   );
 }

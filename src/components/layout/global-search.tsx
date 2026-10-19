@@ -1,86 +1,43 @@
 "use client";
-
-import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BedDouble, CalendarCheck2, Search, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import type { AppLocale } from "@/lib/locale";
 
-export interface GlobalSearchItem {
-  id: string;
-  type: "reservation" | "guest" | "room";
-  title: string;
-  subtitle: string;
-  href: string;
-}
-
-const typeLabels = { reservation: "Бронирования", guest: "Гости", room: "Номера" } as const;
-const typeIcons = { reservation: CalendarCheck2, guest: Users, room: BedDouble } as const;
-
-export function GlobalSearch({ items }: { items: GlobalSearchItem[] }) {
+export interface GlobalSearchItem { id: string; type: "reservation" | "guest" | "room"; title: string; subtitle: string; href: string }
+const icons = { reservation: CalendarCheck2, guest: Users, room: BedDouble } as const;
+export function GlobalSearch({ items, locale = "ru" }: { items: GlobalSearchItem[]; locale?: AppLocale }) {
   const router = useRouter();
+  const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [focused, setFocused] = useState(false);
   const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
+  const kk = locale === "kk";
+  const labels = kk ? { reservation: "Броньдар", guest: "Қонақтар", room: "Пәтерлер" } : { reservation: "Брони", guest: "Гости", room: "Квартиры" };
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        if (inputRef.current?.getClientRects().length) inputRef.current.focus();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    const handle = (event: KeyboardEvent) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && inputRef.current?.getClientRects().length) { event.preventDefault(); inputRef.current.focus(); } };
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
   }, []);
   const results = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase("ru-RU");
-    if (!normalized) return [];
-    return items.filter((item) => `${item.title} ${item.subtitle}`.toLocaleLowerCase("ru-RU").includes(normalized)).slice(0, 12);
-  }, [items, query]);
-
-  const showResults = focused && Boolean(query.trim());
-
-  return (
-    <div
-      className="relative"
-      onFocusCapture={() => setFocused(true)}
-      onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
-      }}
-    >
-      <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        ref={inputRef}
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && results[0]) {
-            event.preventDefault();
-            router.push(results[0].href);
-            setQuery("");
-            setFocused(false);
-          }
-          if (event.key === "Escape") {
-            setQuery("");
-            inputRef.current?.blur();
-          }
-        }}
-        placeholder="Бронь, гость или номер…"
-        aria-label="Поиск по текущему отелю"
-        aria-expanded={showResults}
-        aria-autocomplete="list"
-        role="combobox"
-        className="h-9 w-9 bg-background pl-8 pr-0 shadow-none placeholder:text-transparent focus:w-44 focus:pr-3 focus:placeholder:text-muted-foreground sm:w-72 sm:pr-3 sm:placeholder:text-muted-foreground"
-      />
-      {showResults ? (
-        <div className="fixed inset-x-4 top-14 z-50 max-h-[min(420px,70dvh)] overflow-y-auto rounded-xl border bg-popover p-2 text-popover-foreground shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+0.5rem)] sm:w-[min(32rem,calc(100vw-2rem))]">
-          {results.length ? results.map((item) => {
-            const Icon = typeIcons[item.type];
-            return <Link key={item.id} href={item.href} onClick={() => { setFocused(false); setQuery(""); }} className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-secondary/70"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-primary"><Icon className="size-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{item.title}</span><span className="block truncate text-xs text-muted-foreground">{item.subtitle}</span></span><span className="text-[10px] text-muted-foreground">{typeLabels[item.type]}</span></Link>;
-          }) : <div className="px-6 py-10 text-center text-sm text-muted-foreground">{items.length ? "Ничего не найдено в текущем отеле." : "Данных для поиска пока нет."}</div>}
-        </div>
-      ) : null}
-    </div>
-  );
+    const needle = query.trim().toLocaleLowerCase(locale);
+    return needle ? items.filter((item) => `${item.title} ${item.subtitle}`.toLocaleLowerCase(locale).includes(needle)).slice(0, 12) : [];
+  }, [items, query, locale]);
+  const open = focused && Boolean(query.trim());
+  function choose(item: GlobalSearchItem) { router.push(item.href); setQuery(""); setFocused(false); inputRef.current?.blur(); }
+  return <div className="relative shrink-0" onFocusCapture={() => setFocused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false); }}>
+    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+    <Input ref={inputRef} type="search" role="combobox" value={query} onChange={(event) => { setQuery(event.target.value); setActive(0); }} onKeyDown={(event) => {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setFocused(true); setActive((current) => results.length ? (current + (event.key === "ArrowDown" ? 1 : -1) + results.length) % results.length : 0); }
+      if (event.key === "Enter" && results[active]) { event.preventDefault(); choose(results[active]); }
+      if (event.key === "Escape") { setQuery(""); inputRef.current?.blur(); }
+    }} placeholder={kk ? "Бронь, қонақ, пәтер…" : "Бронь, гость, квартира…"} aria-label={kk ? "Ағымдағы нысанда іздеу" : "Поиск по текущему объекту"} aria-expanded={open} aria-controls={open ? `${id}-list` : undefined} aria-activedescendant={open && results[active] ? `${id}-${active}` : undefined} aria-autocomplete="list" className="h-11 w-11 pl-10 pr-0 placeholder:text-transparent max-lg:focus:fixed max-lg:focus:inset-x-4 max-lg:focus:top-3 max-lg:focus:z-[60] max-lg:focus:w-[calc(100%-2rem)] max-lg:focus:pl-3 max-lg:focus:pr-3 max-lg:focus:placeholder:text-muted-foreground lg:w-72 lg:pr-3 lg:placeholder:text-muted-foreground" />
+    {open ? <div className="fixed inset-x-4 top-20 z-50 max-h-[70dvh] overflow-y-auto rounded-xl border bg-popover p-2 text-popover-foreground shadow-lg lg:absolute lg:inset-x-auto lg:right-0 lg:top-full lg:mt-2 lg:w-[32rem]">
+      <p className="px-3 py-2 text-sm text-muted-foreground">{kk ? "Соңғы жүктелген жазбалар бойынша іздеу. Толық тізім тиісті бөлімде." : "Поиск по последним загруженным записям. Полный список — в нужном разделе."}</p>
+      <ul id={`${id}-list`} role="listbox" aria-label={kk ? "Іздеу нәтижелері" : "Результаты поиска"}>{results.map((item, index) => { const Icon = icons[item.type]; return <li key={item.id} id={`${id}-${index}`} role="option" aria-selected={active === index} onMouseDown={(event) => event.preventDefault()} onMouseMove={() => setActive(index)} onClick={() => choose(item)} className={`flex min-h-14 cursor-pointer items-center gap-3 rounded-lg px-3 py-3 ${active === index ? "bg-accent text-accent-foreground" : ""}`}><Icon className="size-5 shrink-0" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{item.title}</span><span className="block truncate text-sm">{item.subtitle}</span></span><span className="text-sm">{labels[item.type]}</span></li>; })}</ul>
+      {!results.length ? <p role="status" className="px-3 py-6 text-sm">{kk ? "Жүктелген жазбалардан табылмады." : "Среди загруженных записей ничего не найдено."}</p> : null}
+    </div> : null}
+  </div>;
 }

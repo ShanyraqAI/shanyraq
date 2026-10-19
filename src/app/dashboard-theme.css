@@ -1,4 +1,4 @@
-/* Only dashboard colors change; dimensions, typography and interactions stay intact.
+/* Dashboard theme and mobile readability/accessibility adjustments.
    The root scope also supplies these colors to dialogs rendered through portals. */
 :root:not(.dark):has([data-dashboard-theme]) {
   --background: #f7f7f2;
@@ -105,7 +105,7 @@
     --secondary: #f1f4ef;
     --secondary-foreground: #26352f;
     --muted: #f1f4ef;
-    --muted-foreground: #8b9189;
+    --muted-foreground: #56635b;
     --accent: #e4f3ee;
     --accent-foreground: #167862;
     --border: #e2e4da;
@@ -120,7 +120,7 @@
 
   .sh-mobile-main {
     position: relative;
-    max-width: 430px;
+    max-width: 1024px;
     min-height: calc(100dvh - 4.5rem);
     overflow-x: hidden;
     background:
@@ -146,9 +146,9 @@
 
   .sh-mobile-eyebrow {
     margin-top: 0.28rem;
-    font-size: 0.72rem;
+    font-size: 0.875rem;
     line-height: 1rem;
-    color: #8b9189;
+    color: #56635b;
   }
 
   .sh-mobile-section-title {
@@ -169,12 +169,12 @@
 
   .sh-mobile-chip {
     display: inline-flex;
-    min-height: 30px;
+    min-height: 44px;
     align-items: center;
     justify-content: center;
     border-radius: 999px;
     padding-inline: 0.72rem;
-    font-size: 0.68rem;
+    font-size: 0.875rem;
     font-weight: 700;
     color: #747b74;
     background: #f0f1eb;
@@ -207,7 +207,7 @@
     --primary-foreground: #ffffff;
     --secondary: #f4f7f3;
     --secondary-foreground: #26352f;
-    --muted-foreground: #8b9189;
+    --muted-foreground: #56635b;
     --accent: #eff8f4;
     --accent-foreground: #167862;
     --border: #eceee7;
@@ -266,4 +266,10 @@
 @media (display-mode: standalone) {
   html, body { overscroll-behavior-y: none; }
   [data-dashboard-theme] { -webkit-tap-highlight-color: transparent; }
+}
+
+/* Operational captions must remain readable on the light mobile canvas. */
+@media (max-width: 1023px) {
+  [data-dashboard-theme] :is([class~="text-[#939992]"], [class~="text-[#929991]"], [class~="text-[#959b94]"], [class~="text-[#979d96]"], [class~="text-[#a0a59f]"], [class~="text-[#969c95]"], [class~="text-[#858c85]"], [class~="text-[#8b9189]"], [class~="text-[#939991]"]) { color: #56635b; }
+  [data-dashboard-theme] :is(a, button, input, select, textarea):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 }

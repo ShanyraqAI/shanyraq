@@ -1,5 +1,7 @@
 "use client";
 
+import { BookingPriceFields } from "./booking-price-fields";
+import { bookingPrice, type ManualBookingPrice } from "@/lib/reservations/manual-price";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -113,7 +115,7 @@ export function ReservationFormDialog({
   const selectedRoomTypeBasePrice = useMemo(() => {
     // пробуем найти цену из любого тарифа этого типа, иначе 0 — сервер подставит реальную цену типа
     const anyPlan = ratePlans.find((p) => p.roomTypeId === selectedRoom?.roomTypeId);
-    return anyPlan?.basePrice ?? 0;
+    return anyPlan?.basePrice ?? selectedRoom?.basePrice ?? 0;
   }, [ratePlans, selectedRoom]);
   const plansForType = useMemo(
     () => ratePlans.filter((p) => p.roomTypeId === selectedRoom?.roomTypeId),
@@ -136,18 +138,17 @@ export function ReservationFormDialog({
   const [pricingMode, setPricingMode] = useState<"RATE_PLAN" | "MANUAL">(
     initial?.pricingMode ?? (hasPlansForType ? "RATE_PLAN" : "MANUAL"),
   );
-  const [manualTotal, setManualTotal] = useState(
-    initial?.pricingMode === "MANUAL" && initial.totalAmount !== undefined ? String(initial.totalAmount) : "",
+  const [manualPrice, setManualPrice] = useState<ManualBookingPrice>(
+    initial?.pricingMode === "MANUAL" && initial.totalAmount !== undefined ? { basis: "stay", amount: String(initial.totalAmount) } : null,
   );
-  const manualAmount = manualTotal.trim() === "" ? Number.NaN : Number(manualTotal);
+  const price = bookingPrice(manualPrice, nights, estimate);
+  const manualAmount = price.total;
   const total = pricingMode === "MANUAL" ? manualAmount : estimate;
-  const canSubmit = pricingMode === "MANUAL"
-    ? Number.isFinite(manualAmount) && manualAmount >= 0
-    : hasPlansForType && Boolean(effectivePlanId);
+  const canSubmit = pricingMode === "MANUAL" ? price.valid : hasPlansForType && Boolean(effectivePlanId);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (saving) return;
+    if (saving || !canSubmit) return;
     setSaving(true);
     try {
       if (mode === "create") {
@@ -274,6 +275,7 @@ export function ReservationFormDialog({
               onValueChange={(v) => {
                 setRoomId(v);
                 setPlanId("");
+                setManualPrice(null);
                 const room = rooms.find((item) => item.id === v);
                 if (!ratePlans.some((plan) => plan.roomTypeId === room?.roomTypeId)) setPricingMode("MANUAL");
               }}
@@ -330,7 +332,7 @@ export function ReservationFormDialog({
           {!moving ? <section className="space-y-3 rounded-xl border p-3.5 max-sm:rounded-2xl max-sm:bg-white" aria-labelledby="reservation-pricing-title">
             <div>
               <Label id="reservation-pricing-title">Как рассчитать стоимость</Label>
-              <p className="hidden text-xs text-muted-foreground sm:block">Выберите готовый тариф или укажите итоговую цену вручную.</p>
+              <p className="hidden text-xs text-muted-foreground sm:block">Выберите тариф, укажите цену за ночь или стоимость всего проживания.</p>
             </div>
             <div className="grid h-10 grid-cols-2 gap-1 rounded-lg bg-secondary p-1 max-sm:h-11 max-sm:rounded-xl">
               <button type="button" aria-pressed={pricingMode === "RATE_PLAN"} disabled={!hasPlansForType} onClick={() => setPricingMode("RATE_PLAN")} className="flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors active:scale-100 disabled:cursor-not-allowed disabled:opacity-45 aria-pressed:bg-background aria-pressed:shadow-sm max-sm:h-9 max-sm:rounded-lg max-sm:font-bold max-sm:aria-pressed:bg-[#07866b] max-sm:aria-pressed:text-white"><Tags className="size-3.5" />Из тарифа</button>
@@ -346,13 +348,7 @@ export function ReservationFormDialog({
                 </Select>
               </div>
             ) : (
-              <div className="space-y-1.5">
-                <Label htmlFor="manual-total">Итоговая стоимость</Label>
-                <div className="relative">
-                  <Input id="manual-total" type="number" min="0" step="1" inputMode="decimal" value={manualTotal} onChange={(event) => setManualTotal(event.target.value)} className="pr-14 tabular-nums" placeholder="0" required />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">{hotelCurrency}</span>
-                </div>
-              </div>
+              <BookingPriceFields value={manualPrice} onChange={setManualPrice} nights={nights} quotedTotal={estimate} currency={hotelCurrency} allowReset={false} />
             )}
 
             {!hasPlansForType ? <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">Для этой категории ещё нет тарифов — укажите стоимость вручную.</p> : null}

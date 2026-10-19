@@ -8,6 +8,7 @@ import { accessUntil, isExpired } from "@/lib/billing/policy";
 import { requireOnboardingComplete } from "@/lib/auth/session";
 import { getCurrentHotel } from "@/lib/tenant";
 import { DesktopSidebar } from "@/components/layout/app-sidebar";
+import { PropertySwitcher } from "@/components/layout/property-switcher";
 import { MobileAppShell } from "@/components/layout/mobile-app-shell";
 import { MobileContextBack } from "@/components/layout/mobile-context-back";
 import { db } from "@/lib/db";
@@ -83,7 +84,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const [searchGuests, searchRooms, searchReservations] = searchableData;
   const searchItems: GlobalSearchItem[] = [
     ...(permissions.includes("GUESTS") ? searchGuests.map((guest) => ({ id: `guest-${guest.id}`, type: "guest" as const, title: guest.fullName, subtitle: `${guestDisplayId(guest.sequenceNumber)} · ${guest.email ?? guest.phone ?? "карточка гостя"}`, href: `/dashboard/guests?guest=${guest.id}` })) : []),
-    ...(permissions.includes("ROOMS") ? searchRooms.map((room) => ({ id: `room-${room.id}`, type: "room" as const, title: `Номер ${room.number}`, subtitle: `${room.roomType.name} · ${room.floor} этаж`, href: "/dashboard/rooms" })) : []),
+    ...(permissions.includes("ROOMS") ? searchRooms.map((room) => ({ id: `room-${room.id}`, type: "room" as const, title: `${locale === "kk" ? "Пәтер" : "Квартира"} ${room.number}`, subtitle: `${room.roomType.name} · ${room.floor} этаж`, href: `/dashboard/rooms/${encodeURIComponent(room.id)}` })) : []),
     ...(permissions.includes("RESERVATIONS") ? searchReservations.map((reservation) => ({ id: `reservation-${reservation.id}`, type: "reservation" as const, title: `${reservationDisplayId(reservation.sequenceNumber)} · ${reservation.guest.fullName}`, subtitle: `Номер ${reservation.room.number} · ${formatISODate(toISODate(reservation.checkIn))} — ${formatISODate(toISODate(reservation.checkOut))}`, href: `/dashboard/reservations?reservation=${reservation.id}` })) : []),
   ];
 
@@ -102,13 +103,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
         accessLevel={user.accessLevel ?? "FULL"}
         permissions={permissions}
         canManageHotels={user.role === "OWNER"}
+        locale={locale}
       />
       <div className="lg:pl-64">
-        <MobileAppShell locale={locale} />
-        <header className="sticky top-0 z-30 hidden h-16 items-center border-b bg-background/95 px-8 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:flex">
-          <div className="mx-auto flex w-full max-w-[1400px] items-center justify-end gap-2"><GlobalSearch items={searchItems} /><NotificationCenter initialUnreadCount={notificationCenter.unreadCount} initialItems={notificationCenter.items.map((item) => ({ ...item, readAt: item.readAt?.toISOString() ?? null, createdAt: item.createdAt.toISOString() }))} /></div>
+        <MobileAppShell locale={locale} permissions={permissions} accessLevel={user.accessLevel} isOwner={user.role === "OWNER"} />
+        <header className="sticky top-0 z-30 flex min-h-16 items-center border-b bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-8">
+          <div className="mx-auto flex w-full max-w-[1400px] items-center justify-end gap-2"><div className="min-w-0 flex-1 lg:hidden"><PropertySwitcher hotels={hotelOptions} activeHotelId={hotel.id} hotelName={hotelName} locale={locale} /></div><GlobalSearch items={searchItems} locale={locale} /><NotificationCenter initialUnreadCount={notificationCenter.unreadCount} initialItems={notificationCenter.items.map((item) => ({ ...item, readAt: item.readAt?.toISOString() ?? null, createdAt: item.createdAt.toISOString() }))} /></div>
         </header>
-        <main className="sh-mobile-main mx-auto w-full max-w-[1400px] px-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pt-6 lg:px-8 lg:py-8">
+        <main className="sh-mobile-main mx-auto w-full max-w-[1400px] px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pt-6 lg:px-8 lg:py-8">
           {user.platformRole === "SUPER_ADMIN" && (
             <Link href="/superadmin" className="mb-4 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100">
               <span className="flex items-center gap-2"><ShieldCheck className="size-4" />Открыть панель суперадминистратора</span>
