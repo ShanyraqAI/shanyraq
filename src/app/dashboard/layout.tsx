@@ -1,10 +1,7 @@
 import { OverviewWorkspace, OverviewOutlet } from "@/components/dashboard/overview-workspace";
 import { overviewScope, overviewParams, type OverviewContext } from "@/lib/dashboard/overview-types";
-import { SubscriptionBanner } from "@/components/subscription/subscription-banner";
-import { getOrganizationSubscription } from "@/lib/subscription/queries";
 import { BillingBanner } from "@/components/billing/billing-banner";
-import { getSubscription } from "@/lib/billing/service";
-import { accessUntil, isExpired } from "@/lib/billing/policy";
+import { getEffectiveSubscription } from "@/lib/billing/service";
 import { requireOnboardingComplete } from "@/lib/auth/session";
 import { getCurrentHotel } from "@/lib/tenant";
 import { DesktopSidebar } from "@/components/layout/app-sidebar";
@@ -14,7 +11,6 @@ import { db } from "@/lib/db";
 import { avatarDisplayUrl } from "@/lib/avatar";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
-import { PRODUCT_AVAILABILITY } from "@/lib/product-availability";
 import { resolveHotelPermissions } from "@/lib/access";
 import { SupportChatWidget } from "@/components/support/support-chat-widget";
 import { ContextualFeedbackPrompt } from "@/components/feedback/contextual-feedback-prompt";
@@ -52,9 +48,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const locale = await getRequestLocale(hotel.language);
   const userName = user.fullName;
   const permissions = resolveHotelPermissions(user);
-  const [subscription, manualSubscription, hotels, productExperience, reservationCount, notificationCenter, searchableData, upcomingReservations] = await Promise.all([
-    PRODUCT_AVAILABILITY.billing && user.organizationId ? getSubscription(user.organizationId) : Promise.resolve(null),
-    user.organizationId ? getOrganizationSubscription(user.organizationId) : Promise.resolve(null),
+  const [subscription, hotels, productExperience, reservationCount, notificationCenter, searchableData, upcomingReservations] = await Promise.all([
+    user.organizationId ? getEffectiveSubscription(user.organizationId) : Promise.resolve(null),
     db.membership.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: "asc" },
@@ -115,8 +110,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <span aria-hidden>→</span>
             </Link>
           )}
-          {manualSubscription && <SubscriptionBanner status={manualSubscription.status} endsAt={manualSubscription.endsAt} organizationName={hotelName} />}
-          {subscription && <BillingBanner endsAt={accessUntil(subscription).toISOString()} paid={Boolean(subscription.paidUntil)} initiallyExpired={isExpired(subscription)} />}
+          {subscription?.endsAt && (!subscription.unrestricted || subscription.manualActive) && <BillingBanner endsAt={subscription.endsAt.toISOString()} paid={subscription.paidActive} manual={subscription.manualActive} unrestricted={subscription.unrestricted} initiallyExpired={!subscription.writeAllowed} />}
           <OfflineSync scope={`${user.id}:${hotel.id}`} warmUrls={offlineUrls} locale={locale} />
           <MobileContextBack locale={locale} />
           <OverviewOutlet>{children}</OverviewOutlet>

@@ -1,7 +1,9 @@
+import { headers } from "next/headers";
 import { getSiteUrl } from "@/lib/site-url";
 import { landingFaqs } from "./landing-sections";
 
-export function LandingStructuredData() {
+export async function LandingStructuredData() {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   const siteUrl = getSiteUrl().origin;
   const data = {
     "@context": "https://schema.org",
@@ -48,6 +50,7 @@ export function LandingStructuredData() {
   return (
     <script
       type="application/ld+json"
+      nonce={nonce}
       // Escape "<" so content can never close the script tag.
       dangerouslySetInnerHTML={{ __html: JSON.stringify(data).replace(/</g, "\\u003c") }}
     />

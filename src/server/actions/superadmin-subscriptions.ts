@@ -26,13 +26,14 @@ export async function grantSubscriptionAction(input: unknown): Promise<ActionRes
     await grantSubscription({ organizationId, planId, months, note, grantedById: admin.id });
 
     revalidatePath("/superadmin/subscriptions");
-    return ok(undefined, "Подписка выдана");
+    revalidatePath("/dashboard", "layout");
+    return ok(undefined, "Ручной грант выдан");
   } catch (error) {
     return fail(toErrorMessage(error));
   }
 }
 
-/** Ends the current subscription immediately (e.g. a grant issued by mistake). */
+/** Cancels manual grants only; purchased access is never changed. */
 export async function endSubscriptionAction(input: unknown): Promise<ActionResult> {
   try {
     const parsed = z.object({ organizationId: z.string().trim().min(1).max(100) }).safeParse(input);
@@ -40,7 +41,8 @@ export async function endSubscriptionAction(input: unknown): Promise<ActionResul
     await requirePlatformAdmin();
     await endSubscription(parsed.data.organizationId);
     revalidatePath("/superadmin/subscriptions");
-    return ok(undefined, "Подписка завершена");
+    revalidatePath("/dashboard", "layout");
+    return ok(undefined, "Ручной грант отменён. Оплаченная подписка не изменена");
   } catch (error) {
     return fail(toErrorMessage(error));
   }

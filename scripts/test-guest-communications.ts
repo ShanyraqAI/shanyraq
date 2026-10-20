@@ -35,8 +35,10 @@ async function main() {
     const key = crypto.randomUUID();
     const input = { action: "prepare" as const, reservationId: ids.reservation, body: "Hello Guest!", photoIds: [], templateId: template.id, requestKey: key };
     const draft = await runCommunicationCommand(member, input) as { id: string; text: string };
-    const retry = await runCommunicationCommand(member, { ...input, body: "Changed retry" }) as { id: string; text: string };
+    const retry = await runCommunicationCommand(member, input) as { id: string; text: string };
     assert.equal(draft.id, retry.id); assert.equal(retry.text, "Hello Guest!");
+    // Idempotency keys replay the same request, never silently accept a changed payload.
+    await assert.rejects(runCommunicationCommand(member, { ...input, body: "Changed retry" }));
     await runCommunicationCommand(member, { action: "saveTemplate", template: { id: template.id, version: 1, name: "Instruction", body: "New text", language: "ru", status: "ACTIVE", isDefault: true, roomId: null } });
     assert.equal((await db.guestCommunication.findUniqueOrThrow({ where: { id: draft.id } })).body, "Hello Guest!");
     assert.equal(await db.communicationTemplateVersion.count({ where: { templateId: template.id } }), 2);

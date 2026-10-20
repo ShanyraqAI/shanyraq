@@ -16,15 +16,16 @@ export const ACTIVE_HOTEL_COOKIE = "shanyraq_active_hotel";
 const SESSION_TTL_MS = 30 * 86_400_000; // 30 days
 
 function shouldUseSecureSessionCookie(): boolean {
+  if (process.env.NODE_ENV === "production") return true;
   const origin = process.env.APP_URL;
   if (origin) {
     try {
       return new URL(origin).protocol === "https:";
     } catch {
-      // An invalid production origin must fail closed.
+      // Production was handled above; malformed development/test origins use local cookies.
     }
   }
-  return process.env.NODE_ENV === "production";
+  return false;
 }
 
 export interface SessionUser {
@@ -73,15 +74,15 @@ export async function createSession(userId: string): Promise<string> {
   return session.id;
 }
 
-/** Deduplicated per request via React cache. */
-export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
+/** Deduplicated per request/client. Transactional callers must reuse their connection. */
+export const getSessionUser = cache(async (client: Pick<typeof db, "session"> = db): Promise<SessionUser | null> => {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   const activeHotelId = store.get(ACTIVE_HOTEL_COOKIE)?.value;
   if (!token) return null;
 
   try {
-    const session = await db.session.findUnique({
+    const session = await client.session.findUnique({
       where: { tokenHash: hashToken(token) },
       select: {
         id: true,

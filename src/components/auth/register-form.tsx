@@ -8,14 +8,13 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GoogleButton } from "@/components/auth/google-button";
 import { registerAction, resendRegistrationCodeAction, verifyRegistrationCodeAction } from "@/server/actions/auth";
 import { t } from "@/lib/i18n";
 
 export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter();
-  const [method, setMethod] = useState<"email" | "phone">("email");
+  const method = "email" as const;
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [contact, setContact] = useState("");
@@ -32,8 +31,7 @@ export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
         firstName,
         lastName,
         method,
-        email: method === "email" ? contact : undefined,
-        phone: method === "phone" ? contact : undefined,
+        email: contact,
         password,
       });
       if (!result.ok) {
@@ -136,13 +134,6 @@ export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
             maxLength={80} />
         </div>
       </div>
-
-      <Tabs value={method} onValueChange={(v) => setMethod(v as "email" | "phone")}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="email">{t.auth.emailTab}</TabsTrigger>
-          <TabsTrigger value="phone">{t.auth.phoneTab}</TabsTrigger>
-        </TabsList>
-      </Tabs>
 
       <div className="space-y-1.5">
         <Label htmlFor="register-contact">

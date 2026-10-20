@@ -18,7 +18,7 @@ export function daysLeft(endsAt: Date, now = new Date()): number {
   return Math.ceil((endsAt.getTime() - now.getTime()) / DAY_MS);
 }
 
-/** Renewal stacks onto the remaining paid time; an expired subscription restarts from now. */
+/** Manual renewal stacks onto remaining grant time; an expired subscription restarts from now. */
 export function grantPeriod(currentEndsAt: Date | null, months: number, now = new Date()) {
   const startsAt = currentEndsAt && currentEndsAt > now ? currentEndsAt : now;
   return { startsAt, endsAt: extendAccess(startsAt, months) };

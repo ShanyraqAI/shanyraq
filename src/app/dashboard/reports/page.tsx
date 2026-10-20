@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { DataExportDialog } from "@/components/exports/data-export-dialog";
@@ -180,6 +181,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
         {report.reservationOptions.length ? <CardContent className="border-t pt-4">
           <h3 className="mb-3 text-sm font-semibold">{kk ? "Төлем, қайтару немесе шығын қосу" : "Записать оплату, возврат или расход"}</h3>
           <form action={createFinancialOperationAction} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+            <input type="hidden" name="operationKey" value={randomUUID()} />
             <label className="space-y-1 text-xs text-muted-foreground lg:col-span-2">{kk ? "Брондау" : "Бронирование"}<select required name="reservationId" className="h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground">{report.reservationOptions.map((option) => <option key={option.id} value={option.id}>{option.id.slice(-8)} · {formatReportMoney(option.total, option.currency)} ({option.currency})</option>)}</select></label>
             <label className="space-y-1 text-xs text-muted-foreground">{kk ? "Операция" : "Операция"}<select name="type" className="h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground"><option value="PAYMENT">{kk ? "Төлем" : "Оплата"}</option><option value="REFUND">{kk ? "Қайтару" : "Возврат"}</option><option value="EXPENSE">{kk ? "Шығын" : "Расход"}</option></select></label>
             <label className="space-y-1 text-xs text-muted-foreground">{kk ? "Сома" : "Сумма"}<input required name="amount" type="number" min="0.01" step="0.01" className="h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" /></label>

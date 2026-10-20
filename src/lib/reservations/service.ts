@@ -10,7 +10,7 @@ import {
   formatISODate,
   parseISODate,
   toISODate,
-  today,
+  todayInTimeZone,
 } from "@/lib/dates";
 import {
   recomputeAvailability,
@@ -644,7 +644,8 @@ export async function setReservationStatus(
           data: { status: nextRoomStatus },
         });
       } else if (status === "CANCELLED" || status === "NO_SHOW") {
-        const businessDate = today();
+        const hotel = await tx.hotel.findUniqueOrThrow({ where: { id: hotelId }, select: { timezone: true } });
+        const businessDate = todayInTimeZone(hotel.timezone);
         const stillOccupied = await tx.reservation.count({
           where: {
             hotelId,
@@ -656,8 +657,9 @@ export async function setReservationStatus(
           },
         });
         if (stillOccupied === 0) {
-          await tx.room.update({
-            where: { id: current.roomId },
+          // Cancelling a booking must never clear maintenance/out-of-order/cleaning.
+          await tx.room.updateMany({
+            where: { id: current.roomId, hotelId, status: "OCCUPIED" },
             data: { status: "AVAILABLE" },
           });
         }
@@ -782,7 +784,8 @@ export async function writeAudit(
   newValue?: Record<string, unknown>,
   client: ReservationDb = db,
 ): Promise<void> {
-  const session = await getSessionUser().catch(() => null);
+  // Reuse the transaction connection: a global session query can deadlock a saturated pool.
+  const session = await getSessionUser(client).catch(() => null);
   const actorUserId = session?.hotelId === hotelId ? session.id : null;
   await client.auditLog.create({
     data: {

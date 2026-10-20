@@ -106,6 +106,7 @@ export async function registerAction(input: unknown): Promise<ActionResult<{ ver
   try {
     const parsed = registerSchema.safeParse(input);
     if (!parsed.success) return fail(firstZodError(parsed.error));
+    if (parsed.data.method === "phone") return fail("Регистрация по телефону временно недоступна. Используйте email с подтверждением или Google.");
     await ensureDatabaseReady();
 
     const { firstName, lastName, fullName, password, method, email, phone } = parsed.data;
@@ -277,7 +278,13 @@ export async function loginAction(input: unknown): Promise<ActionResult> {
 
     const { identifier, password } = parsed.data;
     const isEmail = identifier.includes("@");
-    await enforceRateLimit("login", identifier, 6, 15 * 60_000);
+    const normalizedIdentifier = isEmail ? identifier.toLowerCase() : normalizePhone(identifier);
+    // One IP cannot evade the limit by changing identifier formatting; one account
+    // also has a shared budget across addresses. Keep legacy phone lookup intact.
+    const rateIdentifier = isEmail ? normalizedIdentifier : normalizedIdentifier.replace(/\D/g, "");
+    await enforceRateLimit("login-ip", "all", 60, 15 * 60_000);
+    await enforceRateLimit("login", rateIdentifier, 6, 15 * 60_000);
+    await enforceRateLimit("login-account", rateIdentifier, 30, 15 * 60_000, { identity: "identifier" });
 
     const user = await db.user.findUnique({
       where: isEmail

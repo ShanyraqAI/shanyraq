@@ -1,0 +1,4 @@
+# Exact historical false positives: synthetic keyInstructions fixture and its assertion.
+# No API credential, real customer lock code, file-wide ignore or history rewrite.
+c55859c6347af590e75a7923eb267630d7ce08c3:scripts/test-guest-stay.ts:generic-api-key:149
+c55859c6347af590e75a7923eb267630d7ce08c3:scripts/test-guest-stay.ts:generic-api-key:636

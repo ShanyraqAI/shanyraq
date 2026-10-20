@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { trustedClientAddress } from "./client-address";
 import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { RateLimitError } from "@/server/errors";
@@ -9,7 +10,7 @@ function digest(value: string): string {
 
 async function requestAddress(): Promise<string> {
   const values = await headers();
-  return values.get("x-real-ip") ?? values.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  return trustedClientAddress(values, { VERCEL: process.env.VERCEL, TRUSTED_CLIENT_IP_HEADER: process.env.TRUSTED_CLIENT_IP_HEADER });
 }
 
 export async function enforceRateLimit(
@@ -17,9 +18,11 @@ export async function enforceRateLimit(
   identifier: string,
   limit: number,
   windowMs: number,
+  options: { identity?: "ip-and-identifier" | "identifier" } = {},
 ): Promise<void> {
-  const ip = await requestAddress();
-  const key = `${scope}:${digest(`${ip}:${identifier.trim().toLowerCase()}`)}`;
+  const normalized = identifier.trim().toLowerCase();
+  const identity = options.identity === "identifier" ? normalized : `${await requestAddress()}:${normalized}`;
+  const key = `${scope}:${digest(identity)}`;
   const now = new Date();
   const resetAt = new Date(now.getTime() + windowMs);
 

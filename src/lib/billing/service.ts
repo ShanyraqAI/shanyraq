@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { billingLaunch } from "./config";
-import { accessUntil, BillingError, billingPlan, extendAccess, isExpired, TRIAL_MS } from "./policy";
+import { accessUntil, BillingError, billingPlan, extendAccess, TRIAL_MS } from "./policy";
+import { effectiveSubscription } from "@/lib/subscription/effective";
 import { amountInMinorUnits, type PaymentFields } from "./freedompay";
 
 /** Old organizations are explicitly grandfathered; switching hotels never starts a new trial. */
@@ -16,25 +17,37 @@ export async function getSubscription(organizationId: string) {
   });
 }
 
+/** Shared by write authorization and account UI; manual grants never alter paid records. */
+export async function getEffectiveSubscription(organizationId: string) {
+  const [subscription, grants] = await Promise.all([
+    getSubscription(organizationId),
+    db.subscriptionGrant.findMany({ where: { organizationId }, select: { planId: true, startsAt: true, endsAt: true } }),
+  ]);
+  return effectiveSubscription(subscription, grants);
+}
+
 export async function assertBillingWriteAccess(organizationId: string) {
-  const subscription = await getSubscription(organizationId);
-  if (subscription && isExpired(subscription)) throw new BillingError("Период доступа завершён. Доступен просмотр данных. Оплатите подписку в разделе «Подписка и оплата», чтобы сохранить изменения.");
+  const access = await getEffectiveSubscription(organizationId);
+  if (!access.writeAllowed) throw new BillingError("Период доступа завершён. Доступен просмотр данных. Продлите подписку или обратитесь за ручным доступом, чтобы сохранить изменения.");
 }
 
 export async function lockBillingOrganization(tx: Prisma.TransactionClient, organizationId: string) {
   await tx.$queryRaw`SELECT "id" FROM "Organization" WHERE "id" = ${organizationId} FOR UPDATE`;
 }
 
-export async function assertRoomCapacity(tx: Prisma.TransactionClient, hotelId: string) {
+export async function assertRoomCapacity(tx: Prisma.TransactionClient, hotelId: string, requestedCount = 1) {
+  if (!Number.isSafeInteger(requestedCount) || requestedCount < 1) throw new BillingError("Некорректное количество номеров");
   if (!billingLaunch()) return;
   const hotel = await tx.hotel.findUniqueOrThrow({ where: { id: hotelId }, select: { orgId: true } });
   if (!hotel.orgId) throw new BillingError("Организация не найдена");
   await lockBillingOrganization(tx, hotel.orgId);
   const subscription = await tx.billingSubscription.findUnique({ where: { organizationId: hotel.orgId } });
-  const plan = subscription?.planId ? billingPlan(subscription.planId) : null;
+  const grants = await tx.subscriptionGrant.findMany({ where: { organizationId: hotel.orgId }, select: { planId: true, startsAt: true, endsAt: true } });
+  const access = effectiveSubscription(subscription, grants);
+  const plan = access.planId ? billingPlan(access.planId) : null;
   if (!plan) return;
   const count = await tx.room.count({ where: { hotel: { orgId: hotel.orgId } } });
-  if (count >= plan.rooms) throw new BillingError(`Тариф ${plan.name}: не более ${plan.rooms} номеров в организации. Удалите лишние номера или измените тариф после окончания оплаченного периода.`);
+  if (count + requestedCount > plan.rooms) throw new BillingError(`Тариф ${plan.name}: не более ${plan.rooms} номеров в организации. Удалите лишние номера или измените тариф.`);
 }
 
 export function matchesPayment(order: { id: string; providerPaymentId: string | null; amountMinor: number; currency: string; testMode: boolean }, fields: PaymentFields) {

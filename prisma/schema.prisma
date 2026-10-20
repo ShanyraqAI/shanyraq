@@ -1623,3 +1623,11 @@ model PublicRuleRevision {
   rule PublicPropertyRules @relation(fields: [ruleId], references: [id], onDelete: Restrict)
   @@id([ruleId, version])
 }
+
+// Durable inbox: the command side effect and replay response commit together.
+model TelegramCommandReceipt {
+  updateId BigInt @id
+  commandHash String @db.VarChar(64)
+  response String
+  createdAt DateTime @default(now())
+}

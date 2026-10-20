@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { BodyError, readBoundedText } from "@/lib/security/request-body";
 
 export const runtime = "nodejs";
 
@@ -12,13 +13,21 @@ function equalsSecret(provided: string, expected: string) {
 
 export async function POST(request: NextRequest) {
   const expected = process.env.TTLOCK_CALLBACK_TOKEN;
-  const provided = request.nextUrl.searchParams.get("token") ?? "";
+  // Header authentication avoids leaking the shared secret through URL/access logs.
+  // Enable the legacy query form only after explicitly reviewing/redacting ingress logs.
+  const headerToken = request.headers.get("x-ttlock-callback-token");
+  const provided = headerToken ?? (process.env.TTLOCK_CALLBACK_ALLOW_QUERY_TOKEN === "true"
+    ? request.nextUrl.searchParams.get("token") ?? "" : "");
   if (!expected) return NextResponse.json({ error: "Callback is not configured" }, { status: 503 });
   if (!equalsSecret(provided, expected)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await request.text();
-  if (body.length > 24_000) return NextResponse.json({ error: "Payload too large" }, { status: 413 });
-  const fields: Record<string, string> = {};
+  let body: string;
+  try { body = await readBoundedText(request, 24_000); }
+  catch (error) {
+    if (error instanceof BodyError) return NextResponse.json({ error: error.message }, { status: error.status });
+    throw error;
+  }
+  const fields: Record<string, string> = Object.create(null);
   new URLSearchParams(body).forEach((value, key) => { fields[key] = value; });
   const remoteLockId = fields.lockId;
   if (!remoteLockId || !/^\d+$/.test(remoteLockId)) return NextResponse.json({ error: "Missing lockId" }, { status: 400 });
@@ -32,6 +41,10 @@ export async function POST(request: NextRequest) {
   const lockDate = Number(fields.lockDate ?? fields.date);
   const success = fields.success === "1" ? true : fields.success === "0" ? false : null;
   const eventAt = Number.isFinite(lockDate) && lockDate > 0 ? new Date(lockDate) : null;
+  if ((eventAt && Number.isNaN(eventAt.getTime())) ||
+      (Number.isInteger(recordType) && (recordType < -2147483648 || recordType > 2147483647))) {
+    return NextResponse.json({ error: "Invalid event fields" }, { status: 400 });
+  }
   const recordNames: Record<number, string> = { 1: "Открытие из приложения", 3: "Открытие через шлюз", 4: "Открытие кодом", 7: "Открытие картой", 8: "Открытие отпечатком", 11: "Открытие по Bluetooth", 12: "Открытие через шлюз", 29: "Необычное открытие", 30: "Дверь закрыта", 31: "Дверь открыта", 32: "Открытие изнутри", 34: "Закрытие кодом", 37: "Удалённая команда", 44: "Тревога взлома", 45: "Автоблокировка", 48: "Несколько неверных кодов" };
   const summary = Number.isInteger(recordType) ? recordNames[recordType] ?? `Событие замка ${recordType}` : (fields.eventType ?? "Событие замка TTLock");
   const safeFields = Object.fromEntries(Object.entries(fields).filter(([key]) => !/(pwd|password|secret|token|key)/i.test(key)));

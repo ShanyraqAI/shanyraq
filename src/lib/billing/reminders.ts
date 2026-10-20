@@ -1,6 +1,7 @@
+import { effectiveSubscription } from "@/lib/subscription/effective";
 import { db } from "@/lib/db";
 import { billingLaunch, paymentConfig } from "./config";
-import { accessUntil, DAY_MS, reminderKind } from "./policy";
+import { DAY_MS, reminderKind } from "./policy";
 
 /** Daily best-effort email reminders; request-time access checks do not depend on this job. */
 export async function sendBillingReminders() {
@@ -15,13 +16,13 @@ export async function sendBillingReminders() {
   const oldest = new Date(now.getTime() - 7 * DAY_MS);
   const subscriptions = await db.billingSubscription.findMany({
     where: { OR: [{ paidUntil: { gte: oldest, lte: horizon } }, { paidUntil: null, trialEndsAt: { gte: oldest, lte: horizon } }] },
-    include: { organization: { select: { memberships: { where: { role: "OWNER", user: { emailVerifiedAt: { not: null }, email: { not: null } } }, select: { user: { select: { id: true, email: true } } } } } } },
+    include: { organization: { select: { subscriptionGrants: { select: { startsAt: true, endsAt: true, planId: true } }, memberships: { where: { role: "OWNER", user: { emailVerifiedAt: { not: null }, email: { not: null } } }, select: { user: { select: { id: true, email: true } } } } } } },
     orderBy: { trialEndsAt: "desc" }, take: 500,
   });
   let sent = 0;
   let failed = 0;
   for (const subscription of subscriptions) {
-    const end = accessUntil(subscription);
+    const end = effectiveSubscription(subscription, subscription.organization.subscriptionGrants, now).endsAt!;
     const kind = reminderKind(end, now);
     if (!kind) continue;
     const recipients = new Map(subscription.organization.memberships.map((item) => [item.user.id, item.user.email!]));
@@ -37,8 +38,8 @@ export async function sendBillingReminders() {
       });
       if (!claimed.count) continue;
       try {
-        const current = await db.billingSubscription.findUniqueOrThrow({ where: { organizationId: subscription.organizationId } });
-        if (accessUntil(current).getTime() !== end.getTime()) continue;
+        const current = await db.billingSubscription.findUniqueOrThrow({ where: { organizationId: subscription.organizationId }, include: { organization: { select: { subscriptionGrants: { select: { startsAt: true, endsAt: true, planId: true } } } } } });
+        if (effectiveSubscription(current, current.organization.subscriptionGrants).endsAt!.getTime() !== end.getTime()) continue;
         const deadline = new Intl.DateTimeFormat("ru-KZ", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Almaty" }).format(end);
         const subject = kind === "expired" ? "Shanyraq AI: период доступа завершён" : "Shanyraq AI: период доступа скоро завершится";
         const text = `${kind === "expired" ? "Период доступа завершился" : "Период доступа завершается"} ${deadline} (время Казахстана). После окончания доступен просмотр данных; для сохранения изменений оплатите подписку. Подключённые каналы не отключаем. Автоматических списаний нет.\n\nПодписка и оплата: ${config.origin}/dashboard/billing`;
