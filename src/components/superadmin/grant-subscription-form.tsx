@@ -34,7 +34,7 @@ export function GrantSubscriptionForm({ organizationId, defaultPlan, canEnd }: {
         {GRANT_MONTHS.map((value) => <option key={value} value={value}>{value} мес.</option>)}
       </select>
       <Button type="button" size="sm" disabled={pending} onClick={() => run(() => grantSubscriptionAction({ organizationId, planId, months }))}>Выдать / продлить</Button>
-      {canEnd ? <Button type="button" size="sm" variant="ghost" className="text-red-300 hover:text-red-200" disabled={pending} onClick={() => { if (confirm("Завершить подписку сейчас?")) run(() => endSubscriptionAction({ organizationId })); }}>Завершить</Button> : null}
+      {canEnd ? <Button type="button" size="sm" variant="ghost" className="text-red-300 hover:text-red-200" disabled={pending} onClick={() => { if (confirm("Отменить ручной грант? Оплаченная подписка не изменится.")) run(() => endSubscriptionAction({ organizationId })); }}>Отменить грант</Button> : null}
     </div>
   );
 }

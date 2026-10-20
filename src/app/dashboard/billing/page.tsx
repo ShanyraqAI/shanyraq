@@ -1,9 +1,9 @@
 import { db } from "@/lib/db";
 import { getCurrentMembership } from "@/lib/tenant";
 import { redirect } from "next/navigation";
-import { getSubscription } from "@/lib/billing/service";
+import { getSubscription, getEffectiveSubscription } from "@/lib/billing/service";
 import { billingLaunch, paymentConfig } from "@/lib/billing/config";
-import { accessUntil, billingPlan, isExpired, BILLING_PLANS } from "@/lib/billing/policy";
+import { billingPlan, BILLING_PLANS } from "@/lib/billing/policy";
 import { BillingCheckout, PaymentStatusCheck } from "@/components/billing/billing-checkout";
 import { PageHeader } from "@/components/shared/page-header";
 
@@ -13,7 +13,7 @@ const dateFormat = new Intl.DateTimeFormat("ru-KZ", { dateStyle: "medium", timeS
 export default async function BillingPage({ searchParams }: { searchParams: Promise<{ payment?: string; plan?: string }> }) {
   const membership = await getCurrentMembership();
   if (!membership) redirect("/login");
-  const subscription = await getSubscription(membership.organizationId);
+  const [subscription, access] = await Promise.all([getSubscription(membership.organizationId), getEffectiveSubscription(membership.organizationId)]);
   const config = paymentConfig();
   const owner = membership.role === "OWNER";
   const params = await searchParams;
@@ -30,8 +30,8 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   return <div className="space-y-6">
     <PageHeader title="Подписка и оплата" description="14 дней без карты. Затем — разовая оплата выбранного периода, без автопродления." />
     <section className="rounded-xl border bg-card p-6">
-      <h2 className="font-semibold">{subscription ? isExpired(subscription) ? "Доступен просмотр данных" : currentPlan ? `Тариф ${billingPlan(currentPlan)?.name ?? "Shanyraq AI"}` : "Бесплатный период" : billingLaunch() ? "Текущий доступ сохранён" : "Онлайн-оплата готовится к запуску"}</h2>
-      <p className="mt-2 text-sm text-muted-foreground">{subscription ? `Доступ до ${dateFormat.format(accessUntil(subscription))} (время Казахстана). После окончания данные сохраняются; изменения доступны после оплаты. Подключённые каналы не отключаем.` : "Ваш аккаунт не заблокирован. Пока подключение Freedom Pay не завершено, оплачивать доступ и вводить карту не нужно."}</p>
+      <h2 className="font-semibold">{!access.writeAllowed ? "Доступен просмотр данных" : access.manualActive ? "Ручной доступ активен" : currentPlan ? `Тариф ${billingPlan(currentPlan)?.name ?? "Shanyraq AI"}` : subscription ? "Бесплатный период" : billingLaunch() ? "Текущий доступ сохранён" : "Онлайн-оплата готовится к запуску"}</h2>
+      <p className="mt-2 text-sm text-muted-foreground">{access.endsAt && !access.unrestricted ? `Доступ до ${dateFormat.format(access.endsAt)} (время Казахстана). После окончания данные сохраняются; изменения доступны при действующей оплате или ручном гранте. Подключённые каналы не отключаем.` : "Ваш аккаунт не заблокирован. Пока подключение Freedom Pay не завершено, оплачивать доступ и вводить карту не нужно."}</p>
     </section>
     {payment && <div role="status" className="rounded-lg border bg-accent p-4 text-sm">{payment.status === "SUCCEEDED" ? payment.testMode ? "Тестовый платёж подтверждён. Реальная подписка не изменена." : "Платёж подтверждён. Доступ продлён." : payment.status === "FAILED" ? "Платёж не завершён. Деньги не подтверждены провайдером; можно попробовать оплатить снова." : "Ожидаем подтверждения Freedom Pay. Возврат на эту страницу сам по себе не означает успешную оплату. Обновите страницу через несколько секунд."}</div>}
     {owner ? <BillingCheckout enabled={enabled} testMode={config?.mode === "test"} roomCount={roomCount} currentPlan={currentPlan} initialPlan={requestedPlan} /> : <p className="text-sm text-muted-foreground">Оплатить подписку может владелец организации. Обратитесь к нему для продления доступа.</p>}

@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { BILLING_PLANS, billingPlan } from "@/lib/billing/policy";
-import { daysLeft, GRANT_MONTHS, subscriptionStatus, type SubscriptionStatus } from "@/lib/subscription/access";
+import { daysLeft, GRANT_MONTHS, type SubscriptionStatus } from "@/lib/subscription/access";
 import { endSubscription, grantSubscription } from "@/lib/subscription/grant";
 import { listSubscriptionOrganizations } from "@/lib/subscription/queries";
 
@@ -47,7 +47,7 @@ const HELP = `<b>Shanyraq Control</b>
 /expired — истекшие
 /find <i>текст</i> — поиск по имени, email, телефону, id
 /grant <i>id|email</i> <i>тариф</i> <i>месяцев</i> — выдать или продлить
-/end <i>id|email</i> — завершить подписку
+/end <i>id|email</i> — отменить ручной грант (не оплату)
 Тарифы: ${BILLING_PLANS.map((plan) => plan.id).join(", ")}. Месяцы: ${GRANT_MONTHS.join(", ")}.`;
 
 async function stats(): Promise<string> {
@@ -96,37 +96,37 @@ export async function handleCommand(text: string, actor: string, tx?: Prisma.Tra
     case "/stats":
       return stats();
     case "/subs": {
-      const orgs = await listSubscriptionOrganizations();
+      const orgs = await listSubscriptionOrganizations(tx);
       return list("Аккаунты с подпиской", orgs.filter((org) => org.status === "ACTIVE" || org.status === "EXPIRING").sort((a, b) => a.endsAt!.getTime() - b.endsAt!.getTime()));
     }
     case "/expiring": {
-      const orgs = await listSubscriptionOrganizations();
+      const orgs = await listSubscriptionOrganizations(tx);
       return list("Заканчиваются за 7 дней", orgs.filter((org) => org.status === "EXPIRING").sort((a, b) => a.endsAt!.getTime() - b.endsAt!.getTime()));
     }
     case "/expired": {
-      const orgs = await listSubscriptionOrganizations();
+      const orgs = await listSubscriptionOrganizations(tx);
       return list("Истекшие", orgs.filter((org) => org.status === "EXPIRED"));
     }
     case "/find": {
-      const found = matchOrgs(await listSubscriptionOrganizations(), args.join(" "));
+      const found = matchOrgs(await listSubscriptionOrganizations(tx), args.join(" "));
       return found.length ? list("Найдено", found) : "Ничего не найдено. Пример: /find ivan@mail.ru";
     }
     case "/grant": {
       const [query, planId, monthsRaw] = args;
       const months = Number(monthsRaw);
       if (!query || !planId || !billingPlan(planId) || !(GRANT_MONTHS as readonly number[]).includes(months)) return "Формат: /grant <id|email> <start|pro|business> <1|3|6|12>";
-      const org = await resolveOne(await listSubscriptionOrganizations(), query);
+      const org = await resolveOne(await listSubscriptionOrganizations(tx), query);
       if (typeof org === "string") return org;
       const { endsAt } = await grantSubscription({ organizationId: org.id, planId, months, note: `Telegram: ${actor}` }, tx);
       return `✅ ${esc(org.owner?.fullName ?? org.name)}: ${billingPlan(planId)!.name}, +${months} мес. Действует до ${dateFormat.format(endsAt)}.`;
     }
     case "/end": {
       if (!args[0]) return "Формат: /end <id|email>";
-      const org = await resolveOne(await listSubscriptionOrganizations(), args[0]);
+      const org = await resolveOne(await listSubscriptionOrganizations(tx), args[0]);
       if (typeof org === "string") return org;
-      if (subscriptionStatus(org.endsAt) === "EXPIRED" || !org.endsAt) return "У аккаунта нет действующей подписки.";
+      if (!org.canEndGrant) return "У аккаунта нет действующего ручного гранта. Оплаченная подписка не изменена.";
       await endSubscription(org.id, tx);
-      return `⛔ Подписка ${esc(org.owner?.fullName ?? org.name)} завершена.`;
+      return `⛔ Ручной грант ${esc(org.owner?.fullName ?? org.name)} отменён. Оплаченная подписка не изменена.`;
     }
     default:
       return "Неизвестная команда.\n\n" + HELP;

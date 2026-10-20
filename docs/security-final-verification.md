@@ -18,7 +18,7 @@ All database and browser fixtures used synthetic data in disposable PostgreSQL 1
 - Clean lockfile install with lifecycle scripts disabled; Prisma generate and validate: passed.
 - All 44 historical Prisma migrations deployed successfully to a clean local database.
 - Full TypeScript, full ESLint and production Next.js build, including the read-only schema gate: passed.
-- Complete source/unit/security suite with all four opt-in database flags enabled: **316 passed, zero failed, zero skipped**.
+- Complete source/unit/security suite with all four opt-in database flags enabled: **322 passed, zero failed, zero skipped** (including the owner-confirmed entitlement follow-up).
 - Reliability and administrative-inbox DB suites: passed. Guest communications, guest payments, document agreements and booking calendar integration scripts: passed.
 - Clean migration, rental-property backfill and Channex-property backfill fixtures: passed.
 - Full lockfile npm audit including development dependencies: zero reported vulnerabilities at verification time. Advisory data can change.
@@ -33,9 +33,9 @@ The least-privilege workflow uses a disposable PostgreSQL service and no product
 
 ## Remaining release gates
 
-- **Entitlement policy decision:** manual grants and purchased subscriptions must not be silently conflated. Confirm whether a manual grant independently enables access, which overlapping plan supplies capacity, and whether `/end` revokes only that grant. Purchased access has not been revoked or expanded by this work.
+- **Entitlement policy resolved:** the owner confirmed independent manual access and grant-only `/end`. Shared authorization/display logic, maximum-not-summed active capacities and paid-record-preserving cancellation are implemented and tested; see [Independent manual and paid access](subscription-entitlements.md). No paid duration or purchased plan is rewritten.
 - **Phone ownership:** unsafe phone signup remains disabled. OTP enrollment, identity-collision review and recovery/provider policy are not implemented by these patches.
 - **Staging/integrations:** exercise real signup/login and provider flows under HTTPS, CSP, trusted ingress and provider sandbox accounts. Header authentication for TTLock requires provider/gateway confirmation before a live callback switch; log redaction and rotation remain operational work.
 - **Operations:** production migrations/release approval, Channex certification and remote ordering, gateway dollar/concurrency limits, least-privilege infrastructure, backups/restore and branch protection require owner review and evidence. A GitHub source scan does not inspect external logs or deployed secret stores.
 
-No merge, production deployment/migration, subscription-policy change, provider reconfiguration, token rotation or infrastructure modification was performed. Keep the PR draft until these release decisions and acceptance checks are complete.
+The owner-confirmed manual/paid entitlement policy is implemented in code. No merge, production deployment/migration, provider reconfiguration, token rotation or infrastructure modification was performed. Keep the PR draft until these release decisions and acceptance checks are complete.

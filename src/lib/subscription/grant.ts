@@ -20,6 +20,7 @@ export async function grantSubscription(input: { organizationId: string; planId:
   return client ? work(client) : db.$transaction(work);
 }
 
+/** Ends only manual grants, including queued renewals. Never touches BillingSubscription. */
 export async function endSubscription(organizationId: string, client?: Prisma.TransactionClient) {
   const now = new Date();
   const work = async (tx: Prisma.TransactionClient) => {

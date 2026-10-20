@@ -47,7 +47,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
     <main className="space-y-6">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Подписки</h1>
-        <p className="mt-2 text-sm text-slate-400">Выдавайте и продлевайте тариф для аккаунта. Продление добавляется к оставшемуся сроку.</p>
+        <p className="mt-2 text-sm text-slate-400">Выдавайте и продлевайте тариф для аккаунта. Продление ручного гранта добавляется к его оставшемуся сроку. Отмена гранта не затрагивает оплату.</p>
       </div>
 
       <section aria-label="Сводка" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -85,7 +85,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
                   <TableCell><Badge className={STATUS_CLASSES[org.status]}>{STATUS_LABELS[org.status]}</Badge></TableCell>
                   <TableCell>{org.planId ? billingPlan(org.planId)?.name ?? org.planId : "—"}</TableCell>
                   <TableCell className="whitespace-nowrap">{org.endsAt ? <>{dateFormat.format(org.endsAt)}<div className="text-xs text-slate-500">{org.status === "EXPIRED" ? "истекла" : `осталось ${daysLeft(org.endsAt)} дн.`}</div></> : "—"}</TableCell>
-                  <TableCell><GrantSubscriptionForm organizationId={org.id} defaultPlan={org.planId} canEnd={org.status === "ACTIVE" || org.status === "EXPIRING"} /></TableCell>
+                  <TableCell><GrantSubscriptionForm organizationId={org.id} defaultPlan={org.planId} canEnd={org.canEndGrant} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
