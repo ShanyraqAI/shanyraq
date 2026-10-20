@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Toaster } from "@/components/ui/sonner";
-import { ClarityAnalytics } from "@/components/analytics/clarity";
+import { connection } from "next/server";
 import { PwaRegistration } from "@/components/pwa/pwa-registration";
 import { getSiteUrl } from "@/lib/site-url";
 
@@ -36,7 +36,9 @@ export const viewport: Viewport = {
   themeColor: "#193e30",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Per-request rendering is required for the nonce on Next.js bootstrap scripts.
+  await connection();
   return (
     <html lang="ru" className="antialiased">
       <body
@@ -47,7 +49,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         }}
       >
         {children}
-        <ClarityAnalytics />
         <PwaRegistration enabled={process.env.NODE_ENV === "production"} />
         <Toaster richColors position="top-right" />
       </body>

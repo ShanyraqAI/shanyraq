@@ -1,0 +1,53 @@
+name: Security validation
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: security_test
+          POSTGRES_PASSWORD: local_ci_only
+          POSTGRES_DB: shanyraq_security_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U security_test -d shanyraq_security_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://security_test:local_ci_only@127.0.0.1:5432/shanyraq_security_test
+      RELIABILITY_TEST_DATABASE_URL: postgresql://security_test:local_ci_only@127.0.0.1:5432/shanyraq_security_test
+      RELIABILITY_TEST_DISPOSABLE: '1'
+      SECURITY_TEST_DATABASE_URL: postgresql://security_test:local_ci_only@127.0.0.1:5432/shanyraq_security_test
+      SECURITY_TEST_DISPOSABLE: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx --no-install prisma generate
+      - run: npx --no-install prisma validate
+      # This database is a throwaway CI service, never an environment secret or a production URL.
+      - run: npx --no-install prisma migrate deploy
+      - run: npm audit --audit-level=low --package-lock-only --ignore-scripts
+      - run: npm run lint
+      - run: npx --no-install tsc --noEmit
+      - run: npm run test:security-audit && npm run test:security-hardening
+      - run: npm run test:rental-property && npm run test:communications && npm run test:document-signing
+      - run: npm run test:reliability && npm run test:instant-overview
+      - run: npm run test:reliability:db && npm run test:security-hardening:db
+      - run: npm run build

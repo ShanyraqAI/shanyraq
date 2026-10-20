@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { trustedClientAddress } from "./client-address";
 import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { RateLimitError } from "@/server/errors";
@@ -9,7 +10,7 @@ function digest(value: string): string {
 
 async function requestAddress(): Promise<string> {
   const values = await headers();
-  return values.get("x-real-ip") ?? values.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  return trustedClientAddress(values, process.env);
 }
 
 export async function enforceRateLimit(
