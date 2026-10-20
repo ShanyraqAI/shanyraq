@@ -37,7 +37,8 @@
     "test:instant-overview": "tsx --test src/lib/offline/read-resource.test.ts src/lib/dashboard/overview-validation.test.ts",
     "test:security-audit": "node --test scripts/security-audit-regressions.test.cjs",
     "test:security-hardening": "node --test scripts/security-hardening.test.cjs",
-    "test:security-hardening:db": "tsx scripts/test-security-inbox.ts"
+    "test:security-hardening:db": "tsx scripts/test-security-inbox.ts",
+    "test:unit": "node scripts/test-unit.mjs"
   },
   "engines": {
     "node": ">=20.9.0"

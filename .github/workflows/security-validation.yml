@@ -30,14 +30,34 @@ jobs:
       SECURITY_TEST_DATABASE_URL: postgresql://security_test:local_ci_only@127.0.0.1:5432/shanyraq_security_test
       SECURITY_TEST_DISPOSABLE: '1'
       NEXT_TELEMETRY_DISABLED: '1'
+      BILLING_DB_TESTS: 'true'
+      RENTAL_PROPERTY_DB_TESTS: 'true'
+      RESERVATION_DB_TESTS: 'true'
+      RESERVATION_IMPORT_DB_TESTS: 'true'
+      COMMUNICATIONS_TEST_DATABASE_URL: postgresql://security_test:local_ci_only@127.0.0.1:5432/shanyraq_security_test
+      COMMUNICATIONS_TEST_DISPOSABLE: '1'
+      TEST_GUEST_PAYMENT_DATABASE_URL: postgresql://security_test:local_ci_only@127.0.0.1:5432/shanyraq_security_test
+      RUN_GUEST_PAYMENT_DB_TESTS: '1'
+      TEST_AGREEMENTS_DATABASE_URL: postgresql://security_test:local_ci_only@127.0.0.1:5432/shanyraq_security_test
+      RUN_AGREEMENTS_DB_TESTS: '1'
+      CALENDAR_TEST_DATABASE_URL: postgresql://security_test:local_ci_only@127.0.0.1:5432/shanyraq_security_test
+      CALENDAR_TEST_DISPOSABLE: '1'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
           cache: npm
+      - name: Scan complete repository history for credentials
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --location --retry 3 https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz -o "$RUNNER_TEMP/gitleaks.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git . --redact=100 --gitleaks-ignore-path .gitleaksignore
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npx --no-install prisma generate
       - run: npx --no-install prisma validate
@@ -46,8 +66,13 @@ jobs:
       - run: npm audit --audit-level=low --package-lock-only --ignore-scripts
       - run: npm run lint
       - run: npx --no-install tsc --noEmit
-      - run: npm run test:security-audit && npm run test:security-hardening
-      - run: npm run test:rental-property && npm run test:communications && npm run test:document-signing
-      - run: npm run test:reliability && npm run test:instant-overview
+      - run: npm run test:unit
       - run: npm run test:reliability:db && npm run test:security-hardening:db
+      - run: node --require ./scripts/test-server-preload.cjs --import tsx scripts/test-guest-communications.ts
+      - run: node --require ./scripts/test-server-preload.cjs --import tsx scripts/test-guest-payments.ts
+      - run: node --require ./scripts/test-server-preload.cjs --import tsx scripts/test-document-agreements.ts
+      - run: node --require ./scripts/test-server-preload.cjs --import tsx scripts/test-booking-calendar.ts
+      - run: node scripts/verify-clean-migrations.mjs
+      - run: node scripts/verify-rental-property-migration.mjs
+      - run: node scripts/verify-channex-property-migration.mjs
       - run: npm run build

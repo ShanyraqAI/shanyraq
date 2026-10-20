@@ -784,7 +784,8 @@ export async function writeAudit(
   newValue?: Record<string, unknown>,
   client: ReservationDb = db,
 ): Promise<void> {
-  const session = await getSessionUser().catch(() => null);
+  // Reuse the transaction connection: a global session query can deadlock a saturated pool.
+  const session = await getSessionUser(client).catch(() => null);
   const actorUserId = session?.hotelId === hotelId ? session.id : null;
   await client.auditLog.create({
     data: {

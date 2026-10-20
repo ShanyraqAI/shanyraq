@@ -42,8 +42,9 @@ test("PostgreSQL: concurrent creates/moves, boundaries, statuses and tenant isol
     });
     await t.test("database blocks writers that bypass the service and returns a safe conflict", async () => {
       const saved = await db.reservation.findFirstOrThrow({ where: { hotelId: id, roomId: rooms[2].id } });
-      const { id: ignored, financialServices: ignoredFinancialServices, ...copy } = saved;
+      const { id: ignored, financialServices: ignoredFinancialServices, sequenceNumber, ...copy } = saved;
       assert.ok(ignored);
+      assert.equal(typeof sequenceNumber, "number");
       assert.equal(ignoredFinancialServices, null);
       await assert.rejects(db.reservation.create({ data: copy }), error => {
         assert.equal(toErrorMessage(error), "В этом номере уже есть бронь на выбранные даты.");

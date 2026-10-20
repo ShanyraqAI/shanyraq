@@ -4,6 +4,7 @@ import test from "node:test";
 import { accessUntil, DAY_MS, extendAccess, isExpired, reminderKind, TRIAL_MS } from "./policy";
 import { amountInMinorUnits, parsePaymentXml, readPaymentFields, safePaymentUrl, signPayment, validSignature } from "./freedompay";
 import { billingLaunch } from "./config";
+import { PRODUCT_AVAILABILITY } from "@/lib/product-availability";
 
 test("14 days are exactly 336 hours; access closes at the boundary", () => {
   const start = new Date("2026-08-31T13:14:15.000Z");
@@ -70,6 +71,10 @@ test("PostgreSQL: forged, duplicate, concurrent and test payment confirmations",
   const { handlePaymentCallback } = await import("./callback");
   const previous = Object.fromEntries(["BILLING_ENABLED", "BILLING_START_AT", "FREEDOMPAY_MODE", "FREEDOMPAY_MERCHANT_ID", "FREEDOMPAY_SECRET_KEY", "APP_URL"].map((key) => [key, process.env[key]]));
   Object.assign(process.env, { BILLING_ENABLED: "true", BILLING_START_AT: new Date(Date.now() - DAY_MS).toISOString(), FREEDOMPAY_MODE: "live", FREEDOMPAY_MERCHANT_ID: "123", FREEDOMPAY_SECRET_KEY: "local-test-secret-not-a-provider-key", APP_URL: "https://example.com" });
+  // Exercise the future provider path only in this isolated test worker.
+  // Production closed-beta billing remains disabled in product-availability.ts.
+  const billingDescriptor = Object.getOwnPropertyDescriptor(PRODUCT_AVAILABILITY, "billing")!;
+  Object.defineProperty(PRODUCT_AVAILABILITY, "billing", { ...billingDescriptor, value: true });
   const organizationId = `billing-test-${randomUUID()}`;
   let created = false;
   try {
@@ -103,6 +108,7 @@ test("PostgreSQL: forged, duplicate, concurrent and test payment confirmations",
     await applyPaymentResult({ ...fields, pg_order_id: testOrder.id, pg_payment_id: testOrder.providerPaymentId!, pg_amount: "399000", pg_testing_mode: "1" });
     assert.equal((await db.billingSubscription.findUniqueOrThrow({ where: { organizationId } })).paidUntil?.toISOString(), paid.paidUntil?.toISOString());
   } finally {
+    Object.defineProperty(PRODUCT_AVAILABILITY, "billing", billingDescriptor);
     // Only the exact temporary tenant created above is removed; customer data is never selected or edited.
     if (created) await db.organization.delete({ where: { id: organizationId } });
     await db.$disconnect();

@@ -10,7 +10,7 @@ function digest(value: string): string {
 
 async function requestAddress(): Promise<string> {
   const values = await headers();
-  return trustedClientAddress(values, process.env);
+  return trustedClientAddress(values, { VERCEL: process.env.VERCEL, TRUSTED_CLIENT_IP_HEADER: process.env.TRUSTED_CLIENT_IP_HEADER });
 }
 
 export async function enforceRateLimit(

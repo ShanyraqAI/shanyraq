@@ -122,7 +122,7 @@ test('Channex finalization preserves a requested rerun',async()=>{
 test('identifier-only rate limit is shared across IP addresses',async()=>{
   let ip='192.0.2.1';const buckets=new Map();
   const tx={$queryRaw:async()=>[],rateLimitBucket:{findUnique:async({where})=>buckets.get(where.key),upsert:async({where,create})=>buckets.set(where.key,create),update:async({where})=>buckets.get(where.key).count++}};
-  const api=load('src/lib/security/rate-limit.ts',{'next/headers':{headers:async()=>new Headers({'x-real-ip':ip})},'@/lib/db':{db:{$transaction:async fn=>fn(tx),rateLimitBucket:{deleteMany:async()=>{}}}},'@/server/errors':{RateLimitError}});
+  const api=load('src/lib/security/rate-limit.ts',{'next/headers':{headers:async()=>new Headers({'x-real-ip':ip})},'@/lib/db':{db:{$transaction:async fn=>fn(tx),rateLimitBucket:{deleteMany:async()=>{}}}},'@/server/errors':{RateLimitError},'./client-address':load('src/lib/security/client-address.ts')});
   await api.enforceRateLimit('account','user',1,60000,{identity:'identifier'});ip='192.0.2.2';
   await assert.rejects(api.enforceRateLimit('account','user',1,60000,{identity:'identifier'}));
 });
@@ -133,4 +133,16 @@ test('unverified phone registration is rejected before provisioning',async()=>{
     ensureDatabaseReady:async()=>{provisioned=true},fail,toErrorMessage:e=>e.message,
   },['registerAction']);
   const result=await api.registerAction({method:'phone'});assert.equal(result.ok,false);assert.equal(provisioned,false);
+});
+
+for (const sessionHotel of ['h', 'other']) test(`transaction audit reuses its connection and scopes actor (${sessionHotel})`, async () => {
+  let recorded;
+  const tx = { auditLog: { create: async ({data}) => { recorded = data; } } };
+  const api = load('src/lib/reservations/service.ts', {getSessionUser: async (client) => {
+    assert.equal(client, tx, 'Session lookup must not borrow a global connection');
+    return {id:'u',hotelId:sessionHotel};
+  }}, ['writeAudit']);
+  await api.writeAudit('h','test','Synthetic','id',undefined,undefined,undefined,tx);
+  assert.equal(recorded.actorUserId,sessionHotel === 'h' ? 'u' : null);
+  assert.equal(recorded.actor,sessionHotel === 'h' ? 'user' : 'system');
 });

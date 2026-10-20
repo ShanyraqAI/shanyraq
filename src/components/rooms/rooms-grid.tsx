@@ -122,7 +122,7 @@ export function RoomsGrid({
     setPending(true); setFormError(null);
     try {
       const result = await upsertRoomAction(draft);
-      if (!result.ok) { setFormError(result.error); return; }
+      if (!result.ok) { setFormError(result.error ?? (locale === "kk" ? "Сақтау сәтсіз аяқталды. Қайталап көріңіз." : "Не удалось сохранить. Повторите попытку.")); return; }
       toast.success(result.message); setDraft(null); router.refresh();
     } catch { setFormError(locale === "kk" ? "Сақтау сәтсіз аяқталды. Қайталап көріңіз." : "Не удалось сохранить. Повторите попытку."); }
     finally { setPending(false); }

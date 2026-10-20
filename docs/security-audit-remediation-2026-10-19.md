@@ -1,5 +1,7 @@
 # Security audit remediation — 2026-10-19
 
+> Historical snapshot. Current full-checkout results and remaining release gates are recorded in [Final security verification](security-final-verification.md); validation limitations below describe the earlier partial-checkout stage.
+
 Base: `4526b2cec307fd6d8ef566c45a3d9ef9dab388d1`. This is a **draft remediation**, not a production release or a claim that the entire repository is secure.
 
 ## Implemented

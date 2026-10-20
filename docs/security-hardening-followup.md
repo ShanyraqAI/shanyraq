@@ -1,5 +1,7 @@
 # Security remediation follow-up
 
+> Historical snapshot. Current full-checkout results and remaining release gates are recorded in [Final security verification](security-final-verification.md); validation limitations below describe the earlier partial-checkout stage.
+
 This continues PR #31. It supersedes the earlier remediation document's statements about remaining dev advisories, CSP and the global recorder. It is not a production acceptance or an assertion that every risk is closed.
 
 ## Changes
